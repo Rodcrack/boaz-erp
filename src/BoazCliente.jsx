@@ -174,6 +174,24 @@ function Dashboard({ pedidos, onVerPedido }) {
     setBusqueda(""); setFechaInicio(""); setFechaFin(""); setTipoServicio(""); setEstado("");
   };
 
+  const descargarCSV = () => {
+    const headers = ["Codigo Boaz","Estado","Tipo Servicio","Destinatario","Telefono","Direccion","Distrito","Fecha"];
+    const rows = filtrados.map(p => [
+      p.omd, ESTADOS[p.estado]?.label||p.estado, TIPOS_SERVICIO[p.tipo_servicio]?.label||"",
+      p.dest_nombre, p.dest_telefono, p.dest_direccion, p.dest_distrito, fmt.fecha(p.created_at),
+    ]);
+    const csv = [headers, ...rows]
+      .map(r => r.map(v => `"${(v??"").toString().replace(/"/g,'""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob(["\uFEFF"+csv], { type:"text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `pedidos_boaz_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div style={{ padding:"20px 24px" }}>
       {/* Barra de búsqueda */}
@@ -184,10 +202,22 @@ function Dashboard({ pedidos, onVerPedido }) {
           style={{ flex:1, border:`1px solid ${C.border}`, borderRadius:10,
             padding:"12px 16px", fontSize:14, color:C.textPri, outline:"none",
             boxSizing:"border-box", background:C.white }}/>
+        <button
+          style={{ background:`linear-gradient(135deg,${C.gold},${C.goldDk})`, border:"none",
+            color:C.navy, padding:"0 22px", borderRadius:10, fontSize:13, fontWeight:800,
+            cursor:"pointer", display:"flex", alignItems:"center", gap:6 }}>
+          🔍 Buscar
+        </button>
         <button onClick={limpiarFiltros}
           style={{ background:C.white, border:`1px solid ${C.border}`, color:C.textSec,
             padding:"0 18px", borderRadius:10, fontSize:13, fontWeight:700, cursor:"pointer" }}>
           Limpiar
+        </button>
+        <button onClick={descargarCSV}
+          style={{ background:C.navy, border:"none", color:"#E8EAF0",
+            padding:"0 18px", borderRadius:10, fontSize:13, fontWeight:700, cursor:"pointer",
+            display:"flex", alignItems:"center", gap:6, whiteSpace:"nowrap" }}>
+          ⬇️ Descargar CSV
         </button>
       </div>
 
@@ -295,8 +325,30 @@ function Dashboard({ pedidos, onVerPedido }) {
 }
 
 // ── MODAL DE DETALLE (SOLO LECTURA) ────────────────────────────
+function agruparHistorial(historial) {
+  const grupos = [];
+  for (const h of historial) {
+    if ((h.tipo||"").startsWith("foto_")) {
+      const ultimo = grupos[grupos.length-1];
+      if (ultimo && ultimo.esFotoGrupo && ultimo.timestamp === h.timestamp) {
+        ultimo.urls.push(h.url);
+      } else {
+        grupos.push({ esFotoGrupo:true, tipo:h.tipo, timestamp:h.timestamp, urls:[h.url] });
+      }
+    } else {
+      grupos.push(h);
+    }
+  }
+  return grupos;
+}
+
 function DetalleModal({ pedido: p, onClose }) {
-  const historial = [...(p.historial||[])].sort((a,b)=> new Date(b.timestamp) - new Date(a.timestamp));
+  const historial = agruparHistorial(
+    [...(p.historial||[])].sort((a,b)=> new Date(b.timestamp) - new Date(a.timestamp))
+  );
+  const colorHeader = p.estado==="entregado" ? C.green
+    : p.estado==="no_entregado" ? C.red
+    : C.navy;
 
   return (
     <div onClick={onClose} style={{ position:"fixed", inset:0, background:"#0D1E3DBB",
@@ -305,17 +357,17 @@ function DetalleModal({ pedido: p, onClose }) {
       <div onClick={e=>e.stopPropagation()} style={{ background:C.bg, borderRadius:16,
         width:"100%", maxWidth:640, boxShadow:"0 20px 60px #00000060" }}>
 
-        <div style={{ background:C.navy, padding:"16px 20px", borderRadius:"16px 16px 0 0",
+        <div style={{ background:colorHeader, padding:"16px 20px", borderRadius:"16px 16px 0 0",
           display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div>
-            <div style={{ fontSize:18, fontWeight:900, color:"#E8EAF0" }}>{p.omd}</div>
+            <div style={{ fontSize:18, fontWeight:900, color:"#FFFFFF" }}>{p.omd}</div>
             <span style={{ fontSize:11, padding:"2px 10px", borderRadius:20, fontWeight:700,
-              background:ESTADOS[p.estado]?.bg, color:ESTADOS[p.estado]?.color }}>
+              background:"rgba(255,255,255,0.22)", color:"#FFFFFF" }}>
               {ESTADOS[p.estado]?.label || p.estado}
             </span>
           </div>
           <button onClick={onClose}
-            style={{ background:"none", border:"1px solid #1E3560", color:C.textMut,
+            style={{ background:"none", border:"1px solid rgba(255,255,255,0.4)", color:"#FFFFFF",
               width:32, height:32, borderRadius:8, fontSize:16, cursor:"pointer" }}>✕</button>
         </div>
 
@@ -404,15 +456,19 @@ function DetalleModal({ pedido: p, onClose }) {
                         {h.tipo==="llamada" && "Llamada al destinatario"}
                         {h.tipo==="whatsapp" && "Mensaje de WhatsApp"}
                         {h.tipo==="estado" && h.detalle}
-                        {(h.tipo==="foto_entrega"||h.tipo==="foto_no_entrega") && "Foto de evidencia"}
+                        {h.esFotoGrupo && "Fotos de evidencia"}
                       </div>
                       <div style={{ fontSize:11, color:C.textMut }}>
                         {fmt.fechaHora(h.timestamp)}
                       </div>
-                      {h.url && (
-                        <img src={h.url} alt="" style={{ width:90, height:90, objectFit:"cover",
-                          borderRadius:6, marginTop:6, border:"1px solid #E2E8F0", cursor:"pointer" }}
-                          onClick={()=>window.open(h.url,"_blank")}/>
+                      {h.esFotoGrupo && (
+                        <div style={{ display:"flex", gap:8, marginTop:6, flexWrap:"wrap" }}>
+                          {h.urls.map((url,ui)=>(
+                            <img key={ui} src={url} alt="" style={{ width:90, height:90, objectFit:"cover",
+                              borderRadius:6, border:"1px solid #E2E8F0", cursor:"pointer" }}
+                              onClick={()=>window.open(url,"_blank")}/>
+                          ))}
+                        </div>
                       )}
                     </div>
                   </div>
