@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import BoazERP from './BoazERP.jsx'
 import BoazTracking from './BoazTracking.jsx'
 import BoazApp from './BoazApp.jsx'
+import BoazCliente from './BoazCliente.jsx'
 
 // Router simple por URL
 const path = window.location.pathname.toLowerCase();
@@ -14,6 +15,8 @@ let Componente = BoazERP; // default: panel admin
 
 if (full.includes("/tracking") || full.includes("tracking")) {
   Componente = BoazTracking; // portal tracking público
+} else if (full.includes("/cliente") || full.includes("cliente=1")) {
+  Componente = BoazCliente; // portal de visibilidad para clientes
 } else if (full.includes("/app") || full.includes("app=1")) {
   Componente = BoazApp; // app móvil repartidor
 }
