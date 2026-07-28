@@ -40,6 +40,19 @@ const fmt = {
   fechaHora: (d) => d ? new Date(d).toLocaleString("es-PE",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}) : "",
 };
 
+// Fecha del evento más reciente del pedido: último item del historial si existe,
+// si no, la fecha específica según el estado actual, y como último recurso el registro.
+function obtenerFechaUltimoEstado(p) {
+  if (p.historial && p.historial.length) {
+    const fechas = p.historial.map(h=>new Date(h.timestamp)).filter(d=>!isNaN(d));
+    if (fechas.length) return new Date(Math.max(...fechas));
+  }
+  if (p.estado==="entregado" && p.fecha_entrega) return new Date(p.fecha_entrega);
+  if (p.estado==="en_ruta" && p.fecha_en_ruta) return new Date(p.fecha_en_ruta);
+  if (p.estado==="asignado" && p.fecha_asignacion) return new Date(p.fecha_asignacion);
+  return new Date(p.created_at);
+}
+
 // ── HELPERS: CARGA MASIVA (CSV / EXCEL) ────────────────────────
 const COLUMNAS_PLANTILLA = [
   "Numero de Orden", "Destinatario", "Telefono", "Direccion", "Referencia",
@@ -254,10 +267,11 @@ function Dashboard({ pedidos, onVerPedido }) {
   };
 
   const descargarCSV = () => {
-    const headers = ["Codigo Boaz","Estado","Tipo Servicio","Destinatario","Telefono","Direccion","Distrito","Fecha"];
+    const headers = ["Codigo Boaz","Estado","Tipo Servicio","Destinatario","Telefono","Direccion","Distrito","Fecha de Registro","Fecha Ultimo Estado"];
     const rows = filtrados.map(p => [
       p.omd, ESTADOS[p.estado]?.label||p.estado, TIPOS_SERVICIO[p.tipo_servicio]?.label||"",
-      p.dest_nombre, p.dest_telefono, p.dest_direccion, p.dest_distrito, fmt.fecha(p.created_at),
+      p.dest_nombre, p.dest_telefono, p.dest_direccion, p.dest_distrito,
+      fmt.fechaHora(p.created_at), fmt.fechaHora(obtenerFechaUltimoEstado(p)),
     ]);
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
     ws["!cols"] = headers.map(()=>({ wch:20 }));
