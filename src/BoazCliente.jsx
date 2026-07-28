@@ -39,13 +39,6 @@ const fmt = {
   fechaHora: (d) => d ? new Date(d).toLocaleString("es-PE",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}) : "",
 };
 
-const FILTROS = [
-  { id:"todos",        label:"Todos" },
-  { id:"en_curso",     label:"En curso" },
-  { id:"entregado",    label:"Entregados" },
-  { id:"no_entregado", label:"No entregados" },
-];
-
 // ── PANTALLA LOGIN ─────────────────────────────────────────────
 function Login({ onLogin }) {
   const [usuario, setUsuario] = useState("");
@@ -142,189 +135,292 @@ function Login({ onLogin }) {
   );
 }
 
-// ── LISTA DE PEDIDOS ───────────────────────────────────────────
-function ListaPedidos({ pedidos, onVerPedido, filtro, setFiltro }) {
+// ── LISTA DE PEDIDOS: DASHBOARD DE CONSULTA ────────────────────
+const TIPOS_SERVICIO = {
+  same_day: { label:"Same Day", color:"#7C3AED", bg:"#F5F3FF" },
+  next_day: { label:"Next Day", color:"#0369A1", bg:"#EFF6FF" },
+};
+
+function Dashboard({ pedidos, onVerPedido }) {
+  const [busqueda, setBusqueda] = useState("");
+  const [fechaInicio, setFechaInicio] = useState("");
+  const [fechaFin, setFechaFin] = useState("");
+  const [tipoServicio, setTipoServicio] = useState("");
+  const [estado, setEstado] = useState("");
+
   const filtrados = pedidos.filter(p => {
-    if (filtro==="todos") return true;
-    if (filtro==="en_curso") return p.estado==="asignado" || p.estado==="en_ruta" || p.estado==="sin_asignar";
-    return p.estado===filtro;
+    if (busqueda.trim()) {
+      const q = busqueda.trim().toLowerCase();
+      const match = (p.omd||"").toLowerCase().includes(q)
+        || (p.dest_nombre||"").toLowerCase().includes(q)
+        || (p.dest_telefono||"").toLowerCase().includes(q)
+        || (p.dest_distrito||"").toLowerCase().includes(q);
+      if (!match) return false;
+    }
+    if (fechaInicio) {
+      const f = new Date(p.created_at);
+      if (f < new Date(fechaInicio+"T00:00:00")) return false;
+    }
+    if (fechaFin) {
+      const f = new Date(p.created_at);
+      if (f > new Date(fechaFin+"T23:59:59")) return false;
+    }
+    if (tipoServicio && p.tipo_servicio !== tipoServicio) return false;
+    if (estado && p.estado !== estado) return false;
+    return true;
   });
 
-  const conteos = {
-    todos: pedidos.length,
-    en_curso: pedidos.filter(p=>p.estado==="asignado"||p.estado==="en_ruta"||p.estado==="sin_asignar").length,
-    entregado: pedidos.filter(p=>p.estado==="entregado").length,
-    no_entregado: pedidos.filter(p=>p.estado==="no_entregado").length,
+  const limpiarFiltros = () => {
+    setBusqueda(""); setFechaInicio(""); setFechaFin(""); setTipoServicio(""); setEstado("");
   };
 
   return (
-    <div style={{ padding:16 }}>
-      <div style={{ display:"flex", gap:8, overflowX:"auto", marginBottom:16, paddingBottom:4 }}>
-        {FILTROS.map(f=>(
-          <button key={f.id} onClick={()=>setFiltro(f.id)}
-            style={{ flexShrink:0, padding:"8px 14px", borderRadius:20, fontSize:12, fontWeight:700,
-              cursor:"pointer", whiteSpace:"nowrap",
-              border: filtro===f.id ? `2px solid ${C.gold}` : `1px solid #E2E8F0`,
-              background: filtro===f.id ? "#FFF8EF" : C.white,
-              color: filtro===f.id ? C.goldDk : C.textSec }}>
-            {f.label} ({conteos[f.id]})
-          </button>
-        ))}
+    <div style={{ padding:"20px 24px" }}>
+      {/* Barra de búsqueda */}
+      <div style={{ display:"flex", gap:10, marginBottom:14 }}>
+        <input
+          placeholder="Buscar por código Boaz, tracking, destinatario, teléfono o distrito..."
+          value={busqueda} onChange={e=>setBusqueda(e.target.value)}
+          style={{ flex:1, border:`1px solid ${C.border}`, borderRadius:10,
+            padding:"12px 16px", fontSize:14, color:C.textPri, outline:"none",
+            boxSizing:"border-box", background:C.white }}/>
+        <button onClick={limpiarFiltros}
+          style={{ background:C.white, border:`1px solid ${C.border}`, color:C.textSec,
+            padding:"0 18px", borderRadius:10, fontSize:13, fontWeight:700, cursor:"pointer" }}>
+          Limpiar
+        </button>
       </div>
 
-      {filtrados.length===0 ? (
-        <div style={{ background:C.white, borderRadius:14, padding:32,
-          textAlign:"center", color:C.textMut, border:`1px solid #E2E8F0` }}>
-          <div style={{ fontSize:36, marginBottom:8 }}>📦</div>
-          <div style={{ fontSize:14, fontWeight:600 }}>Sin pedidos en esta categoría</div>
+      {/* Filtros */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:10, marginBottom:20 }}>
+        <div>
+          <label style={{ fontSize:11, color:C.textMut, textTransform:"uppercase",
+            fontWeight:700, marginBottom:4, display:"block" }}>Fecha inicio</label>
+          <input type="date" value={fechaInicio} onChange={e=>setFechaInicio(e.target.value)}
+            style={{ width:"100%", border:`1px solid ${C.border}`, borderRadius:8,
+              padding:"9px 10px", fontSize:13, color:C.textPri, boxSizing:"border-box" }}/>
         </div>
-      ) : (
-        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-          {filtrados.map(p=>(
-            <div key={p.id} onClick={()=>onVerPedido(p)}
-              style={{ background:C.white, borderRadius:14, padding:16,
-                border:`1px solid #E2E8F0`, cursor:"pointer",
-                boxShadow:"0 2px 8px #0D1E3D0A",
-                borderLeft:`4px solid ${ESTADOS[p.estado]?.color||C.gold}` }}>
-              <div style={{ display:"flex", justifyContent:"space-between",
-                alignItems:"flex-start", marginBottom:8 }}>
-                <div style={{ fontSize:14, fontWeight:800, color:C.navy }}>{p.omd}</div>
-                <span style={{ fontSize:11, padding:"3px 10px", borderRadius:20,
-                  fontWeight:700, background:ESTADOS[p.estado]?.bg,
-                  color:ESTADOS[p.estado]?.color, border:`1px solid ${ESTADOS[p.estado]?.color}33` }}>
-                  {ESTADOS[p.estado]?.label || p.estado}
-                </span>
-              </div>
-              <div style={{ fontSize:14, fontWeight:600, color:C.textPri, marginBottom:4 }}>
-                {p.dest_nombre}
-              </div>
-              <div style={{ fontSize:12, color:C.textSec, marginBottom:4 }}>
-                📍 {p.dest_direccion}
-              </div>
-              <div style={{ display:"flex", justifyContent:"space-between",
-                alignItems:"center", marginTop:8 }}>
-                <span style={{ fontSize:11, color:C.textMut }}>{p.dest_distrito}</span>
-                <span style={{ fontSize:11, color:C.textMut }}>{fmt.fecha(p.created_at)}</span>
-              </div>
-            </div>
-          ))}
+        <div>
+          <label style={{ fontSize:11, color:C.textMut, textTransform:"uppercase",
+            fontWeight:700, marginBottom:4, display:"block" }}>Fecha fin</label>
+          <input type="date" value={fechaFin} onChange={e=>setFechaFin(e.target.value)}
+            style={{ width:"100%", border:`1px solid ${C.border}`, borderRadius:8,
+              padding:"9px 10px", fontSize:13, color:C.textPri, boxSizing:"border-box" }}/>
         </div>
-      )}
+        <div>
+          <label style={{ fontSize:11, color:C.textMut, textTransform:"uppercase",
+            fontWeight:700, marginBottom:4, display:"block" }}>Tipo de servicio</label>
+          <select value={tipoServicio} onChange={e=>setTipoServicio(e.target.value)}
+            style={{ width:"100%", border:`1px solid ${C.border}`, borderRadius:8,
+              padding:"9px 10px", fontSize:13, color:C.textPri, boxSizing:"border-box" }}>
+            <option value="">Todos</option>
+            <option value="same_day">Same Day</option>
+            <option value="next_day">Next Day</option>
+          </select>
+        </div>
+        <div>
+          <label style={{ fontSize:11, color:C.textMut, textTransform:"uppercase",
+            fontWeight:700, marginBottom:4, display:"block" }}>Estado</label>
+          <select value={estado} onChange={e=>setEstado(e.target.value)}
+            style={{ width:"100%", border:`1px solid ${C.border}`, borderRadius:8,
+              padding:"9px 10px", fontSize:13, color:C.textPri, boxSizing:"border-box" }}>
+            <option value="">Todos</option>
+            {Object.entries(ESTADOS).map(([k,v])=>(
+              <option key={k} value={k}>{v.label}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div style={{ fontSize:12, color:C.textMut, marginBottom:10 }}>
+        {filtrados.length} pedido{filtrados.length===1?"":"s"} encontrado{filtrados.length===1?"":"s"}
+      </div>
+
+      {/* Tabla */}
+      <div style={{ background:C.white, borderRadius:12, border:`1px solid ${C.border}`,
+        overflow:"hidden", boxShadow:"0 2px 8px #0D1E3D0A" }}>
+        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+          <thead>
+            <tr style={{ background:C.bg, textAlign:"left" }}>
+              {["Código Boaz","Estado","Tipo servicio","Destinatario","Distrito","Fecha",""].map(h=>(
+                <th key={h} style={{ padding:"12px 14px", fontSize:11, fontWeight:700,
+                  color:C.textSec, textTransform:"uppercase", letterSpacing:"0.4px",
+                  borderBottom:`1px solid ${C.border}` }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtrados.length===0 ? (
+              <tr>
+                <td colSpan={7} style={{ padding:40, textAlign:"center", color:C.textMut }}>
+                  📦 No se encontraron pedidos con estos filtros
+                </td>
+              </tr>
+            ) : filtrados.map(p=>(
+              <tr key={p.id} style={{ borderBottom:`1px solid #F1F5F9` }}>
+                <td style={{ padding:"12px 14px", fontWeight:800, color:C.navy }}>{p.omd}</td>
+                <td style={{ padding:"12px 14px" }}>
+                  <span style={{ fontSize:11, padding:"3px 10px", borderRadius:20, fontWeight:700,
+                    background:ESTADOS[p.estado]?.bg, color:ESTADOS[p.estado]?.color,
+                    border:`1px solid ${ESTADOS[p.estado]?.color}33` }}>
+                    {ESTADOS[p.estado]?.label || p.estado}
+                  </span>
+                </td>
+                <td style={{ padding:"12px 14px" }}>
+                  {p.tipo_servicio ? (
+                    <span style={{ fontSize:11, padding:"3px 10px", borderRadius:20, fontWeight:700,
+                      background:TIPOS_SERVICIO[p.tipo_servicio]?.bg,
+                      color:TIPOS_SERVICIO[p.tipo_servicio]?.color }}>
+                      {TIPOS_SERVICIO[p.tipo_servicio]?.label || p.tipo_servicio}
+                    </span>
+                  ) : <span style={{ color:C.textMut }}>—</span>}
+                </td>
+                <td style={{ padding:"12px 14px", color:C.textPri }}>{p.dest_nombre}</td>
+                <td style={{ padding:"12px 14px", color:C.textSec }}>{p.dest_distrito}</td>
+                <td style={{ padding:"12px 14px", color:C.textSec }}>{fmt.fecha(p.created_at)}</td>
+                <td style={{ padding:"12px 14px", textAlign:"center" }}>
+                  <button onClick={()=>onVerPedido(p)} title="Ver detalle"
+                    style={{ background:"none", border:"none", cursor:"pointer",
+                      fontSize:18, color:C.navy, padding:4 }}>
+                    👁️
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
-// ── DETALLE DE PEDIDO (SOLO LECTURA) ───────────────────────────
-function DetallePedido({ pedido: p, onVolver }) {
+// ── MODAL DE DETALLE (SOLO LECTURA) ────────────────────────────
+function DetalleModal({ pedido: p, onClose }) {
   const historial = [...(p.historial||[])].sort((a,b)=> new Date(b.timestamp) - new Date(a.timestamp));
 
   return (
-    <div style={{ padding:16 }}>
-      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20 }}>
-        <button onClick={onVolver}
-          style={{ background:C.white, border:`1px solid #E2E8F0`,
-            color:C.textSec, padding:"8px 14px", borderRadius:10,
-            fontSize:13, cursor:"pointer", fontWeight:600 }}>← Volver</button>
-        <div>
-          <div style={{ fontSize:18, fontWeight:900, color:C.navy }}>{p.omd}</div>
-          <span style={{ fontSize:11, padding:"2px 10px", borderRadius:20, fontWeight:700,
-            background:ESTADOS[p.estado]?.bg, color:ESTADOS[p.estado]?.color }}>
-            {ESTADOS[p.estado]?.label || p.estado}
-          </span>
-        </div>
-      </div>
+    <div onClick={onClose} style={{ position:"fixed", inset:0, background:"#0D1E3DBB",
+      zIndex:1000, display:"flex", alignItems:"flex-start", justifyContent:"center",
+      padding:"40px 16px", overflowY:"auto" }}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:C.bg, borderRadius:16,
+        width:"100%", maxWidth:640, boxShadow:"0 20px 60px #00000060" }}>
 
-      <div style={{ background:C.white, borderRadius:14, padding:18,
-        marginBottom:12, border:`1px solid #E2E8F0`,
-        borderLeft:`4px solid ${C.gold}` }}>
-        <div style={{ fontSize:11, fontWeight:700, color:C.navy, textTransform:"uppercase",
-          letterSpacing:"0.8px", marginBottom:12 }}>📦 Destinatario</div>
-        <div style={{ fontSize:16, fontWeight:800, color:C.textPri, marginBottom:4 }}>
-          {p.dest_nombre}
-        </div>
-        <div style={{ fontSize:13, color:C.textSec, marginBottom:4 }}>
-          📍 {p.dest_direccion}
-        </div>
-        {p.dest_referencia && (
-          <div style={{ fontSize:12, color:C.textMut, marginBottom:4 }}>
-            🏠 Ref: {p.dest_referencia}
+        <div style={{ background:C.navy, padding:"16px 20px", borderRadius:"16px 16px 0 0",
+          display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div>
+            <div style={{ fontSize:18, fontWeight:900, color:"#E8EAF0" }}>{p.omd}</div>
+            <span style={{ fontSize:11, padding:"2px 10px", borderRadius:20, fontWeight:700,
+              background:ESTADOS[p.estado]?.bg, color:ESTADOS[p.estado]?.color }}>
+              {ESTADOS[p.estado]?.label || p.estado}
+            </span>
           </div>
-        )}
-        <div style={{ fontSize:13, color:C.textSec }}>
-          🏙️ {p.dest_distrito}
+          <button onClick={onClose}
+            style={{ background:"none", border:"1px solid #1E3560", color:C.textMut,
+              width:32, height:32, borderRadius:8, fontSize:16, cursor:"pointer" }}>✕</button>
         </div>
-      </div>
 
-      <div style={{ background:C.white, borderRadius:14, padding:18,
-        marginBottom:12, border:`1px solid #E2E8F0` }}>
-        <div style={{ fontSize:11, fontWeight:700, color:C.navy, textTransform:"uppercase",
-          letterSpacing:"0.8px", marginBottom:12 }}>📋 Paquete</div>
-        <div>
-          <div style={{ fontSize:10, color:C.textMut, textTransform:"uppercase" }}>Peso</div>
-          <div style={{ fontSize:14, fontWeight:600, color:C.textPri }}>{p.peso_kg?p.peso_kg+" kg":"—"}</div>
-        </div>
-        {p.cobro_destino && (
-          <div style={{ marginTop:14, background:"#FFF7ED",
-            border:"2px solid #FED7AA", borderRadius:10, padding:"12px 14px" }}>
-            <div style={{ fontSize:12, fontWeight:700, color:"#C2410C", marginBottom:2 }}>
-              💵 COBRO EN DESTINO (COD)
+        <div style={{ padding:20 }}>
+          <div style={{ background:C.white, borderRadius:14, padding:18,
+            marginBottom:12, border:`1px solid #E2E8F0`,
+            borderLeft:`4px solid ${C.gold}` }}>
+            <div style={{ fontSize:11, fontWeight:700, color:C.navy, textTransform:"uppercase",
+              letterSpacing:"0.8px", marginBottom:12 }}>📦 Destinatario</div>
+            <div style={{ fontSize:16, fontWeight:800, color:C.textPri, marginBottom:4 }}>
+              {p.dest_nombre}
             </div>
-            <div style={{ fontSize:20, fontWeight:900, color:"#C2410C" }}>
-              S/ {p.monto_cobrar}
+            <div style={{ fontSize:13, color:C.textSec, marginBottom:4 }}>
+              📍 {p.dest_direccion}
+            </div>
+            {p.dest_referencia && (
+              <div style={{ fontSize:12, color:C.textMut, marginBottom:4 }}>
+                🏠 Ref: {p.dest_referencia}
+              </div>
+            )}
+            <div style={{ fontSize:13, color:C.textSec }}>
+              🏙️ {p.dest_distrito}
             </div>
           </div>
-        )}
-        {p.estado==="no_entregado" && p.motivo_no_entrega && (
-          <div style={{ marginTop:14, background:"#FEF2F2",
-            border:"2px solid #FECACA", borderRadius:10, padding:"12px 14px" }}>
-            <div style={{ fontSize:12, fontWeight:700, color:C.red, marginBottom:2 }}>
-              ⚠️ NO ENTREGADO
-            </div>
-            <div style={{ fontSize:13, color:"#991B1B" }}>{p.motivo_no_entrega}</div>
-          </div>
-        )}
-        {p.repartidor_nombre && (
-          <div style={{ marginTop:14, fontSize:12, color:C.textSec }}>
-            🛵 Repartidor asignado: <strong>{p.repartidor_nombre}</strong>
-          </div>
-        )}
-      </div>
 
-      <div style={{ background:C.white, borderRadius:14, padding:18,
-        border:`1px solid #E2E8F0` }}>
-        <div style={{ fontSize:11, fontWeight:700, color:C.navy, textTransform:"uppercase",
-          letterSpacing:"0.8px", marginBottom:12 }}>🕒 Historial y evidencias</div>
-        {historial.length===0 ? (
-          <div style={{ fontSize:12, color:C.textMut, textAlign:"center", padding:"12px 0" }}>
-            Sin eventos registrados aún.
-          </div>
-        ) : (
-          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-            {historial.map((h,i)=>(
-              <div key={i} style={{ display:"flex", gap:10, alignItems:"flex-start",
-                borderBottom: i<historial.length-1 ? "1px solid #F1F5F9" : "none",
-                paddingBottom:10 }}>
-                <span style={{ fontSize:16 }}>{ICONOS_HIST[h.tipo]||"•"}</span>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:12, fontWeight:600, color:C.textPri }}>
-                    {h.tipo==="llamada" && "Llamada al destinatario"}
-                    {h.tipo==="whatsapp" && "Mensaje de WhatsApp"}
-                    {h.tipo==="estado" && h.detalle}
-                    {(h.tipo==="foto_entrega"||h.tipo==="foto_no_entrega") && "Foto de evidencia"}
-                  </div>
-                  <div style={{ fontSize:11, color:C.textMut }}>
-                    {fmt.fechaHora(h.timestamp)}
-                  </div>
-                  {h.url && (
-                    <img src={h.url} alt="" style={{ width:90, height:90, objectFit:"cover",
-                      borderRadius:6, marginTop:6, border:"1px solid #E2E8F0", cursor:"pointer" }}
-                      onClick={()=>window.open(h.url,"_blank")}/>
-                  )}
+          <div style={{ background:C.white, borderRadius:14, padding:18,
+            marginBottom:12, border:`1px solid #E2E8F0` }}>
+            <div style={{ fontSize:11, fontWeight:700, color:C.navy, textTransform:"uppercase",
+              letterSpacing:"0.8px", marginBottom:12 }}>📋 Paquete</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <div>
+                <div style={{ fontSize:10, color:C.textMut, textTransform:"uppercase" }}>Peso</div>
+                <div style={{ fontSize:14, fontWeight:600, color:C.textPri }}>{p.peso_kg?p.peso_kg+" kg":"—"}</div>
+              </div>
+              <div>
+                <div style={{ fontSize:10, color:C.textMut, textTransform:"uppercase" }}>Tipo de servicio</div>
+                <div style={{ fontSize:14, fontWeight:600, color:C.textPri }}>
+                  {TIPOS_SERVICIO[p.tipo_servicio]?.label || "—"}
                 </div>
               </div>
-            ))}
+            </div>
+            {p.cobro_destino && (
+              <div style={{ marginTop:14, background:"#FFF7ED",
+                border:"2px solid #FED7AA", borderRadius:10, padding:"12px 14px" }}>
+                <div style={{ fontSize:12, fontWeight:700, color:"#C2410C", marginBottom:2 }}>
+                  💵 COBRO EN DESTINO (COD)
+                </div>
+                <div style={{ fontSize:20, fontWeight:900, color:"#C2410C" }}>
+                  S/ {p.monto_cobrar}
+                </div>
+              </div>
+            )}
+            {p.estado==="no_entregado" && p.motivo_no_entrega && (
+              <div style={{ marginTop:14, background:"#FEF2F2",
+                border:"2px solid #FECACA", borderRadius:10, padding:"12px 14px" }}>
+                <div style={{ fontSize:12, fontWeight:700, color:C.red, marginBottom:2 }}>
+                  ⚠️ NO ENTREGADO
+                </div>
+                <div style={{ fontSize:13, color:"#991B1B" }}>{p.motivo_no_entrega}</div>
+              </div>
+            )}
+            {p.repartidor_nombre && (
+              <div style={{ marginTop:14, fontSize:12, color:C.textSec }}>
+                🛵 Repartidor asignado: <strong>{p.repartidor_nombre}</strong>
+              </div>
+            )}
           </div>
-        )}
+
+          <div style={{ background:C.white, borderRadius:14, padding:18,
+            border:`1px solid #E2E8F0` }}>
+            <div style={{ fontSize:11, fontWeight:700, color:C.navy, textTransform:"uppercase",
+              letterSpacing:"0.8px", marginBottom:12 }}>🕒 Historial y evidencias</div>
+            {historial.length===0 ? (
+              <div style={{ fontSize:12, color:C.textMut, textAlign:"center", padding:"12px 0" }}>
+                Sin eventos registrados aún.
+              </div>
+            ) : (
+              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                {historial.map((h,i)=>(
+                  <div key={i} style={{ display:"flex", gap:10, alignItems:"flex-start",
+                    borderBottom: i<historial.length-1 ? "1px solid #F1F5F9" : "none",
+                    paddingBottom:10 }}>
+                    <span style={{ fontSize:16 }}>{ICONOS_HIST[h.tipo]||"•"}</span>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:12, fontWeight:600, color:C.textPri }}>
+                        {h.tipo==="llamada" && "Llamada al destinatario"}
+                        {h.tipo==="whatsapp" && "Mensaje de WhatsApp"}
+                        {h.tipo==="estado" && h.detalle}
+                        {(h.tipo==="foto_entrega"||h.tipo==="foto_no_entrega") && "Foto de evidencia"}
+                      </div>
+                      <div style={{ fontSize:11, color:C.textMut }}>
+                        {fmt.fechaHora(h.timestamp)}
+                      </div>
+                      {h.url && (
+                        <img src={h.url} alt="" style={{ width:90, height:90, objectFit:"cover",
+                          borderRadius:6, marginTop:6, border:"1px solid #E2E8F0", cursor:"pointer" }}
+                          onClick={()=>window.open(h.url,"_blank")}/>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -337,7 +433,6 @@ export default function BoazCliente() {
   const [contacto, setContacto] = useState(null);
   const [pedidos, setPedidos] = useState([]);
   const [pedidoSel, setPedidoSel] = useState(null);
-  const [filtro, setFiltro] = useState("todos");
   const [cargando, setCargando] = useState(false);
 
   const cargar = useCallback(async () => {
@@ -371,10 +466,9 @@ export default function BoazCliente() {
 
   return (
     <div style={{ minHeight:"100vh", background:C.bg,
-      fontFamily:"'Segoe UI','Inter',sans-serif",
-      maxWidth:480, margin:"0 auto", position:"relative" }}>
+      fontFamily:"'Segoe UI','Inter',sans-serif" }}>
 
-      <div style={{ background:C.navy, padding:"14px 16px",
+      <div style={{ background:C.navy, padding:"14px 24px",
         display:"flex", alignItems:"center", justifyContent:"space-between",
         position:"sticky", top:0, zIndex:100,
         boxShadow:"0 2px 12px #0D1E3D44" }}>
@@ -382,34 +476,36 @@ export default function BoazCliente() {
           <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:18, fontWeight:900 }}>
             <span style={{ color:"#E8EAF0" }}>BOA</span>
             <span style={{ color:C.gold }}>Z</span>
-            <span style={{ fontSize:11, color:C.textMut, fontWeight:500, marginLeft:4 }}>Cliente</span>
+            <span style={{ fontSize:11, color:C.textMut, fontWeight:500, marginLeft:4 }}>Portal Cliente</span>
           </div>
           <div style={{ fontSize:11, color:C.textMut, marginTop:2 }}>
             {contacto.empresa?.nombre || "—"}
           </div>
         </div>
-        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:14 }}>
           <div style={{ fontSize:12, color:C.textMut, textAlign:"right" }}>
             {contacto.nombres} {contacto.apellidos?.[0]}.
           </div>
           <button onClick={()=>{setContacto(null); setPedidoSel(null);}}
             style={{ background:"none", border:"1px solid #1E3560",
-              color:C.textMut, padding:"6px 12px", borderRadius:8,
+              color:C.textMut, padding:"6px 14px", borderRadius:8,
               fontSize:11, cursor:"pointer" }}>Salir</button>
         </div>
       </div>
 
       {cargando && pedidos.length===0 ? (
-        <div style={{ padding:40, textAlign:"center", color:C.textMut, fontSize:13 }}>
+        <div style={{ padding:60, textAlign:"center", color:C.textMut, fontSize:13 }}>
           Cargando pedidos...
         </div>
-      ) : pedidoSel ? (
-        <DetallePedido
-          pedido={pedidos.find(p=>p.id===pedidoSel.id) || pedidoSel}
-          onVolver={()=>setPedidoSel(null)}
-        />
       ) : (
-        <ListaPedidos pedidos={pedidos} onVerPedido={setPedidoSel} filtro={filtro} setFiltro={setFiltro}/>
+        <Dashboard pedidos={pedidos} onVerPedido={setPedidoSel}/>
+      )}
+
+      {pedidoSel && (
+        <DetalleModal
+          pedido={pedidos.find(p=>p.id===pedidoSel.id) || pedidoSel}
+          onClose={()=>setPedidoSel(null)}
+        />
       )}
     </div>
   );
