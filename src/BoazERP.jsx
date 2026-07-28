@@ -500,7 +500,7 @@ function ModalNuevoPedido({ repartidores, empresas, onClose, onSaved, toast }) {
           <Field label="Empresa cliente">
             <select style={inp} value={f.empresa_id} onChange={e=>setF(p=>({...p,empresa_id:e.target.value}))}>
               <option value="">— Sin empresa —</option>
-              {empresas.map(e=><option key={e.id} value={e.id}>{e.nombre}</option>)}
+              {empresas.map(e=><option key={e.id} value={e.id}>{e.codigo_interno ? `${e.codigo_interno} — ` : ""}{e.nombre}</option>)}
             </select>
           </Field>
           <Field label="Repartidor">
@@ -875,7 +875,13 @@ function Clientes({ empresas, pedidos, onRefresh, toast }) {
               borderLeft:`4px solid ${B.gold}` }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:14 }}>
                 <div>
-                  <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>{e.nombre}</div>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>{e.nombre}</div>
+                    {e.codigo_interno && (
+                      <span style={{ fontSize:10, fontWeight:800, color:B.gold, background:`${B.gold}18`,
+                        padding:"2px 8px", borderRadius:8, border:`1px solid ${B.gold}44` }}>{e.codigo_interno}</span>
+                    )}
+                  </div>
                   <div style={{ fontSize:11, color:B.textMut }}>RUC: {e.ruc||"—"}</div>
                 </div>
                 <button onClick={()=>{setEditando(e);setF({...e});setModal(true);}}
@@ -920,6 +926,16 @@ function Clientes({ empresas, pedidos, onRefresh, toast }) {
               <button onClick={()=>setModal(false)} style={{ background:"none", border:"none",
                 fontSize:18, color:B.textSec, cursor:"pointer" }}>✕</button>
             </div>
+            {editando?.codigo_interno && (
+              <div style={{ marginBottom:14, fontSize:12, color:B.textSec }}>
+                Código interno: <strong style={{ color:B.gold }}>{editando.codigo_interno}</strong> (se asigna automáticamente y no se puede editar)
+              </div>
+            )}
+            {!editando && (
+              <div style={{ marginBottom:14, fontSize:12, color:B.textMut, fontStyle:"italic" }}>
+                El código interno (ej. CLI-004) se asignará automáticamente al guardar.
+              </div>
+            )}
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
               {[["Razón social","nombre"],["RUC","ruc"],["Contacto","contacto"],
                 ["Teléfono","telefono"],["Email","email"],["Dirección","direccion"]].map(([l,k])=>(
@@ -1192,7 +1208,7 @@ function Facturacion({ empresas, pedidos, toast }) {
                 <label style={lbl}>Empresa cliente</label>
                 <select style={inp} value={f.empresa_id} onChange={e=>setF(p=>({...p,empresa_id:e.target.value}))}>
                   <option value="">— Selecciona —</option>
-                  {empresas.map(e=><option key={e.id} value={e.id}>{e.nombre} — RUC: {e.ruc}</option>)}
+                  {empresas.map(e=><option key={e.id} value={e.id}>{e.codigo_interno ? `${e.codigo_interno} — ` : ""}{e.nombre} — RUC: {e.ruc}</option>)}
                 </select>
               </div>
               <div><label style={lbl}>Serie</label>
