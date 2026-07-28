@@ -814,6 +814,9 @@ function Repartidores({ repartidores, pedidos, onRefresh, toast }) {
                   <option value="bicicleta">Bicicleta</option>
                   <option value="auto">Auto</option>
                   <option value="furgoneta">Furgoneta</option>
+                  <option value="minivan">Minivan</option>
+                  <option value="van">Van</option>
+                  <option value="porter">Porter</option>
                 </select>
               </div>
               <div><label style={lbl}>Zona default</label>
