@@ -475,15 +475,11 @@ function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, ini
               <div style={{ display:"flex", justifyContent:"space-between",
                 alignItems:"center", marginTop:8 }}>
                 <span style={{ fontSize:11, color:C.textMut }}>{p.dest_distrito}</span>
-                <span style={{ fontSize:14, fontWeight:800, color:C.navy }}>S/ {p.tarifa_s}</span>
+                <span style={{ fontSize:12, fontWeight:800,
+                  color: p.cobro_destino ? "#C2410C" : C.green }}>
+                  {p.cobro_destino ? "COD" : "Pagado"}
+                </span>
               </div>
-              {p.cobro_destino && (
-                <div style={{ marginTop:8, background:"#FFF7ED",
-                  border:"1px solid #FED7AA", borderRadius:8, padding:"6px 10px",
-                  fontSize:11, color:"#C2410C", fontWeight:600 }}>
-                  💵 COD — Cobrar en destino: S/ {p.monto_cobrar}
-                </div>
-              )}
             </div>
           ))}
         </div>
@@ -677,19 +673,22 @@ function DetallePedido({ pedido: p, onVolver, onActualizar, onActualizarLocal, t
         marginBottom:12, border:`1px solid #E2E8F0` }}>
         <div style={{ fontSize:11, fontWeight:700, color:C.navy, textTransform:"uppercase",
           letterSpacing:"0.8px", marginBottom:12 }}>📋 Paquete</div>
-        <div style={{ display:"grid", gridTemplateColumns: p.cobro_destino ? "1fr 1fr" : "1fr", gap:12 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
           <div>
             <div style={{ fontSize:10, color:C.textMut, textTransform:"uppercase" }}>Peso</div>
             <div style={{ fontSize:14, fontWeight:600, color:C.textPri }}>{p.peso_kg?p.peso_kg+" kg":"—"}</div>
           </div>
-          {p.cobro_destino && (
-            <div>
-              <div style={{ fontSize:10, color:C.textMut, textTransform:"uppercase" }}>Método de servicio</div>
-              <div style={{ fontSize:14, fontWeight:700, color:"#C2410C" }}>
-                COD — S/ {p.monto_cobrar}
-              </div>
+          <div>
+            <div style={{ fontSize:10, color:C.textMut, textTransform:"uppercase" }}>Método de servicio</div>
+            <div style={{ fontSize:14, fontWeight:700,
+              color: p.cobro_destino ? "#C2410C" : C.green }}>
+              {p.cobro_destino ? "COD" : "Pagado"}
             </div>
-          )}
+            <div style={{ fontSize:13, fontWeight:600,
+              color: p.cobro_destino ? "#C2410C" : C.textMut }}>
+              {p.cobro_destino ? `S/ ${p.monto_cobrar}` : "—"}
+            </div>
+          </div>
         </div>
         {p.cobro_destino && (
           <div style={{ marginTop:14, background:"#FFF7ED",
