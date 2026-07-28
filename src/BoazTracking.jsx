@@ -35,7 +35,6 @@ export default function BoazTracking() {
     if (!codigo.trim()) return;
     setBuscando(true); setError(""); setPedido(null);
     const raw = codigo.trim().toUpperCase().replace(/^BZ-?/,"");
-    // Buscar con formato exacto primero, luego con padding de 4 y 6 dígitos
     const candidatos = [
       "BZ-" + raw,
       "BZ-" + raw.padStart(4,"0"),
@@ -188,25 +187,7 @@ export default function BoazTracking() {
                   </div>
                 </div>
               )}
-{/* Historial de estados */}
-              {pedido.estado!=="devuelto" && pedido.estado!=="incidencia" && (
-                <div style={{ padding:"0 24px 20px" }}>
-                  <div style={{ fontSize:11, color:"#8FA3BA", textTransform:"uppercase",
-                    letterSpacing:"0.8px", marginBottom:12, fontWeight:700 }}>Historial</div>
-                  {[
-                    ["Registrado", pedido.created_at],
-                    ["Asignado", pedido.fecha_asignacion],
-                    ["En camino", pedido.fecha_en_ruta],
-                    ["Entregado", pedido.fecha_entrega],
-                  ].filter(([,fecha]) => fecha).map(([label, fecha]) => (
-                    <div key={label} style={{ display:"flex", justifyContent:"space-between",
-                      padding:"8px 0", borderBottom:"1px solid #1E3560", fontSize:13 }}>
-                      <span style={{ color:"#E8EAF0" }}>✓ {label}</span>
-                      <span style={{ color:"#8FA3BA" }}>{fmt.fecha(fecha)}, {fmt.hora(fecha)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+
               {/* Datos del pedido */}
               <div style={{ padding:"20px 24px",
                 display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
@@ -241,6 +222,26 @@ export default function BoazTracking() {
                   ))}
                 </div>
               </div>
+
+              {/* Historial de estados */}
+              {pedido.estado!=="devuelto" && pedido.estado!=="incidencia" && (
+                <div style={{ padding:"0 24px 20px" }}>
+                  <div style={{ fontSize:11, color:"#8FA3BA", textTransform:"uppercase",
+                    letterSpacing:"0.8px", marginBottom:12, fontWeight:700 }}>Historial</div>
+                  {[
+                    ["Registrado", pedido.created_at],
+                    ["Asignado", pedido.fecha_asignacion],
+                    ["En camino", pedido.fecha_en_ruta],
+                    ["Entregado", pedido.fecha_entrega],
+                  ].filter(([,fecha]) => fecha).map(([label, fecha]) => (
+                    <div key={label} style={{ display:"flex", justifyContent:"space-between",
+                      padding:"8px 0", borderBottom:"1px solid #1E3560", fontSize:13 }}>
+                      <span style={{ color:"#E8EAF0" }}>✓ {label}</span>
+                      <span style={{ color:"#8FA3BA" }}>{fmt.fecha(fecha)}, {fmt.hora(fecha)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Foto evidencia */}
               {pedido.foto_evidencia && (
