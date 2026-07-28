@@ -42,7 +42,11 @@ const ESTADOS_PEDIDO = {
   devuelto:    { bg:"#FEF2F2", color:"#991B1B", label:"Devuelto" },
   incidencia:  { bg:"#FFF7ED", color:"#9A3412", label:"Incidencia" },
 };
-
+const ROLES_ACCESO = {
+  admin: ["dashboard","pedidos","repartidores","clientes","liquidaciones","facturacion","reportes","configuracion"],
+  operaciones: ["dashboard","pedidos","repartidores","clientes"],
+  finanzas: ["dashboard","liquidaciones","facturacion","reportes"],
+};
 const Chip = ({ estado, size="sm" }) => {
   const s = ESTADOS_PEDIDO[estado] || { bg:"#F3F4F6", color:"#374151", label: estado };
   return (
@@ -1490,10 +1494,84 @@ function Configuracion({ toast }) {
   );
 }
 
-// ══════════════════════════════════════════════════════════════
+function Login({ onLogin }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [cargando, setCargando] = useState(false);
+
+  const entrar = async () => {
+    if (!email || !password) { setError("Completa email y contraseña"); return; }
+    setCargando(true); setError("");
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) { setError("Credenciales incorrectas"); setCargando(false); return; }
+    onLogin(data.session);
+  };
+
+  return (
+    <div style={{ minHeight:"100vh", background:B.navy, display:"flex",
+      alignItems:"center", justifyContent:"center",
+      fontFamily:"'Segoe UI','Inter',sans-serif" }}>
+      <div style={{ width:360, background:B.navyMd, border:`1px solid ${B.navyBdr}`,
+        borderRadius:16, padding:32, boxShadow:"0 20px 60px #0006" }}>
+        <div style={{ textAlign:"center", marginBottom:24 }}>
+          <div style={{ display:"inline-flex", alignItems:"center", gap:2, marginBottom:6 }}>
+            <span style={{ fontSize:28, fontWeight:900, color:"#E8EAF0" }}>BOA</span>
+            <span style={{ fontSize:28, fontWeight:900, color:B.gold }}>Z</span>
+            <span style={{ fontSize:12, color:"#8FA3BA", marginLeft:6, fontWeight:500 }}>ERP</span>
+          </div>
+          <div style={{ fontSize:12, color:"#8FA3BA" }}>Panel administrativo</div>
+        </div>
+        <label style={{ fontSize:11, color:"#8FA3BA", fontWeight:700,
+          textTransform:"uppercase", letterSpacing:"0.7px", marginBottom:4, display:"block" }}>Email</label>
+        <input type="email" value={email} onChange={e=>setEmail(e.target.value)}
+          onKeyDown={e=>e.key==="Enter"&&entrar()}
+          style={{ width:"100%", background:B.navy, border:`1px solid ${B.navyBdr}`,
+            color:"#fff", borderRadius:8, padding:"10px 12px", fontSize:13,
+            outline:"none", marginBottom:14, boxSizing:"border-box" }}/>
+        <label style={{ fontSize:11, color:"#8FA3BA", fontWeight:700,
+          textTransform:"uppercase", letterSpacing:"0.7px", marginBottom:4, display:"block" }}>Contraseña</label>
+        <input type="password" value={password} onChange={e=>setPassword(e.target.value)}
+          onKeyDown={e=>e.key==="Enter"&&entrar()}
+          style={{ width:"100%", background:B.navy, border:`1px solid ${B.navyBdr}`,
+            color:"#fff", borderRadius:8, padding:"10px 12px", fontSize:13,
+            outline:"none", marginBottom:16, boxSizing:"border-box" }}/>
+        {error && <div style={{ background:"#2D0707", border:"1px solid #EF444444",
+          borderRadius:8, padding:"10px 12px", color:"#FCA5A5", fontSize:12,
+          marginBottom:14, textAlign:"center" }}>{error}</div>}
+        <button onClick={entrar} disabled={cargando}
+          style={{ width:"100%", background:`linear-gradient(135deg,${B.gold},${B.goldDk})`,
+            border:"none", color:B.navy, padding:"11px", borderRadius:8,
+            cursor:cargando?"not-allowed":"pointer", fontSize:13, fontWeight:800 }}>
+          {cargando?"Ingresando...":"Ingresar"}
+        </button>
+      </div>
+    </div>
+  );
+}// ══════════════════════════════════════════════════════════════
 // APP PRINCIPAL
 // ══════════════════════════════════════════════════════════════
 export default function BoazERP() {
+  const [sesion, setSesion] = useState(null);
+  const [usuario, setUsuario] = useState(null);
+  const [verificando, setVerificando] = useState(true);
+
+  useEffect(() => {
+    sb.auth.getSession().then(({data}) => {
+      if (data.session) cargarUsuario(data.session);
+      else setVerificando(false);
+    });
+  }, []);
+
+  const cargarUsuario = async (session) => {
+    const { data } = await sb.from("usuarios").select("*").eq("id", session.user.id).single();
+    setSesion(session); setUsuario(data); setVerificando(false);
+  };
+
+  const cerrarSesion = async () => {
+    await sb.auth.signOut();
+    setSesion(null); setUsuario(null);
+  };
   const [seccion, setSeccion] = useState("dashboard");
   const [pedidos, setPedidos] = useState([]);
   const [repartidores, setRepartidores] = useState([]);
@@ -1551,7 +1629,18 @@ export default function BoazERP() {
   ];
 
   const sideW = sidebarOpen ? 220 : 60;
+if (verificando) {
+    return (
+      <div style={{ minHeight:"100vh", background:B.navy, display:"flex",
+        alignItems:"center", justifyContent:"center", color:"#8FA3BA", fontSize:13 }}>
+        Verificando sesión...
+      </div>
+    );
+  }
 
+  if (!sesion || !usuario) {
+    return <Login onLogin={cargarUsuario}/>;
+  }
   return (
     <div style={{ display:"flex", height:"100vh", background:B.bg,
       color:B.textPri, fontFamily:"'Segoe UI','Inter',sans-serif", overflow:"hidden" }}>
@@ -1653,15 +1742,23 @@ export default function BoazERP() {
             {seccion==="pedidos" && (
               <BtnPri onClick={()=>{}}>+ Nuevo pedido</BtnPri>
             )}
-            <div style={{ width:36, height:36,
-              background:`linear-gradient(135deg,${B.navy},${B.navyLt})`,
-              borderRadius:"50%", display:"flex", alignItems:"center",
-              justifyContent:"center", fontSize:14, fontWeight:800, color:B.gold }}>
-              C
-            </div>
-          </div>
-        </div>
-
+            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+  <div style={{ textAlign:"right" }}>
+    <div style={{ fontSize:12, fontWeight:700, color:B.navy }}>{usuario.nombre}</div>
+    <div style={{ fontSize:10, color:B.textMut, textTransform:"capitalize" }}>{usuario.rol}</div>
+  </div>
+  <div style={{ width:36, height:36,
+    background:`linear-gradient(135deg,${B.navy},${B.navyLt})`,
+    borderRadius:"50%", display:"flex", alignItems:"center",
+    justifyContent:"center", fontSize:14, fontWeight:800, color:B.gold }}>
+    {usuario.nombre?.[0]}
+  </div>
+  <button onClick={cerrarSesion}
+    style={{ background:"none", border:`1px solid ${B.border}`, color:B.textSec,
+      fontSize:11, padding:"6px 10px", borderRadius:6, cursor:"pointer" }}>Salir</button>
+</div>
+</div>
+</div>
         {/* Contenido */}
         <div style={{ flex:1, overflowY:"auto", padding:24 }}>
           {cargando ? (
