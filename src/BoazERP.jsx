@@ -1629,6 +1629,7 @@ export default function BoazERP() {
   ];
 
   const sideW = sidebarOpen ? 220 : 60;
+  const navVisible = NAV.filter(n => n.section || (ROLES_ACCESO[usuario.rol]||[]).includes(n.id));
 if (verificando) {
     return (
       <div style={{ minHeight:"100vh", background:B.navy, display:"flex",
@@ -1677,7 +1678,8 @@ if (verificando) {
 
         {/* Nav */}
         <nav style={{ flex:1, padding:"12px 8px", overflowY:"auto" }}>
-          {NAV.map((n,i) => {
+          
+  {navVisible.map((n,i) => {
             if (n.section) return sidebarOpen ? (
               <div key={i} style={{ fontSize:9, fontWeight:700, color:"#4A6080",
                 letterSpacing:"1.2px", textTransform:"uppercase",
