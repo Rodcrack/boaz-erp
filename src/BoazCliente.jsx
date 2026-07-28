@@ -7,6 +7,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
 import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 
 const SUPABASE_URL  = "https://jeftkwjdqzkpswvaqspi.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImplZnRrd2pkcXprcHN3dmFxc3BpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4MzI0OTEsImV4cCI6MjEwMDQwODQ5MX0.Ta8Ei_wCm8ZEzD3IM-S60R0rJvI_d5BTvix_Z3W4EmY";
@@ -324,10 +325,11 @@ function SerieDiaria({ datos }) {
   );
 }
 
-function Reportes({ pedidos }) {
+function Reportes({ pedidos, contacto }) {
   const [periodo, setPeriodo] = useState("hoy");
   const [fechaInicio, setFechaInicio] = useState("");
   const [fechaFin, setFechaFin] = useState("");
+  const [generando, setGenerando] = useState(false);
 
   const [inicio, fin] = rangoPeriodo(periodo, fechaInicio, fechaFin);
   const filtrados = pedidos.filter(p => {
@@ -372,6 +374,131 @@ function Reportes({ pedidos }) {
     total:v.total, entregados:v.entregados,
   }));
 
+  // ── Reporte de Liquidación Documentaria (descargo de guías) ──
+  const incluidosLiquidacion = filtrados.filter(p=>p.estado==="entregado"||p.estado==="no_entregado");
+
+  const descargarLiquidacionDocumentaria = async () => {
+    if (incluidosLiquidacion.length===0) return;
+    setGenerando(true);
+    try {
+      const NAVY="FF1B2A4A", GOLD="FFE8A33D", WHITE="FFFFFFFF",
+        GREEN="FF1E7A34", RED="FFB00000", REDBG="FFFCE4E4", GRAY="FF808080", ZEBRA="FFF2F2F2",
+        BORDER="FFD9DEE6";
+
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet("Liquidación", { pageSetup:{ orientation:"landscape" } });
+      ws.columns = [ {width:3}, {width:10}, {width:34}, {width:20}, {width:24}, {width:16}, {width:22}, {width:37} ];
+
+      const setCell = (addr, value, opts={}) => {
+        const cell = ws.getCell(addr);
+        cell.value = value;
+        cell.font = { bold: !!opts.bold, size: opts.size||10, color:{argb: opts.color||"FF000000"}, italic: !!opts.italic };
+        if (opts.fill) cell.fill = { type:"pattern", pattern:"solid", fgColor:{argb:opts.fill} };
+        cell.alignment = { horizontal: opts.align||"left", vertical:"middle", wrapText: !!opts.wrap };
+        if (opts.border) cell.border = {
+          top:{style:"thin",color:{argb:BORDER}}, left:{style:"thin",color:{argb:BORDER}},
+          bottom:{style:"thin",color:{argb:BORDER}}, right:{style:"thin",color:{argb:BORDER}},
+        };
+        return cell;
+      };
+
+      // Encabezado de marca
+      ws.mergeCells("B1:H1"); setCell("B1","GRUPO BOAZ S.A.C.",{bold:true,size:18,color:WHITE,fill:NAVY});
+      ws.getRow(1).height = 30;
+      ws.mergeCells("B2:H2"); setCell("B2","Con Boaz, tu negocio no para",{size:10,color:GOLD,fill:NAVY});
+      ws.getRow(2).height = 18;
+      ws.mergeCells("B3:H3");
+      setCell("B3","RUC 20613172301  |  El Agustino, Lima  |  +51 960 622 471  |  contacto@boaz.com.pe  |  www.boaz.com.pe",{size:9,color:WHITE,fill:NAVY});
+      ws.getRow(3).height = 16;
+
+      const tiposPresentes = [...new Set(incluidosLiquidacion.map(p=>TIPOS_SERVICIO[p.tipo_servicio]?.label).filter(Boolean))];
+      const tituloServicio = tiposPresentes.length===1 ? ` - ${tiposPresentes[0].toUpperCase()}` : "";
+      ws.mergeCells("B5:H5");
+      setCell("B5",`LIQUIDACIÓN DOCUMENTARIA DE ENTREGAS${tituloServicio}`,{bold:true,size:13,color:NAVY});
+      ws.getRow(5).height = 22;
+      ws.mergeCells("B6:H6");
+      setCell("B6","(Documento de descargo de guías - sin valorización)",{size:9,color:GRAY,italic:true});
+
+      const numLiquidacion = `LIQ-DOC-BOAZ-${new Date().toISOString().slice(0,10).replace(/-/g,"")}-${Math.random().toString(36).slice(2,5).toUpperCase()}`;
+      const rangoTxt = `${inicio.toLocaleDateString("es-PE")} — ${fin.toLocaleDateString("es-PE")}`;
+      const nombreEmpresa = contacto?.empresa?.nombre || "—";
+      const destinosUnicos = new Set(incluidosLiquidacion.map(p=>p.dest_nombre)).size;
+      const tipoServicioTxt = tiposPresentes.join(" / ") || "—";
+
+      setCell("B8","N° Liquidación:",{bold:true,color:NAVY}); setCell("C8",numLiquidacion);
+      setCell("E8","Periodo:",{bold:true,color:NAVY}); setCell("F8",rangoTxt);
+      setCell("B9","Cliente:",{bold:true,color:NAVY}); setCell("C9",nombreEmpresa);
+      setCell("E9","Fecha de generación:",{bold:true,color:NAVY}); setCell("F9",new Date().toLocaleDateString("es-PE"));
+      setCell("B10","Destinatarios:",{bold:true,color:NAVY});
+      setCell("C10",`${destinosUnicos} destinatario(s) — ${incluidosLiquidacion.length} punto(s) de entrega`);
+      setCell("E10","Tipo de servicio:",{bold:true,color:NAVY}); setCell("F10",tipoServicioTxt);
+
+      // Tabla de guías
+      const headers = ["N°","Punto","Distrito","Guía de Remisión / N° Orden","Fecha de Entrega","Estado","Observaciones"];
+      const headerRow = 13;
+      headers.forEach((h,i)=>{
+        const col = String.fromCharCode("B".charCodeAt(0)+i);
+        setCell(`${col}${headerRow}`, h, {bold:true,color:WHITE,fill:NAVY,border:true});
+      });
+      ws.getRow(headerRow).height = 28;
+
+      incluidosLiquidacion.forEach((p,i)=>{
+        const row = headerRow+1+i;
+        const esNoEntregado = p.estado==="no_entregado";
+        const fill = esNoEntregado ? REDBG : (i%2===1 ? ZEBRA : null);
+        const vals = [
+          i+1,
+          p.dest_nombre||"—",
+          p.dest_distrito||"—",
+          p.cliente_referencia || p.omd,
+          p.fecha_entrega ? new Date(p.fecha_entrega).toLocaleDateString("es-PE") : "—",
+          esNoEntregado ? "No entregado" : "Entregado",
+          esNoEntregado ? (p.motivo_no_entrega||"") : "",
+        ];
+        vals.forEach((v,ci)=>{
+          const col = String.fromCharCode("B".charCodeAt(0)+ci);
+          const opts = { fill: fill||undefined, border:true, wrap: ci===6 };
+          if (ci===5) { opts.bold=true; opts.color = esNoEntregado?RED:GREEN; }
+          if (ci===6 && esNoEntregado) opts.color = RED;
+          setCell(`${col}${row}`, v, opts);
+        });
+      });
+
+      let r = headerRow+1+incluidosLiquidacion.length+2;
+      ws.mergeCells(`B${r}:H${r}`); setCell(`B${r}`,"RESUMEN DE DESCARGO",{bold:true,size:11,color:NAVY}); r++;
+      setCell(`B${r}`,"Total de guías / puntos",{bold:true,color:NAVY}); setCell(`D${r}`,incluidosLiquidacion.length); r++;
+      setCell(`B${r}`,"Total entregados",{bold:true,color:NAVY}); setCell(`D${r}`,entregados.length); r++;
+      setCell(`B${r}`,"Total no entregados",{bold:true,color:NAVY}); setCell(`D${r}`,noEntregados.length); r+=2;
+
+      ws.mergeCells(`B${r}:H${r}`);
+      setCell(`B${r}`,"CARGO DE RECEPCIÓN DE LIQUIDACIÓN",{bold:true,size:11,color:WHITE,fill:NAVY});
+      ws.getRow(r).height = 22; r++;
+      ws.mergeCells(`B${r}:H${r}`);
+      setCell(`B${r}`,`Declaro haber recibido de Grupo Boaz S.A.C. el presente documento de liquidación, con las ${incluidosLiquidacion.length} guías/puntos y sus respectivas observaciones detalladas.`,{size:8,color:GRAY,wrap:true});
+      ws.getRow(r).height = 26; r+=2;
+
+      ["Recibido por (nombre):","Cargo:","Empresa:","Fecha de recepción:","Firma / Sello:"].forEach(label=>{
+        setCell(`B${r}`,label,{bold:true,color:NAVY});
+        ws.mergeCells(`D${r}:F${r}`);
+        setCell(`D${r}`,"________________________________");
+        r++;
+      });
+      r++;
+      ws.mergeCells(`B${r}:H${r}`);
+      setCell(`B${r}`,`Nota: documento de descargo operativo, sin valorización económica. Periodo: ${rangoTxt}.`,{size:8,color:GRAY,italic:true});
+
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `${numLiquidacion}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setGenerando(false);
+    }
+  };
+
   const PRESETS = [
     { id:"hoy", label:"Hoy" },
     { id:"semana", label:"Esta semana" },
@@ -382,16 +509,28 @@ function Reportes({ pedidos }) {
   return (
     <div style={{ padding:"20px 24px" }}>
       {/* Selector de periodo */}
-      <div style={{ display:"flex", gap:8, marginBottom:6, flexWrap:"wrap" }}>
-        {PRESETS.map(p=>(
-          <button key={p.id} onClick={()=>setPeriodo(p.id)}
-            style={{ padding:"8px 16px", borderRadius:20, fontSize:12, fontWeight:700, cursor:"pointer",
-              border: periodo===p.id ? `2px solid ${C.gold}` : `1px solid ${C.border}`,
-              background: periodo===p.id ? "#FFF8EF" : C.white,
-              color: periodo===p.id ? C.goldDk : C.textSec }}>
-            {p.label}
-          </button>
-        ))}
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start",
+        gap:12, marginBottom:6, flexWrap:"wrap" }}>
+        <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+          {PRESETS.map(p=>(
+            <button key={p.id} onClick={()=>setPeriodo(p.id)}
+              style={{ padding:"8px 16px", borderRadius:20, fontSize:12, fontWeight:700, cursor:"pointer",
+                border: periodo===p.id ? `2px solid ${C.gold}` : `1px solid ${C.border}`,
+                background: periodo===p.id ? "#FFF8EF" : C.white,
+                color: periodo===p.id ? C.goldDk : C.textSec }}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <button onClick={descargarLiquidacionDocumentaria}
+          disabled={incluidosLiquidacion.length===0 || generando}
+          title={incluidosLiquidacion.length===0 ? "No hay pedidos entregados o no entregados en este periodo" : ""}
+          style={{ background: incluidosLiquidacion.length>0 ? C.navy : "#CBD5E1", color:"#E8EAF0", border:"none",
+            padding:"10px 18px", borderRadius:10, fontSize:12, fontWeight:800,
+            cursor: incluidosLiquidacion.length>0 && !generando ? "pointer" : "default",
+            whiteSpace:"nowrap" }}>
+          {generando ? "Generando..." : "📄 Descargar Liquidación Documentaria"}
+        </button>
       </div>
       {periodo==="personalizado" && (
         <div style={{ display:"flex", gap:10, marginBottom:16, marginTop:10 }}>
@@ -405,6 +544,7 @@ function Reportes({ pedidos }) {
       <div style={{ fontSize:12, color:C.textMut, margin:"12px 0 18px" }}>
         Mostrando {filtrados.length} pedido{filtrados.length===1?"":"s"} registrado{filtrados.length===1?"":"s"} entre{" "}
         {inicio.toLocaleDateString("es-PE",{day:"numeric",month:"short"})} y {fin.toLocaleDateString("es-PE",{day:"numeric",month:"short"})}
+        {" · "}la liquidación documentaria incluye {incluidosLiquidacion.length} pedido{incluidosLiquidacion.length===1?"":"s"} finalizado{incluidosLiquidacion.length===1?"":"s"} (entregados o no entregados)
       </div>
 
       {filtrados.length===0 ? (
@@ -1128,7 +1268,7 @@ export default function BoazCliente() {
       ) : vista==="carga" ? (
         <CargaMasiva empresaId={contacto.empresa_id} onCargaCompleta={()=>{ cargar(); }}/>
       ) : vista==="reportes" ? (
-        <Reportes pedidos={pedidos}/>
+        <Reportes pedidos={pedidos} contacto={contacto}/>
       ) : (
         <Dashboard pedidos={pedidos} onVerPedido={setPedidoSel}/>
       )}
