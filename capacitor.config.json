@@ -1,0 +1,9 @@
+{
+  "appId": "pe.com.boaz.app",
+  "appName": "Boaz App",
+  "webDir": "dist",
+  "server": {
+    "url": "https://boaz-erp.netlify.app/app",
+    "cleartext": false
+  }
+}
