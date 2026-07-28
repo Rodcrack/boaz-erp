@@ -6,6 +6,7 @@
 // ══════════════════════════════════════════════════════════════
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
+import * as XLSX from "xlsx";
 
 const SUPABASE_URL  = "https://jeftkwjdqzkpswvaqspi.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImplZnRrd2pkcXprcHN3dmFxc3BpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4MzI0OTEsImV4cCI6MjEwMDQwODQ5MX0.Ta8Ei_wCm8ZEzD3IM-S60R0rJvI_d5BTvix_Z3W4EmY";
@@ -38,6 +39,87 @@ const fmt = {
   hora:  (d) => d ? new Date(d).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"}) : "",
   fechaHora: (d) => d ? new Date(d).toLocaleString("es-PE",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}) : "",
 };
+
+// ── HELPERS: CARGA MASIVA (CSV / EXCEL) ────────────────────────
+const COLUMNAS_PLANTILLA = [
+  "Numero de Orden", "Destinatario", "Telefono", "Direccion", "Referencia",
+  "Distrito", "Peso (kg)", "Tipo de Servicio", "Cobro en Destino (SI/NO)", "Monto a Cobrar",
+];
+
+function normalizarTexto(s) {
+  return (s||"").toString().trim().toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+}
+
+// Mapea encabezados flexibles del archivo del cliente a nuestros campos internos
+function mapearFila(fila) {
+  const out = {};
+  for (const key of Object.keys(fila)) {
+    const k = normalizarTexto(key);
+    const v = fila[key];
+    if (k.includes("orden") || k.includes("referencia cliente") || k.includes("guia")) out.cliente_referencia = (v||"").toString().trim();
+    else if (k.includes("destinatario") || k === "nombre") out.dest_nombre = (v||"").toString().trim();
+    else if (k.includes("telefono")) out.dest_telefono = (v||"").toString().trim();
+    else if (k.includes("direccion")) out.dest_direccion = (v||"").toString().trim();
+    else if (k.includes("referencia")) out.dest_referencia = (v||"").toString().trim();
+    else if (k.includes("distrito")) out.dest_distrito = (v||"").toString().trim();
+    else if (k.includes("peso")) out.peso_kg = parseFloat(v) || null;
+    else if (k.includes("servicio")) {
+      const t = normalizarTexto(v);
+      out.tipo_servicio = t.includes("next") ? "next_day" : t.includes("same") ? "same_day" : "";
+    }
+    else if (k.includes("cobro")) {
+      const t = normalizarTexto(v);
+      out.cobro_destino = t==="si" || t==="sí" || t==="true" || t==="1" || t==="x";
+    }
+    else if (k.includes("monto")) out.monto_cobrar = parseFloat(v) || null;
+  }
+  return out;
+}
+
+const REGEX_ALFANUM = /^[a-zA-Z0-9-]+$/;
+
+function validarFila(fila) {
+  const errores = [];
+  if (!fila.dest_nombre) errores.push("falta destinatario");
+  if (!fila.dest_direccion) errores.push("falta dirección");
+  if (!fila.dest_distrito) errores.push("falta distrito");
+  if (fila.cliente_referencia) {
+    if (fila.cliente_referencia.length > 15) errores.push("N° de orden supera 15 caracteres");
+    if (!REGEX_ALFANUM.test(fila.cliente_referencia)) errores.push("N° de orden debe ser alfanumérico");
+  }
+  return errores;
+}
+
+function parseArchivo(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type:"array" });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(sheet, { defval:"" });
+        resolve(json);
+      } catch (err) { reject(err); }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function descargarPlantilla() {
+  const ejemplo = ["PED-00123","Marco Salinas","987654321","Calle Las Flores 890","Frente al parque","Miraflores","1.2","Same Day","NO",""];
+  const csv = [COLUMNAS_PLANTILLA, ejemplo]
+    .map(r => r.map(v => `"${(v||"").toString().replace(/"/g,'""')}"`).join(","))
+    .join("\n");
+  const blob = new Blob(["\uFEFF"+csv], { type:"text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "plantilla_pedidos_boaz.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 // ── PANTALLA LOGIN ─────────────────────────────────────────────
 function Login({ onLogin }) {
@@ -154,7 +236,8 @@ function Dashboard({ pedidos, onVerPedido }) {
       const match = (p.omd||"").toLowerCase().includes(q)
         || (p.dest_nombre||"").toLowerCase().includes(q)
         || (p.dest_telefono||"").toLowerCase().includes(q)
-        || (p.dest_distrito||"").toLowerCase().includes(q);
+        || (p.dest_distrito||"").toLowerCase().includes(q)
+        || (p.cliente_referencia||"").toLowerCase().includes(q);
       if (!match) return false;
     }
     if (fechaInicio) {
@@ -324,6 +407,182 @@ function Dashboard({ pedidos, onVerPedido }) {
   );
 }
 
+// ── CARGA MASIVA DE PEDIDOS (CSV / EXCEL) ──────────────────────
+function CargaMasiva({ empresaId, onCargaCompleta }) {
+  const [filas, setFilas] = useState([]);
+  const [nombreArchivo, setNombreArchivo] = useState("");
+  const [procesando, setProcesando] = useState(false);
+  const [resultado, setResultado] = useState(null);
+  const [errorArchivo, setErrorArchivo] = useState("");
+
+  const validas = filas.filter(f=>f.errores.length===0);
+  const invalidas = filas.filter(f=>f.errores.length>0);
+
+  const onSeleccionarArchivo = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setErrorArchivo(""); setResultado(null); setNombreArchivo(file.name);
+    try {
+      const json = await parseArchivo(file);
+      const procesadas = json.map(fila => {
+        const mapeada = mapearFila(fila);
+        return { ...mapeada, errores: validarFila(mapeada) };
+      });
+      setFilas(procesadas);
+    } catch (err) {
+      setErrorArchivo("No se pudo leer el archivo. Verifica que sea un .csv o .xlsx válido.");
+      setFilas([]);
+    }
+    e.target.value = "";
+  };
+
+  const confirmarCarga = async () => {
+    if (validas.length===0) return;
+    setProcesando(true);
+    const generados = [];
+    for (const fila of validas) {
+      const { data: codigo, error: errCodigo } = await sb.rpc("generar_codigo_boaz");
+      if (errCodigo || !codigo) { generados.push({ ...fila, ok:false, error:"no se pudo generar código" }); continue; }
+      const { error: errInsert } = await sb.from("pedidos").insert({
+        omd: codigo,
+        empresa_id: empresaId,
+        cliente_referencia: fila.cliente_referencia || null,
+        dest_nombre: fila.dest_nombre,
+        dest_telefono: fila.dest_telefono || null,
+        dest_direccion: fila.dest_direccion,
+        dest_referencia: fila.dest_referencia || null,
+        dest_distrito: fila.dest_distrito,
+        peso_kg: fila.peso_kg || null,
+        tipo_servicio: fila.tipo_servicio || null,
+        cobro_destino: !!fila.cobro_destino,
+        monto_cobrar: fila.cobro_destino ? (fila.monto_cobrar || null) : null,
+        estado: "sin_asignar",
+      });
+      if (errInsert) generados.push({ ...fila, ok:false, error:errInsert.message });
+      else generados.push({ ...fila, ok:true, codigo });
+    }
+    setProcesando(false);
+    setResultado(generados);
+    setFilas([]);
+    onCargaCompleta();
+  };
+
+  const descargarResultado = () => {
+    if (!resultado) return;
+    const headers = ["N Orden Cliente","Codigo Boaz","Destinatario","Estado"];
+    const rows = resultado.map(r => [r.cliente_referencia||"", r.ok?r.codigo:"—", r.dest_nombre, r.ok?"Creado":("Error: "+r.error)]);
+    const csv = [headers, ...rows].map(r=>r.map(v=>`"${(v||"").toString().replace(/"/g,'""')}"`).join(",")).join("\n");
+    const blob = new Blob(["\uFEFF"+csv], { type:"text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `codigos_boaz_generados_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div style={{ padding:"20px 24px" }}>
+      <div style={{ background:C.white, borderRadius:14, padding:20, border:`1px solid ${C.border}`, marginBottom:16 }}>
+        <div style={{ fontSize:14, fontWeight:800, color:C.navy, marginBottom:6 }}>
+          Cargar pedidos desde CSV o Excel
+        </div>
+        <div style={{ fontSize:12, color:C.textSec, marginBottom:14 }}>
+          Descarga la plantilla, complétala con tus pedidos y súbela aquí. A cada fila válida se le asignará automáticamente un código de seguimiento Boaz.
+        </div>
+        <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+          <button onClick={descargarPlantilla}
+            style={{ background:C.white, border:`1px solid ${C.border}`, color:C.textSec,
+              padding:"10px 16px", borderRadius:10, fontSize:13, fontWeight:700, cursor:"pointer" }}>
+            📥 Descargar plantilla
+          </button>
+          <label style={{ background:`linear-gradient(135deg,${C.gold},${C.goldDk})`, color:C.navy,
+            padding:"10px 16px", borderRadius:10, fontSize:13, fontWeight:800, cursor:"pointer",
+            display:"inline-flex", alignItems:"center", gap:6 }}>
+            📤 Seleccionar archivo (.csv, .xlsx)
+            <input type="file" accept=".csv,.xlsx,.xls" onChange={onSeleccionarArchivo} style={{ display:"none" }}/>
+          </label>
+          {nombreArchivo && <div style={{ fontSize:12, color:C.textMut, alignSelf:"center" }}>{nombreArchivo}</div>}
+        </div>
+        {errorArchivo && (
+          <div style={{ marginTop:12, background:"#FEF2F2", border:"1px solid #FECACA", borderRadius:8,
+            padding:"10px 14px", color:C.red, fontSize:12 }}>{errorArchivo}</div>
+        )}
+      </div>
+
+      {filas.length > 0 && (
+        <div style={{ background:C.white, borderRadius:14, border:`1px solid ${C.border}`, overflow:"hidden", marginBottom:16 }}>
+          <div style={{ padding:"14px 20px", borderBottom:`1px solid ${C.border}`,
+            display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <div style={{ fontSize:13, fontWeight:700, color:C.navy }}>
+              Vista previa — {validas.length} válida{validas.length===1?"":"s"}, {invalidas.length} con error{invalidas.length===1?"":"es"}
+            </div>
+            <button onClick={confirmarCarga} disabled={validas.length===0 || procesando}
+              style={{ background: validas.length>0 ? C.green : "#CBD5E1", color:C.white, border:"none",
+                padding:"10px 18px", borderRadius:10, fontSize:13, fontWeight:800,
+                cursor: validas.length>0 && !procesando ? "pointer" : "default" }}>
+              {procesando ? "Generando códigos..." : `✅ Confirmar y cargar ${validas.length} pedido${validas.length===1?"":"s"}`}
+            </button>
+          </div>
+          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+            <thead>
+              <tr style={{ background:C.bg, textAlign:"left" }}>
+                {["N° Orden","Destinatario","Dirección","Referencia","Distrito","Servicio","Estado"].map(h=>(
+                  <th key={h} style={{ padding:"10px 12px", fontSize:10, fontWeight:700, color:C.textSec,
+                    textTransform:"uppercase", borderBottom:`1px solid ${C.border}` }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filas.map((f,i)=>(
+                <tr key={i} style={{ borderBottom:"1px solid #F1F5F9",
+                  background: f.errores.length>0 ? "#FEF2F2" : "transparent" }}>
+                  <td style={{ padding:"10px 12px" }}>{f.cliente_referencia||"—"}</td>
+                  <td style={{ padding:"10px 12px" }}>{f.dest_nombre||"—"}</td>
+                  <td style={{ padding:"10px 12px" }}>{f.dest_direccion||"—"}</td>
+                  <td style={{ padding:"10px 12px" }}>{f.dest_referencia||"—"}</td>
+                  <td style={{ padding:"10px 12px" }}>{f.dest_distrito||"—"}</td>
+                  <td style={{ padding:"10px 12px" }}>{TIPOS_SERVICIO[f.tipo_servicio]?.label||"—"}</td>
+                  <td style={{ padding:"10px 12px" }}>
+                    {f.errores.length===0
+                      ? <span style={{ color:C.green, fontWeight:700 }}>✅ OK</span>
+                      : <span style={{ color:C.red, fontWeight:700 }} title={f.errores.join(", ")}>❌ {f.errores[0]}</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {resultado && (
+        <div style={{ background:C.white, borderRadius:14, padding:20, border:`1px solid ${C.border}` }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+            <div style={{ fontSize:14, fontWeight:800, color:C.navy }}>
+              {resultado.filter(r=>r.ok).length} pedido{resultado.filter(r=>r.ok).length===1?"":"s"} creado{resultado.filter(r=>r.ok).length===1?"":"s"} correctamente
+            </div>
+            <button onClick={descargarResultado}
+              style={{ background:C.navy, color:"#E8EAF0", border:"none", padding:"8px 16px",
+                borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer" }}>
+              ⬇️ Descargar códigos generados
+            </button>
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            {resultado.map((r,i)=>(
+              <div key={i} style={{ display:"flex", justifyContent:"space-between",
+                padding:"8px 12px", background:C.bg, borderRadius:8, fontSize:12 }}>
+                <span style={{ color:C.textSec }}>{r.cliente_referencia||"—"} · {r.dest_nombre}</span>
+                <span style={{ fontWeight:700, color: r.ok?C.green:C.red }}>
+                  {r.ok ? r.codigo : `Error: ${r.error}`}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── MODAL DE DETALLE (SOLO LECTURA) ────────────────────────────
 function agruparHistorial(historial) {
   const grupos = [];
@@ -408,6 +667,12 @@ function DetalleModal({ pedido: p, onClose }) {
                   {TIPOS_SERVICIO[p.tipo_servicio]?.label || "—"}
                 </div>
               </div>
+              {p.cliente_referencia && (
+                <div>
+                  <div style={{ fontSize:10, color:C.textMut, textTransform:"uppercase" }}>N° de orden (tuyo)</div>
+                  <div style={{ fontSize:14, fontWeight:600, color:C.textPri }}>{p.cliente_referencia}</div>
+                </div>
+              )}
             </div>
             {p.cobro_destino && (
               <div style={{ marginTop:14, background:"#FFF7ED",
@@ -490,6 +755,7 @@ export default function BoazCliente() {
   const [pedidos, setPedidos] = useState([]);
   const [pedidoSel, setPedidoSel] = useState(null);
   const [cargando, setCargando] = useState(false);
+  const [vista, setVista] = useState("consulta"); // consulta | carga
 
   const cargar = useCallback(async () => {
     if (!contacto?.empresa_id) return;
@@ -549,10 +815,28 @@ export default function BoazCliente() {
         </div>
       </div>
 
+      <div style={{ background:C.white, borderBottom:`1px solid ${C.border}`,
+        padding:"0 24px", display:"flex", gap:4 }}>
+        {[
+          { id:"consulta", label:"📋 Consultar pedidos" },
+          { id:"carga", label:"⬆️ Cargar pedidos" },
+        ].map(t=>(
+          <button key={t.id} onClick={()=>setVista(t.id)}
+            style={{ background:"none", border:"none", cursor:"pointer",
+              padding:"14px 16px", fontSize:13, fontWeight:700,
+              color: vista===t.id ? C.navy : C.textMut,
+              borderBottom: vista===t.id ? `3px solid ${C.gold}` : "3px solid transparent" }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       {cargando && pedidos.length===0 ? (
         <div style={{ padding:60, textAlign:"center", color:C.textMut, fontSize:13 }}>
           Cargando pedidos...
         </div>
+      ) : vista==="carga" ? (
+        <CargaMasiva empresaId={contacto.empresa_id} onCargaCompleta={()=>{ cargar(); }}/>
       ) : (
         <Dashboard pedidos={pedidos} onVerPedido={setPedidoSel}/>
       )}
