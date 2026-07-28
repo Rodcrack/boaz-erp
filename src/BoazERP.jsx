@@ -1629,7 +1629,7 @@ export default function BoazERP() {
   ];
 
   const sideW = sidebarOpen ? 220 : 60;
-  const navVisible = NAV.filter(n => n.section || (ROLES_ACCESO[usuario.rol]||[]).includes(n.id));
+  
 if (verificando) {
     return (
       <div style={{ minHeight:"100vh", background:B.navy, display:"flex",
@@ -1642,6 +1642,9 @@ if (verificando) {
   if (!sesion || !usuario) {
     return <Login onLogin={cargarUsuario}/>;
   }
+
+  const navVisible = NAV.filter(n => n.section || (ROLES_ACCESO[usuario.rol]||[]).includes(n.id));
+  
   return (
     <div style={{ display:"flex", height:"100vh", background:B.bg,
       color:B.textPri, fontFamily:"'Segoe UI','Inter',sans-serif", overflow:"hidden" }}>
