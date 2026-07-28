@@ -232,6 +232,292 @@ const TIPOS_SERVICIO = {
   next_day: { label:"Next Day", color:"#0369A1", bg:"#EFF6FF" },
 };
 
+// ── HELPERS: REPORTES E INDICADORES ────────────────────────────
+function rangoPeriodo(periodo, fechaInicio, fechaFin) {
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  if (periodo==="hoy") {
+    const fin = new Date(); return [hoy, fin];
+  }
+  if (periodo==="semana") {
+    const dia = hoy.getDay();
+    const diff = hoy.getDate() - dia + (dia===0 ? -6 : 1);
+    const inicio = new Date(hoy); inicio.setDate(diff);
+    return [inicio, new Date()];
+  }
+  if (periodo==="mes") {
+    const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    return [inicio, new Date()];
+  }
+  const inicio = fechaInicio ? new Date(fechaInicio+"T00:00:00") : hoy;
+  const fin = fechaFin ? new Date(fechaFin+"T23:59:59") : new Date();
+  return [inicio, fin];
+}
+
+function DonutChart({ segments, size=150 }) {
+  const total = segments.reduce((a,s)=>a+s.value,0);
+  const r = size/2 - 16, c = size/2, circunferencia = 2*Math.PI*r;
+  let acc = 0;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <circle cx={c} cy={c} r={r} fill="none" stroke="#F1F5F9" strokeWidth={18}/>
+      {total>0 && segments.filter(s=>s.value>0).map((s,i)=>{
+        const frac = s.value/total;
+        const dash = frac*circunferencia;
+        const offset = -acc*circunferencia;
+        acc += frac;
+        return (
+          <circle key={i} cx={c} cy={c} r={r} fill="none" stroke={s.color} strokeWidth={18}
+            strokeDasharray={`${dash} ${circunferencia-dash}`} strokeDashoffset={offset}
+            transform={`rotate(-90 ${c} ${c})`}/>
+        );
+      })}
+      <text x={c} y={c-4} textAnchor="middle" fontSize="22" fontWeight="900" fill={C.navy}>{total}</text>
+      <text x={c} y={c+16} textAnchor="middle" fontSize="10" fill={C.textMut}>pedidos</text>
+    </svg>
+  );
+}
+
+function KPICard({ icon, label, value, sub, color }) {
+  return (
+    <div style={{ background:C.white, borderRadius:14, padding:18, border:`1px solid ${C.border}`,
+      boxShadow:"0 2px 8px #0D1E3D0A", borderTop:`3px solid ${color}` }}>
+      <div style={{ fontSize:22, marginBottom:6 }}>{icon}</div>
+      <div style={{ fontSize:26, fontWeight:900, color:C.navy }}>{value}</div>
+      <div style={{ fontSize:11, color:C.textMut, textTransform:"uppercase", fontWeight:700, marginTop:2 }}>{label}</div>
+      {sub && <div style={{ fontSize:11, color:color, fontWeight:700, marginTop:6 }}>{sub}</div>}
+    </div>
+  );
+}
+
+function BarraHorizontal({ label, valor, max, color }) {
+  const pct = max>0 ? Math.max(4, (valor/max*100)) : 0;
+  return (
+    <div style={{ marginBottom:10 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:4 }}>
+        <span style={{ color:C.textSec, fontWeight:600 }}>{label}</span>
+        <span style={{ color:C.navy, fontWeight:800 }}>{valor}</span>
+      </div>
+      <div style={{ background:"#F1F5F9", borderRadius:6, height:9, overflow:"hidden" }}>
+        <div style={{ width:`${pct}%`, height:"100%", background:color, borderRadius:6 }}/>
+      </div>
+    </div>
+  );
+}
+
+function SerieDiaria({ datos }) {
+  const max = Math.max(1, ...datos.map(d=>d.total));
+  return (
+    <div style={{ display:"flex", gap:8, alignItems:"flex-end", height:150, overflowX:"auto", paddingBottom:28 }}>
+      {datos.map((d,i)=>(
+        <div key={i} style={{ display:"flex", flexDirection:"column", alignItems:"center", minWidth:32, position:"relative" }}>
+          <div style={{ fontSize:10, color:C.textMut, marginBottom:4, fontWeight:700 }}>{d.total}</div>
+          <div style={{ width:20, height: Math.max(4, d.total/max*100), borderRadius:"5px 5px 0 0",
+            background:"#DCE3ED", position:"relative", overflow:"hidden" }}>
+            <div style={{ position:"absolute", bottom:0, left:0, width:"100%",
+              height: d.total ? `${(d.entregados/d.total*100)}%` : "0%", background:C.green }}/>
+          </div>
+          <div style={{ fontSize:9, color:C.textMut, marginTop:6, whiteSpace:"nowrap",
+            position:"absolute", top:"100%", transform:"rotate(-35deg)", transformOrigin:"top left" }}>{d.label}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Reportes({ pedidos }) {
+  const [periodo, setPeriodo] = useState("hoy");
+  const [fechaInicio, setFechaInicio] = useState("");
+  const [fechaFin, setFechaFin] = useState("");
+
+  const [inicio, fin] = rangoPeriodo(periodo, fechaInicio, fechaFin);
+  const filtrados = pedidos.filter(p => {
+    const f = new Date(p.created_at);
+    return f >= inicio && f <= fin;
+  });
+
+  const entregados = filtrados.filter(p=>p.estado==="entregado");
+  const noEntregados = filtrados.filter(p=>p.estado==="no_entregado");
+  const enRuta = filtrados.filter(p=>p.estado==="en_ruta");
+  const asignados = filtrados.filter(p=>p.estado==="asignado");
+  const sinAsignar = filtrados.filter(p=>p.estado==="sin_asignar");
+  const finalizados = entregados.length + noEntregados.length;
+  const efectividad = finalizados>0 ? Math.round(entregados.length/finalizados*100) : 0;
+
+  const codPedidos = filtrados.filter(p=>p.cobro_destino);
+  const codCobrado = entregados.filter(p=>p.cobro_destino).reduce((a,p)=>a+(parseFloat(p.monto_cobrar)||0),0);
+  const codPendiente = codPedidos.filter(p=>p.estado!=="entregado").reduce((a,p)=>a+(parseFloat(p.monto_cobrar)||0),0);
+
+  const porDistrito = {};
+  filtrados.forEach(p=>{ const d=p.dest_distrito||"Sin distrito"; porDistrito[d]=(porDistrito[d]||0)+1; });
+  const topDistritos = Object.entries(porDistrito).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const maxDistrito = topDistritos.length ? topDistritos[0][1] : 0;
+
+  const porServicio = { same_day:0, next_day:0, sin_definir:0 };
+  filtrados.forEach(p=>{
+    if (p.tipo_servicio==="same_day") porServicio.same_day++;
+    else if (p.tipo_servicio==="next_day") porServicio.next_day++;
+    else porServicio.sin_definir++;
+  });
+
+  const porDia = {};
+  filtrados.forEach(p=>{
+    const d = new Date(p.created_at);
+    const key = d.toISOString().slice(0,10);
+    if (!porDia[key]) porDia[key] = { total:0, entregados:0 };
+    porDia[key].total++;
+    if (p.estado==="entregado") porDia[key].entregados++;
+  });
+  const serieDiaria = Object.entries(porDia).sort((a,b)=>a[0].localeCompare(b[0])).map(([key,v])=>({
+    label: new Date(key+"T12:00:00").toLocaleDateString("es-PE",{day:"2-digit",month:"2-digit"}),
+    total:v.total, entregados:v.entregados,
+  }));
+
+  const PRESETS = [
+    { id:"hoy", label:"Hoy" },
+    { id:"semana", label:"Esta semana" },
+    { id:"mes", label:"Este mes" },
+    { id:"personalizado", label:"Rango personalizado" },
+  ];
+
+  return (
+    <div style={{ padding:"20px 24px" }}>
+      {/* Selector de periodo */}
+      <div style={{ display:"flex", gap:8, marginBottom:6, flexWrap:"wrap" }}>
+        {PRESETS.map(p=>(
+          <button key={p.id} onClick={()=>setPeriodo(p.id)}
+            style={{ padding:"8px 16px", borderRadius:20, fontSize:12, fontWeight:700, cursor:"pointer",
+              border: periodo===p.id ? `2px solid ${C.gold}` : `1px solid ${C.border}`,
+              background: periodo===p.id ? "#FFF8EF" : C.white,
+              color: periodo===p.id ? C.goldDk : C.textSec }}>
+            {p.label}
+          </button>
+        ))}
+      </div>
+      {periodo==="personalizado" && (
+        <div style={{ display:"flex", gap:10, marginBottom:16, marginTop:10 }}>
+          <input type="date" value={fechaInicio} onChange={e=>setFechaInicio(e.target.value)}
+            style={{ border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 10px", fontSize:13 }}/>
+          <span style={{ alignSelf:"center", color:C.textMut, fontSize:12 }}>hasta</span>
+          <input type="date" value={fechaFin} onChange={e=>setFechaFin(e.target.value)}
+            style={{ border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 10px", fontSize:13 }}/>
+        </div>
+      )}
+      <div style={{ fontSize:12, color:C.textMut, margin:"12px 0 18px" }}>
+        Mostrando {filtrados.length} pedido{filtrados.length===1?"":"s"} registrado{filtrados.length===1?"":"s"} entre{" "}
+        {inicio.toLocaleDateString("es-PE",{day:"numeric",month:"short"})} y {fin.toLocaleDateString("es-PE",{day:"numeric",month:"short"})}
+      </div>
+
+      {filtrados.length===0 ? (
+        <div style={{ background:C.white, borderRadius:14, padding:40, textAlign:"center",
+          color:C.textMut, border:`1px solid ${C.border}` }}>
+          📊 No hay pedidos registrados en este periodo
+        </div>
+      ) : (
+      <>
+        {/* KPIs principales */}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(5, 1fr)", gap:12, marginBottom:20 }}>
+          <KPICard icon="📦" label="Total pedidos" value={filtrados.length} color={C.navy}/>
+          <KPICard icon="✅" label="Entregados" value={entregados.length} color={C.green}
+            sub={finalizados>0 ? `${efectividad}% efectividad` : null}/>
+          <KPICard icon="⚠️" label="No entregados" value={noEntregados.length} color={C.red}/>
+          <KPICard icon="🛵" label="En ruta" value={enRuta.length} color="#7C3AED"/>
+          <KPICard icon="⏳" label="Por asignar / asignados" value={sinAsignar.length+asignados.length} color={C.gold}/>
+        </div>
+
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16 }}>
+          {/* Estado de pedidos: donut */}
+          <div style={{ background:C.white, borderRadius:14, padding:20, border:`1px solid ${C.border}` }}>
+            <div style={{ fontSize:12, fontWeight:800, color:C.navy, textTransform:"uppercase", marginBottom:16 }}>
+              Distribución por estado
+            </div>
+            <div style={{ display:"flex", alignItems:"center", gap:20 }}>
+              <DonutChart segments={[
+                { value:entregados.length, color:C.green, label:"Entregados" },
+                { value:noEntregados.length, color:C.red, label:"No entregados" },
+                { value:enRuta.length, color:"#7C3AED", label:"En ruta" },
+                { value:asignados.length, color:"#D97706", label:"Asignados" },
+                { value:sinAsignar.length, color:"#3B82F6", label:"Sin asignar" },
+              ]}/>
+              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                {[
+                  ["Entregados",entregados.length,C.green],
+                  ["No entregados",noEntregados.length,C.red],
+                  ["En ruta",enRuta.length,"#7C3AED"],
+                  ["Asignados",asignados.length,"#D97706"],
+                  ["Sin asignar",sinAsignar.length,"#3B82F6"],
+                ].map(([label,val,color])=>(
+                  <div key={label} style={{ display:"flex", alignItems:"center", gap:8, fontSize:12 }}>
+                    <span style={{ width:10, height:10, borderRadius:3, background:color, display:"inline-block" }}/>
+                    <span style={{ color:C.textSec }}>{label}</span>
+                    <span style={{ fontWeight:800, color:C.navy, marginLeft:"auto" }}>{val}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Cobros COD */}
+          <div style={{ background:C.white, borderRadius:14, padding:20, border:`1px solid ${C.border}` }}>
+            <div style={{ fontSize:12, fontWeight:800, color:C.navy, textTransform:"uppercase", marginBottom:16 }}>
+              Cobros en destino (COD)
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+              <div>
+                <div style={{ fontSize:11, color:C.textMut, textTransform:"uppercase" }}>Pedidos COD</div>
+                <div style={{ fontSize:24, fontWeight:900, color:C.navy }}>{codPedidos.length}</div>
+              </div>
+              <div>
+                <div style={{ fontSize:11, color:C.textMut, textTransform:"uppercase" }}>Cobrado</div>
+                <div style={{ fontSize:24, fontWeight:900, color:C.green }}>S/ {codCobrado.toFixed(2)}</div>
+              </div>
+              <div style={{ gridColumn:"1 / -1" }}>
+                <div style={{ fontSize:11, color:C.textMut, textTransform:"uppercase" }}>Pendiente por cobrar</div>
+                <div style={{ fontSize:24, fontWeight:900, color:"#C2410C" }}>S/ {codPendiente.toFixed(2)}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16 }}>
+          {/* Top distritos */}
+          <div style={{ background:C.white, borderRadius:14, padding:20, border:`1px solid ${C.border}` }}>
+            <div style={{ fontSize:12, fontWeight:800, color:C.navy, textTransform:"uppercase", marginBottom:16 }}>
+              Top distritos
+            </div>
+            {topDistritos.map(([distrito,val])=>(
+              <BarraHorizontal key={distrito} label={distrito} valor={val} max={maxDistrito} color={C.gold}/>
+            ))}
+          </div>
+
+          {/* Tipo de servicio */}
+          <div style={{ background:C.white, borderRadius:14, padding:20, border:`1px solid ${C.border}` }}>
+            <div style={{ fontSize:12, fontWeight:800, color:C.navy, textTransform:"uppercase", marginBottom:16 }}>
+              Tipo de servicio
+            </div>
+            <BarraHorizontal label="Same Day" valor={porServicio.same_day} max={filtrados.length} color="#7C3AED"/>
+            <BarraHorizontal label="Next Day" valor={porServicio.next_day} max={filtrados.length} color="#0369A1"/>
+            <BarraHorizontal label="Sin definir" valor={porServicio.sin_definir} max={filtrados.length} color={C.textMut}/>
+          </div>
+        </div>
+
+        {/* Tendencia diaria */}
+        {serieDiaria.length > 1 && (
+          <div style={{ background:C.white, borderRadius:14, padding:20, border:`1px solid ${C.border}` }}>
+            <div style={{ fontSize:12, fontWeight:800, color:C.navy, textTransform:"uppercase", marginBottom:8 }}>
+              Tendencia diaria
+            </div>
+            <div style={{ fontSize:11, color:C.textMut, marginBottom:10 }}>
+              <span style={{ color:C.green, fontWeight:700 }}>■</span> Entregados · Barra completa = total de pedidos del día
+            </div>
+            <SerieDiaria datos={serieDiaria}/>
+          </div>
+        )}
+      </>
+      )}
+    </div>
+  );
+}
+
 function Dashboard({ pedidos, onVerPedido }) {
   const [busqueda, setBusqueda] = useState("");
   const [fechaInicio, setFechaInicio] = useState("");
@@ -822,6 +1108,7 @@ export default function BoazCliente() {
         padding:"0 24px", display:"flex", gap:4 }}>
         {[
           { id:"consulta", label:"📋 Consultar pedidos" },
+          { id:"reportes", label:"📈 Reportes" },
           { id:"carga", label:"⬆️ Cargar pedidos" },
         ].map(t=>(
           <button key={t.id} onClick={()=>setVista(t.id)}
@@ -840,6 +1127,8 @@ export default function BoazCliente() {
         </div>
       ) : vista==="carga" ? (
         <CargaMasiva empresaId={contacto.empresa_id} onCargaCompleta={()=>{ cargar(); }}/>
+      ) : vista==="reportes" ? (
+        <Reportes pedidos={pedidos}/>
       ) : (
         <Dashboard pedidos={pedidos} onVerPedido={setPedidoSel}/>
       )}
