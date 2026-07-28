@@ -517,14 +517,6 @@ function DetallePedido({ pedido: p, onVolver, onActualizar, onActualizarLocal, t
     onVolver();
   };
 
-  const iniciarRutaIndividual = async () => {
-    setGuardando(true);
-    await iniciarRutaMasivo([p.id]);
-    setGuardando(false);
-    onActualizarLocal(p.id, { estado:"en_ruta" });
-    toast("Pedido en ruta ✓");
-  };
-
   const abrirGoogleMaps = () => {
     const addr = encodeURIComponent(`${p.dest_direccion}, ${p.dest_distrito}, Lima, Perú`);
     window.open(`https://www.google.com/maps/search/?api=1&query=${addr}`, "_blank");
@@ -673,22 +665,9 @@ function DetallePedido({ pedido: p, onVolver, onActualizar, onActualizarLocal, t
         marginBottom:12, border:`1px solid #E2E8F0` }}>
         <div style={{ fontSize:11, fontWeight:700, color:C.navy, textTransform:"uppercase",
           letterSpacing:"0.8px", marginBottom:12 }}>📋 Paquete</div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-          <div>
-            <div style={{ fontSize:10, color:C.textMut, textTransform:"uppercase" }}>Peso</div>
-            <div style={{ fontSize:14, fontWeight:600, color:C.textPri }}>{p.peso_kg?p.peso_kg+" kg":"—"}</div>
-          </div>
-          <div>
-            <div style={{ fontSize:10, color:C.textMut, textTransform:"uppercase" }}>Método de servicio</div>
-            <div style={{ fontSize:14, fontWeight:700,
-              color: p.cobro_destino ? "#C2410C" : C.green }}>
-              {p.cobro_destino ? "COD" : "Pagado"}
-            </div>
-            <div style={{ fontSize:13, fontWeight:600,
-              color: p.cobro_destino ? "#C2410C" : C.textMut }}>
-              {p.cobro_destino ? `S/ ${p.monto_cobrar}` : "—"}
-            </div>
-          </div>
+        <div>
+          <div style={{ fontSize:10, color:C.textMut, textTransform:"uppercase" }}>Peso</div>
+          <div style={{ fontSize:14, fontWeight:600, color:C.textPri }}>{p.peso_kg?p.peso_kg+" kg":"—"}</div>
         </div>
         {p.cobro_destino && (
           <div style={{ marginTop:14, background:"#FFF7ED",
@@ -719,15 +698,6 @@ function DetallePedido({ pedido: p, onVolver, onActualizar, onActualizarLocal, t
           letterSpacing:"0.8px", marginBottom:14 }}>🔄 Actualizar estado</div>
 
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-          {p.estado==="asignado" && (
-            <button onClick={iniciarRutaIndividual} disabled={guardando}
-              style={{ background:`linear-gradient(135deg,#7C3AED,#6D28D9)`,
-                color:C.white, border:"none", padding:16, borderRadius:12,
-                fontSize:15, fontWeight:800, cursor:"pointer" }}>
-              🚀 Iniciar ruta (solo este pedido)
-            </button>
-          )}
-
           {(p.estado==="asignado"||p.estado==="en_ruta") && (
             <>
               <button onClick={()=>{ setFotos([]); setVista("entrega"); }}
