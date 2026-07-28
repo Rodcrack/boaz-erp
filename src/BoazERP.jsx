@@ -181,7 +181,10 @@ function Dashboard({ pedidos, repartidores, liquidaciones }) {
                   <td style={{ padding:"10px 14px", fontSize:12, color:B.textPri }}>{p.dest_nombre}</td>
                   <td style={{ padding:"10px 14px", fontSize:12, color:B.textSec }}>{p.dest_distrito||"—"}</td>
                   <td style={{ padding:"10px 14px", fontSize:12, fontWeight:600, color:B.textPri }}>{fmt.sol(p.tarifa_s)}</td>
-                  <td style={{ padding:"10px 14px", fontSize:12, color:B.textSec }}>—</td>
+                  <td style={{ padding:"10px 14px", fontSize:12, color:B.textSec }}>
+  {repartidores.find(r=>r.id===p.repartidor_id) ?
+    `${repartidores.find(r=>r.id===p.repartidor_id).nombres} ${repartidores.find(r=>r.id===p.repartidor_id).apellidos}` : "—"}
+</td>
                   <td style={{ padding:"10px 14px" }}><Chip estado={p.estado}/></td>
                   <td style={{ padding:"10px 14px", fontSize:11, color:B.textMut }}>{fmt.fecha(p.created_at)}</td>
                 </tr>
