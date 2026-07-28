@@ -122,6 +122,23 @@ async function subirFotosYUrls(pedidoId, tipoEvento, blobsOBase64) {
   return urls;
 }
 
+function agruparHistorial(historial) {
+  const grupos = [];
+  for (const h of historial) {
+    if ((h.tipo||"").startsWith("foto_")) {
+      const ultimo = grupos[grupos.length-1];
+      if (ultimo && ultimo.esFotoGrupo && ultimo.timestamp === h.timestamp) {
+        ultimo.urls.push(h.url);
+      } else {
+        grupos.push({ esFotoGrupo:true, tipo:h.tipo, timestamp:h.timestamp, urls:[h.url] });
+      }
+    } else {
+      grupos.push(h);
+    }
+  }
+  return grupos;
+}
+
 // Guarda un cambio de estado (entregado / no_entregado) con sus fotos y GPS.
 // Intenta online primero; si falla, encola en localStorage (con las fotos
 // ya comprimidas en base64) para sincronizar cuando vuelva la conexión.
@@ -549,7 +566,9 @@ function DetallePedido({ pedido: p, onVolver, onActualizar, onActualizarLocal, t
     window.open(`https://wa.me/51${tel}?text=Hola ${p.dest_nombre}, soy repartidor de Boaz. Estoy llegando a entregar tu pedido ${p.omd}.`,"_blank");
   };
 
-  const historial = [...(p.historial||[])].sort((a,b)=> new Date(b.timestamp) - new Date(a.timestamp));
+  const historial = agruparHistorial(
+    [...(p.historial||[])].sort((a,b)=> new Date(b.timestamp) - new Date(a.timestamp))
+  );
 
   // ── Sub-vista: capturar evidencias (entrega o no entrega) ──
   if (vista === "entrega" || vista === "no_entrega") {
@@ -749,15 +768,19 @@ function DetallePedido({ pedido: p, onVolver, onActualizar, onActualizarLocal, t
                     {h.tipo==="llamada" && "Llamada al cliente"}
                     {h.tipo==="whatsapp" && "Mensaje de WhatsApp"}
                     {h.tipo==="estado" && h.detalle}
-                    {(h.tipo==="foto_entrega"||h.tipo==="foto_no_entrega") && "Foto de evidencia"}
+                    {h.esFotoGrupo && "Fotos de evidencia"}
                   </div>
                   <div style={{ fontSize:11, color:C.textMut }}>
                     {fmt.fechaHora(h.timestamp)}
                     {h.lat && ` · GPS ${h.lat.toFixed(4)}, ${h.lng.toFixed(4)}`}
                   </div>
-                  {h.url && (
-                    <img src={h.url} alt="" style={{ width:60, height:60, objectFit:"cover",
-                      borderRadius:6, marginTop:6, border:"1px solid #E2E8F0" }}/>
+                  {h.esFotoGrupo && (
+                    <div style={{ display:"flex", gap:8, marginTop:6, flexWrap:"wrap" }}>
+                      {h.urls.map((url,ui)=>(
+                        <img key={ui} src={url} alt="" style={{ width:60, height:60, objectFit:"cover",
+                          borderRadius:6, border:"1px solid #E2E8F0" }}/>
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>
