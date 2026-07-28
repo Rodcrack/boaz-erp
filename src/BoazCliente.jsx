@@ -110,15 +110,11 @@ function parseArchivo(file) {
 
 function descargarPlantilla() {
   const ejemplo = ["PED-00123","Marco Salinas","987654321","Calle Las Flores 890","Frente al parque","Miraflores","1.2","Same Day","NO",""];
-  const csv = [COLUMNAS_PLANTILLA, ejemplo]
-    .map(r => r.map(v => `"${(v||"").toString().replace(/"/g,'""')}"`).join(","))
-    .join("\n");
-  const blob = new Blob(["\uFEFF"+csv], { type:"text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = "plantilla_pedidos_boaz.csv";
-  a.click();
-  URL.revokeObjectURL(url);
+  const ws = XLSX.utils.aoa_to_sheet([COLUMNAS_PLANTILLA, ejemplo]);
+  ws["!cols"] = COLUMNAS_PLANTILLA.map(()=>({ wch:20 }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Plantilla");
+  XLSX.writeFile(wb, "plantilla_pedidos_boaz.xlsx");
 }
 
 // ── PANTALLA LOGIN ─────────────────────────────────────────────
@@ -263,16 +259,11 @@ function Dashboard({ pedidos, onVerPedido }) {
       p.omd, ESTADOS[p.estado]?.label||p.estado, TIPOS_SERVICIO[p.tipo_servicio]?.label||"",
       p.dest_nombre, p.dest_telefono, p.dest_direccion, p.dest_distrito, fmt.fecha(p.created_at),
     ]);
-    const csv = [headers, ...rows]
-      .map(r => r.map(v => `"${(v??"").toString().replace(/"/g,'""')}"`).join(","))
-      .join("\n");
-    const blob = new Blob(["\uFEFF"+csv], { type:"text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `pedidos_boaz_${new Date().toISOString().slice(0,10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    ws["!cols"] = headers.map(()=>({ wch:20 }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Pedidos");
+    XLSX.writeFile(wb, `pedidos_boaz_${new Date().toISOString().slice(0,10)}.xlsx`);
   };
 
   return (
@@ -300,7 +291,7 @@ function Dashboard({ pedidos, onVerPedido }) {
           style={{ background:C.navy, border:"none", color:"#E8EAF0",
             padding:"0 18px", borderRadius:10, fontSize:13, fontWeight:700, cursor:"pointer",
             display:"flex", alignItems:"center", gap:6, whiteSpace:"nowrap" }}>
-          ⬇️ Descargar CSV
+          ⬇️ Descargar Excel
         </button>
       </div>
 
@@ -471,13 +462,11 @@ function CargaMasiva({ empresaId, onCargaCompleta }) {
     if (!resultado) return;
     const headers = ["N Orden Cliente","Codigo Boaz","Destinatario","Estado"];
     const rows = resultado.map(r => [r.cliente_referencia||"", r.ok?r.codigo:"—", r.dest_nombre, r.ok?"Creado":("Error: "+r.error)]);
-    const csv = [headers, ...rows].map(r=>r.map(v=>`"${(v||"").toString().replace(/"/g,'""')}"`).join(",")).join("\n");
-    const blob = new Blob(["\uFEFF"+csv], { type:"text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = `codigos_boaz_generados_${new Date().toISOString().slice(0,10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    ws["!cols"] = headers.map(()=>({ wch:20 }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Codigos");
+    XLSX.writeFile(wb, `codigos_boaz_generados_${new Date().toISOString().slice(0,10)}.xlsx`);
   };
 
   return (
