@@ -334,7 +334,8 @@ function Login({ onLogin }) {
 
 // ── COMPONENTE: CAPTURA DE FOTOS ───────────────────────────────
 function CapturaFotos({ fotos, setFotos, minimo = 2, label = "Evidencias" }) {
-  const inputRef = useRef();
+  const inputCamara = useRef();
+  const inputGaleria = useRef();
   const agregarFoto = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -350,7 +351,7 @@ function CapturaFotos({ fotos, setFotos, minimo = 2, label = "Evidencias" }) {
         textTransform:"uppercase", marginBottom:8 }}>
         📷 {label} — {fotos.length}/{minimo} mínimo {completo && "✓"}
       </div>
-      <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:6 }}>
+      <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:10 }}>
         {fotos.map((f,i)=>(
           <div key={i} style={{ position:"relative", width:70, height:70 }}>
             <img src={f.preview} alt="" style={{ width:70, height:70, objectFit:"cover",
@@ -360,14 +361,27 @@ function CapturaFotos({ fotos, setFotos, minimo = 2, label = "Evidencias" }) {
               border:"none", fontSize:11, cursor:"pointer", lineHeight:"20px" }}>×</button>
           </div>
         ))}
-        <button onClick={()=>inputRef.current?.click()}
-          style={{ width:70, height:70, borderRadius:8, border:`2px dashed ${C.gold}`,
-            background:"#FFF8EF", color:C.goldDk, fontSize:24, cursor:"pointer" }}>+</button>
-        <input ref={inputRef} type="file" accept="image/*" capture="environment"
+      </div>
+      <div style={{ display:"flex", gap:8, marginBottom:6 }}>
+        <button onClick={()=>inputCamara.current?.click()}
+          style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+            padding:"12px 10px", borderRadius:10, border:`2px dashed ${C.gold}`,
+            background:"#FFF8EF", color:C.goldDk, fontSize:13, fontWeight:700, cursor:"pointer" }}>
+          📸 Tomar foto
+        </button>
+        <button onClick={()=>inputGaleria.current?.click()}
+          style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+            padding:"12px 10px", borderRadius:10, border:`2px dashed ${C.navyLt}`,
+            background:"#F0F4F8", color:C.navy, fontSize:13, fontWeight:700, cursor:"pointer" }}>
+          🖼️ Subir de galería
+        </button>
+        <input ref={inputCamara} type="file" accept="image/*" capture="environment"
+          style={{display:"none"}} onChange={agregarFoto}/>
+        <input ref={inputGaleria} type="file" accept="image/*"
           style={{display:"none"}} onChange={agregarFoto}/>
       </div>
       {!completo && (
-        <div style={{ fontSize:11, color:C.textMut }}>Toma al menos {minimo} fotos para continuar.</div>
+        <div style={{ fontSize:11, color:C.textMut }}>Toma o sube al menos {minimo} fotos para continuar.</div>
       )}
     </div>
   );
