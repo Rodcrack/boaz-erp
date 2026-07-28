@@ -28,7 +28,6 @@ const ESTADOS = {
   no_entregado:{ label:"No entregado",color:"#DC2626", bg:"#FEF2F2" },
 };
 
-const RESPONSABILIDADES = ["Cliente", "Boaz", "Empresa remitente", "Externo / Zona"];
 const MOTIVOS_NO_ENTREGA = [
   "Cliente ausente",
   "Dirección incorrecta / no ubicable",
@@ -136,12 +135,11 @@ async function guardarEvidenciaYEstado({ pedidoId, nuevoEstado, fotosFiles, moti
   if (nuevoEstado === "entregado") payload.fecha_entrega = timestamp;
   if (nuevoEstado === "no_entregado") {
     payload.motivo_no_entrega = motivo;
-    payload.responsable_no_entrega = responsable;
   }
   const tipoEvento = nuevoEstado === "entregado" ? "foto_entrega" : "foto_no_entrega";
   const detalleEvento = nuevoEstado === "entregado"
     ? "Entregado"
-    : `No entregado — ${responsable}: ${motivo}`;
+    : `No entregado: ${motivo}`;
 
   try {
     const urls = await subirFotosYUrls(pedidoId, tipoEvento, comprimidas);
@@ -499,25 +497,24 @@ function DetallePedido({ pedido: p, onVolver, onActualizar, onActualizarLocal, t
   const [vista, setVista] = useState("detalle"); // detalle | entrega | no_entrega
   const [guardando, setGuardando] = useState(false);
   const [fotos, setFotos] = useState([]);
-  const [responsable, setResponsable] = useState("");
   const [motivo, setMotivo] = useState("");
   const [detalleOtro, setDetalleOtro] = useState("");
 
   const confirmarEvidencia = async (nuevoEstado) => {
     if (fotos.length < 2) { toast("Se requieren mínimo 2 fotos de evidencia","error"); return; }
-    if (nuevoEstado === "no_entregado" && (!responsable || !motivo)) {
-      toast("Selecciona responsable y motivo","error"); return;
+    if (nuevoEstado === "no_entregado" && !motivo) {
+      toast("Selecciona un motivo","error"); return;
     }
     setGuardando(true);
     const motivoFinal = motivo === "Otro" ? (detalleOtro || "Otro") : motivo;
     const { offline } = await guardarEvidenciaYEstado({
       pedidoId: p.id, nuevoEstado, fotosFiles: fotos,
-      motivo: motivoFinal, responsable,
+      motivo: motivoFinal, responsable: "",
     });
     setGuardando(false);
     onActualizarLocal(p.id, nuevoEstado === "entregado"
       ? { estado:"entregado", fecha_entrega:new Date().toISOString() }
-      : { estado:"no_entregado", motivo_no_entrega:motivoFinal, responsable_no_entrega:responsable });
+      : { estado:"no_entregado", motivo_no_entrega:motivoFinal });
     toast(offline
       ? "Sin conexión: guardado en el equipo, se sincronizará al recuperar señal ⏳"
       : (nuevoEstado==="entregado" ? "¡Pedido entregado! ✓" : "Registrado como no entregado ✓"));
@@ -572,21 +569,6 @@ function DetallePedido({ pedido: p, onVolver, onActualizar, onActualizarLocal, t
         {!esEntrega && (
           <div style={{ background:C.white, borderRadius:14, padding:18,
             marginBottom:14, border:`1px solid #E2E8F0` }}>
-            <div style={{ fontSize:11, fontWeight:700, color:C.navy, textTransform:"uppercase",
-              marginBottom:10 }}>Responsabilidad</div>
-            <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:16 }}>
-              {RESPONSABILIDADES.map(r=>(
-                <button key={r} onClick={()=>setResponsable(r)}
-                  style={{ padding:"8px 14px", borderRadius:20, fontSize:12, fontWeight:700,
-                    cursor:"pointer",
-                    border: responsable===r ? `2px solid ${C.red}` : `1px solid #E2E8F0`,
-                    background: responsable===r ? "#FEF2F2" : C.white,
-                    color: responsable===r ? C.red : C.textSec }}>
-                  {r}
-                </button>
-              ))}
-            </div>
-
             <div style={{ fontSize:11, fontWeight:700, color:C.navy, textTransform:"uppercase",
               marginBottom:10 }}>Motivo</div>
             <select value={motivo} onChange={e=>setMotivo(e.target.value)}
@@ -695,18 +677,19 @@ function DetallePedido({ pedido: p, onVolver, onActualizar, onActualizarLocal, t
         marginBottom:12, border:`1px solid #E2E8F0` }}>
         <div style={{ fontSize:11, fontWeight:700, color:C.navy, textTransform:"uppercase",
           letterSpacing:"0.8px", marginBottom:12 }}>📋 Paquete</div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-          {[
-            ["Peso",p.peso_kg?p.peso_kg+" kg":"—"],
-            ["Tarifa","S/ "+p.tarifa_s],
-            ["Ámbito",p.ambito?.replace("_"," ")||"—"],
-            ["Programado",fmt.fecha(p.fecha_programada)],
-          ].map(([k,v])=>(
-            <div key={k}>
-              <div style={{ fontSize:10, color:C.textMut, textTransform:"uppercase" }}>{k}</div>
-              <div style={{ fontSize:14, fontWeight:600, color:C.textPri, textTransform:"capitalize" }}>{v}</div>
+        <div style={{ display:"grid", gridTemplateColumns: p.cobro_destino ? "1fr 1fr" : "1fr", gap:12 }}>
+          <div>
+            <div style={{ fontSize:10, color:C.textMut, textTransform:"uppercase" }}>Peso</div>
+            <div style={{ fontSize:14, fontWeight:600, color:C.textPri }}>{p.peso_kg?p.peso_kg+" kg":"—"}</div>
+          </div>
+          {p.cobro_destino && (
+            <div>
+              <div style={{ fontSize:10, color:C.textMut, textTransform:"uppercase" }}>Método de servicio</div>
+              <div style={{ fontSize:14, fontWeight:700, color:"#C2410C" }}>
+                COD — S/ {p.monto_cobrar}
+              </div>
             </div>
-          ))}
+          )}
         </div>
         {p.cobro_destino && (
           <div style={{ marginTop:14, background:"#FFF7ED",
@@ -724,7 +707,7 @@ function DetallePedido({ pedido: p, onVolver, onActualizar, onActualizarLocal, t
           <div style={{ marginTop:14, background:"#FEF2F2",
             border:"2px solid #FECACA", borderRadius:10, padding:"12px 14px" }}>
             <div style={{ fontSize:12, fontWeight:700, color:C.red, marginBottom:2 }}>
-              ⚠️ NO ENTREGADO — {p.responsable_no_entrega}
+              ⚠️ NO ENTREGADO
             </div>
             <div style={{ fontSize:13, color:"#991B1B" }}>{p.motivo_no_entrega}</div>
           </div>
@@ -754,7 +737,7 @@ function DetallePedido({ pedido: p, onVolver, onActualizar, onActualizarLocal, t
                   fontSize:15, fontWeight:800, cursor:"pointer" }}>
                 ✅ Marcar entregado
               </button>
-              <button onClick={()=>{ setFotos([]); setResponsable(""); setMotivo(""); setDetalleOtro(""); setVista("no_entrega"); }}
+              <button onClick={()=>{ setFotos([]); setMotivo(""); setDetalleOtro(""); setVista("no_entrega"); }}
                 style={{ background:`linear-gradient(135deg,${C.red},#B91C1C)`,
                   color:C.white, border:"none", padding:16, borderRadius:12,
                   fontSize:15, fontWeight:800, cursor:"pointer" }}>
