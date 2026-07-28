@@ -40,8 +40,8 @@ function Login({ onLogin }) {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    sb.from("repartidores").select("id,nombres,apellidos,activo")
-      .eq("activo",true).order("nombres")
+    sb.from("repartidores").select("id,nombres,apellidos,activo,password_hash")
+  .eq("activo",true).order("nombres")
       .then(({data})=>{ if(data) setRepartidores(data); });
   }, []);
 
@@ -51,7 +51,7 @@ function Login({ onLogin }) {
     if (!rep) { setError("Repartidor no encontrado"); return; }
     // PIN simple: últimos 4 dígitos del DNI (configurable)
     // Por ahora cualquier PIN de 4 dígitos funciona en demo
-    if (pin.length < 4) { setError("Ingresa tu PIN de 4 dígitos"); return; }
+    if (pin !== rep.password_hash) { setError("PIN incorrecto"); return; }
     onLogin(rep);
   };
 
