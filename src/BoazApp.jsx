@@ -242,20 +242,22 @@ async function procesarCola() {
 // ── PANTALLA LOGIN ─────────────────────────────────────────────
 function Login({ onLogin }) {
   const [repartidores, setRepartidores] = useState([]);
-  const [sel, setSel] = useState("");
+  const [usuario, setUsuario] = useState("");
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
-    sb.from("repartidores").select("id,nombres,apellidos,activo,password_hash")
-      .eq("activo",true).order("nombres")
+    sb.from("repartidores").select("id,nombres,apellidos,activo,password_hash,usuario")
+      .eq("activo",true)
       .then(({data})=>{ if(data) setRepartidores(data); });
   }, []);
 
   const entrar = () => {
-    if (!sel) { setError("Selecciona tu nombre"); return; }
-    const rep = repartidores.find(r=>r.id===sel);
-    if (!rep) { setError("Repartidor no encontrado"); return; }
+    if (!usuario.trim()) { setError("Ingresa tu usuario"); return; }
+    const rep = repartidores.find(r=>
+      (r.usuario||"").trim().toLowerCase() === usuario.trim().toLowerCase()
+    );
+    if (!rep) { setError("Usuario no encontrado"); return; }
     if (pin !== rep.password_hash) { setError("PIN incorrecto"); return; }
     onLogin(rep);
   };
@@ -287,16 +289,12 @@ function Login({ onLogin }) {
 
         <div style={{ marginBottom:14 }}>
           <label style={{ fontSize:11, color:C.textMut, textTransform:"uppercase",
-            letterSpacing:"0.7px", marginBottom:6, display:"block" }}>Soy repartidor</label>
-          <select value={sel} onChange={e=>setSel(e.target.value)}
+            letterSpacing:"0.7px", marginBottom:6, display:"block" }}>Usuario</label>
+          <input type="text" placeholder="Tu usuario" autoCapitalize="none" autoCorrect="off"
+            value={usuario} onChange={e=>setUsuario(e.target.value)}
             style={{ width:"100%", background:"#0D1E3D", border:"1px solid #1E3560",
               color:"#E8EAF0", borderRadius:10, padding:"12px 14px",
-              fontSize:14, outline:"none" }}>
-            <option value="">— Selecciona tu nombre —</option>
-            {repartidores.map(r=>(
-              <option key={r.id} value={r.id}>{r.nombres} {r.apellidos}</option>
-            ))}
-          </select>
+              fontSize:14, outline:"none", boxSizing:"border-box" }}/>
         </div>
 
         <div style={{ marginBottom:20 }}>
