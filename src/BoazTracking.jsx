@@ -14,8 +14,7 @@ const ESTADOS = {
   asignado:    { label:"Asignado",      icon:"🛵", color:"#F59E0B", desc:"Tu pedido fue asignado a un repartidor." },
   en_ruta:     { label:"En camino",     icon:"🚀", color:"#8B5CF6", desc:"¡Tu pedido está en camino hacia ti!" },
   entregado:   { label:"Entregado",     icon:"✅", color:"#10B981", desc:"¡Tu pedido fue entregado exitosamente!" },
-  devuelto:    { label:"Devuelto",      icon:"↩️", color:"#EF4444", desc:"Tu pedido fue devuelto. Por favor contáctanos." },
-  incidencia:  { label:"Incidencia",    icon:"⚠️", color:"#F97316", desc:"Hay una incidencia con tu pedido. Te contactaremos." },
+  no_entregado:{ label:"No entregado",  icon:"⚠️", color:"#EF4444", desc:"Tu pedido no pudo ser entregado. Nos pondremos en contacto contigo." },
 };
 
 const TIMELINE = ["sin_asignar","asignado","en_ruta","entregado"];
@@ -34,11 +33,18 @@ export default function BoazTracking() {
   const buscar = async () => {
     if (!codigo.trim()) return;
     setBuscando(true); setError(""); setPedido(null);
-    const raw = codigo.trim().toUpperCase().replace(/^BZ-?/,"");
+
+    // Normaliza lo que pegue o escriba el usuario: mayúsculas, sin espacios.
+    const limpio = codigo.trim().toUpperCase().replace(/\s+/g,"");
+    const soloDigitos = limpio.replace(/^BZ-?/,"");
+
     const candidatos = [
-      "BZ-" + raw,
-      "BZ-" + raw.padStart(4,"0"),
-      "BZ-" + raw.padStart(6,"0"),
+      limpio,                              // tal cual lo pegó (nuevo formato: BZ + 10 dígitos)
+      "BZ" + soloDigitos,                  // por si escribió solo los dígitos
+      "BZ" + soloDigitos.padStart(10,"0"), // por si le faltan ceros a la izquierda
+      "BZ-" + soloDigitos,                 // formato antiguo (compatibilidad)
+      "BZ-" + soloDigitos.padStart(4,"0"),
+      "BZ-" + soloDigitos.padStart(6,"0"),
     ];
     let data = null, err = null;
     for (const bz of candidatos) {
@@ -56,6 +62,7 @@ export default function BoazTracking() {
 
   const estadoActual = pedido ? (ESTADOS[pedido.estado] || ESTADOS.sin_asignar) : null;
   const idxActual = pedido ? TIMELINE.indexOf(pedido.estado) : -1;
+  const esFinal = pedido?.estado === "no_entregado";
 
   return (
     <div style={{ minHeight:"100vh", background:"#0D1E3D",
@@ -82,22 +89,25 @@ export default function BoazTracking() {
             Rastrea tu pedido
           </div>
           <div style={{ fontSize:15, color:"#8FA3BA" }}>
-            Ingresa tu código BZ para ver el estado de tu envío en tiempo real
+            Ingresa tu Tracking Boaz para ver el estado de tu envío en tiempo real
           </div>
         </div>
 
         {/* Input de búsqueda */}
         <div style={{ display:"flex", gap:10, marginBottom:12 }}>
-          <div style={{ flex:1, position:"relative" }}>
-            <span style={{ position:"absolute", left:14, top:"50%", transform:"translateY(-50%)",
-              fontSize:14, color:"#8FA3BA", fontWeight:700 }}>BZ-</span>
+          <div style={{ flex:1 }}>
             <input
-              placeholder="000009"
-              value={codigo.replace(/^BZ-?0*/i,"").replace(/^BZ-/i,"")}
-              onChange={e=>setCodigo(e.target.value.replace(/^BZ-?/i,""))}
+              placeholder="BZ0000000004"
+              value={codigo}
+              onChange={e=>setCodigo(e.target.value)}
+              onPaste={e=>{
+                e.preventDefault();
+                const texto = (e.clipboardData || window.clipboardData).getData("text");
+                setCodigo(texto.trim());
+              }}
               onKeyDown={e=>e.key==="Enter"&&buscar()}
               style={{ width:"100%", background:"#152848", border:"1px solid #1E3560",
-                color:"#F3F4F6", borderRadius:12, padding:"14px 16px 14px 44px",
+                color:"#F3F4F6", borderRadius:12, padding:"14px 16px",
                 fontSize:16, outline:"none", boxSizing:"border-box",
                 letterSpacing:"1px", fontWeight:600 }}
             />
@@ -144,14 +154,14 @@ export default function BoazTracking() {
                   </div>
                 </div>
                 <div style={{ marginLeft:"auto", textAlign:"right" }}>
-                  <div style={{ fontSize:11, color:"#8FA3BA" }}>Código</div>
+                  <div style={{ fontSize:11, color:"#8FA3BA" }}>Tracking Boaz</div>
                   <div style={{ fontSize:20, fontWeight:900, color:"#F5A623",
                     letterSpacing:"1px" }}>{pedido.omd}</div>
                 </div>
               </div>
 
               {/* Timeline */}
-              {pedido.estado!=="devuelto" && pedido.estado!=="incidencia" && (
+              {!esFinal && (
                 <div style={{ padding:"24px", borderBottom:"1px solid #1E3560" }}>
                   <div style={{ display:"flex", alignItems:"flex-start", position:"relative" }}>
                     {/* Línea de fondo */}
@@ -223,8 +233,19 @@ export default function BoazTracking() {
                 </div>
               </div>
 
+              {esFinal && pedido.motivo_no_entrega && (
+                <div style={{ padding:"0 24px 20px" }}>
+                  <div style={{ background:"#2D0707", border:"1px solid #EF444444",
+                    borderRadius:10, padding:"14px 16px" }}>
+                    <div style={{ fontSize:11, color:"#FCA5A5", textTransform:"uppercase",
+                      fontWeight:700, marginBottom:4 }}>Motivo</div>
+                    <div style={{ fontSize:13, color:"#F3F4F6" }}>{pedido.motivo_no_entrega}</div>
+                  </div>
+                </div>
+              )}
+
               {/* Historial de estados */}
-              {pedido.estado!=="devuelto" && pedido.estado!=="incidencia" && (
+              {!esFinal && (
                 <div style={{ padding:"0 24px 20px" }}>
                   <div style={{ fontSize:11, color:"#8FA3BA", textTransform:"uppercase",
                     letterSpacing:"0.8px", marginBottom:12, fontWeight:700 }}>Historial</div>
@@ -284,8 +305,8 @@ export default function BoazTracking() {
         {!pedido && !error && !buscando && (
           <div style={{ textAlign:"center", marginTop:40, color:"#4A6080" }}>
             <div style={{ fontSize:40, marginBottom:12 }}>📦</div>
-            <div style={{ fontSize:13 }}>Ingresa tu código BZ para comenzar</div>
-            <div style={{ fontSize:11, marginTop:6, color:"#2A3F60" }}>Ejemplo: BZ-000009 o BZ-0009</div>
+            <div style={{ fontSize:13 }}>Ingresa tu Tracking Boaz para comenzar</div>
+            <div style={{ fontSize:11, marginTop:6, color:"#2A3F60" }}>Ejemplo: BZ0000000004</div>
           </div>
         )}
       </div>
