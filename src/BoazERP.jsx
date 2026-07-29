@@ -2295,8 +2295,8 @@ export default function BoazERP() {
 
   const showToast = useCallback((msg, tipo="ok") => setToast({msg,tipo}), []);
 
-  const cargar = useCallback(async () => {
-    setCargando(true);
+  const cargar = useCallback(async (opts={}) => {
+    if (!opts.silencioso) setCargando(true);
     try {
       const [p,r,e,l] = await Promise.all([
         sb.from("pedidos").select("*").order("created_at",{ascending:false}),
@@ -2309,8 +2309,10 @@ export default function BoazERP() {
       if(e.data) setEmpresas(e.data);
       if(l.data) setLiquidaciones(l.data);
     } catch(err) { console.error(err); }
-    setCargando(false);
+    if (!opts.silencioso) setCargando(false);
   }, []);
+
+  const cargarSilencioso = useCallback(() => cargar({ silencioso:true }), [cargar]);
 
   useEffect(() => { cargar(); }, [cargar]);
 
@@ -2490,10 +2492,10 @@ if (verificando) {
           ) : (
             <>
               {seccion==="dashboard"     && <Dashboard pedidos={pedidos} repartidores={repartidores} liquidaciones={liquidaciones}/>}
-              {seccion==="pedidos"       && <Pedidos pedidos={pedidos} repartidores={repartidores} empresas={empresas} onRefresh={cargar} toast={showToast}/>}
-              {seccion==="repartidores"  && <Repartidores repartidores={repartidores} pedidos={pedidos} onRefresh={cargar} toast={showToast}/>}
-              {seccion==="clientes"      && <Clientes empresas={empresas} pedidos={pedidos} onRefresh={cargar} toast={showToast}/>}
-              {seccion==="liquidaciones" && <Liquidaciones repartidores={repartidores} pedidos={pedidos} liquidaciones={liquidaciones} onRefresh={cargar} toast={showToast}/>}
+              {seccion==="pedidos"       && <Pedidos pedidos={pedidos} repartidores={repartidores} empresas={empresas} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccion==="repartidores"  && <Repartidores repartidores={repartidores} pedidos={pedidos} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccion==="clientes"      && <Clientes empresas={empresas} pedidos={pedidos} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccion==="liquidaciones" && <Liquidaciones repartidores={repartidores} pedidos={pedidos} liquidaciones={liquidaciones} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="facturacion"   && <Facturacion empresas={empresas} pedidos={pedidos} toast={showToast}/>}
               {seccion==="reportes"      && <Reportes pedidos={pedidos} repartidores={repartidores} empresas={empresas} toast={showToast}/>}
               {seccion==="configuracion" && <Configuracion toast={showToast}/>}
