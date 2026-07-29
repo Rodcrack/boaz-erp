@@ -758,6 +758,13 @@ function ModalCargaMasiva({ repartidores, empresas, onClose, onSaved, toast }) {
             padding:"10px 14px", color:B.red, fontSize:12 }}>{errorArchivo}</div>
         )}
 
+        {filas.length > 0 && !empresaId && (
+          <div style={{ marginBottom:14, background:"#FFFBEB", border:"1px solid #FDE68A", borderRadius:8,
+            padding:"10px 14px", color:"#92400E", fontSize:12, fontWeight:600 }}>
+            ⚠️ Selecciona el cliente (empresa) arriba antes de confirmar — el botón no hace nada hasta que lo elijas.
+          </div>
+        )}
+
         {filas.length > 0 && (
           <div style={{ border:`1px solid ${B.border}`, borderRadius:10, overflow:"hidden", marginBottom:16 }}>
             <div style={{ padding:"12px 16px", borderBottom:`1px solid ${B.border}`, background:B.bg,
