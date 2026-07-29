@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
+import * as XLSX from "xlsx";
 
 const SUPABASE_URL  = "https://jeftkwjdqzkpswvaqspi.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImplZnRrd2pkcXprcHN3dmFxc3BpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4MzI0OTEsImV4cCI6MjEwMDQwODQ5MX0.Ta8Ei_wCm8ZEzD3IM-S60R0rJvI_d5BTvix_Z3W4EmY";
@@ -41,6 +42,19 @@ const ESTADOS_PEDIDO = {
   entregado:   { bg:"#ECFDF5", color:"#065F46", label:"Entregado" },
   no_entregado:{ bg:"#FEF2F2", color:"#991B1B", label:"No entregado" },
 };
+
+const TARIFAS_SAMEDAY = {
+  urbano:      { XS:10, S:13, M:16 },
+  semi_urbano: { XS:12, S:15, M:18 },
+  periferico:  { XS:15, S:18, M:22 },
+};
+const getTarifaSameDay = (ambito, kg) => {
+  const t = TARIFAS_SAMEDAY[ambito] || TARIFAS_SAMEDAY.urbano;
+  if (!kg || kg <= 1) return t.XS;
+  if (kg <= 3) return t.S;
+  return t.M;
+};
+
 const ROLES_ACCESO = {
   admin: ["dashboard","pedidos","repartidores","clientes","liquidaciones","facturacion","reportes","configuracion"],
   operaciones: ["dashboard","pedidos","repartidores","clientes"],
@@ -257,6 +271,7 @@ function Pedidos({ pedidos, repartidores, empresas, onRefresh, toast }) {
   const [filtroEstado, setFiltroEstado] = useState("todos");
   const [busqueda, setBusqueda] = useState("");
   const [modalNuevo, setModalNuevo] = useState(false);
+  const [modalCarga, setModalCarga] = useState(false);
   const [modalDetalle, setModalDetalle] = useState(null);
   const [asignando, setAsignando] = useState(null);
 
@@ -308,6 +323,7 @@ function Pedidos({ pedidos, repartidores, empresas, onRefresh, toast }) {
           ))}
         </div>
         <span style={{ marginLeft:"auto", fontSize:12, color:B.textMut }}>{filtrados.length} pedidos</span>
+        <BtnSec onClick={()=>setModalCarga(true)}>⬆️ Cargar masivo</BtnSec>
         <BtnPri onClick={()=>setModalNuevo(true)}>+ Nuevo pedido</BtnPri>
       </div>
 
@@ -386,6 +402,8 @@ function Pedidos({ pedidos, repartidores, empresas, onRefresh, toast }) {
 
       {modalNuevo && <ModalNuevoPedido repartidores={repartidores} empresas={empresas}
         onClose={()=>setModalNuevo(false)} onSaved={()=>{setModalNuevo(false);onRefresh();}} toast={toast}/>}
+      {modalCarga && <ModalCargaMasiva repartidores={repartidores} empresas={empresas}
+        onClose={()=>setModalCarga(false)} onSaved={()=>{onRefresh();}} toast={toast}/>}
       {modalDetalle && <ModalDetallePedido pedido={modalDetalle} repartidores={repartidores}
         onClose={()=>setModalDetalle(null)} onRefresh={onRefresh} toast={toast}/>}
     </div>
@@ -540,6 +558,268 @@ function ModalNuevoPedido({ repartidores, empresas, onClose, onSaved, toast }) {
         <div style={{ display:"flex", gap:10, marginTop:20, justifyContent:"flex-end" }}>
           <BtnSec onClick={onClose}>Cancelar</BtnSec>
           <BtnPri onClick={save}>Crear pedido</BtnPri>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Modal de carga masiva (CSV / Excel) — admin puede cargar en nombre de cualquier cliente
+const COLUMNAS_PLANTILLA_ADMIN = [
+  "Numero de Orden", "Destinatario", "Telefono", "Direccion", "Referencia",
+  "Distrito", "Ambito (urbano-semi_urbano-periferico)", "Peso (kg)",
+  "Tipo de Servicio", "Cobro en Destino (SI/NO)", "Monto a Cobrar",
+];
+
+function normalizarTextoAdmin(s) {
+  return (s||"").toString().trim().toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+}
+
+function mapearFilaAdmin(fila) {
+  const out = {};
+  for (const key of Object.keys(fila)) {
+    const k = normalizarTextoAdmin(key);
+    const v = fila[key];
+    if (k.includes("orden") || k.includes("referencia cliente") || k.includes("guia")) out.cliente_referencia = (v||"").toString().trim();
+    else if (k.includes("destinatario") || k === "nombre") out.dest_nombre = (v||"").toString().trim();
+    else if (k.includes("telefono")) out.dest_telefono = (v||"").toString().trim();
+    else if (k.includes("direccion")) out.dest_direccion = (v||"").toString().trim();
+    else if (k.includes("referencia")) out.dest_referencia = (v||"").toString().trim();
+    else if (k.includes("distrito")) out.dest_distrito = (v||"").toString().trim();
+    else if (k.includes("ambito") || k.includes("zona")) {
+      const t = normalizarTextoAdmin(v);
+      out.ambito = t.includes("peri") ? "periferico" : t.includes("semi") ? "semi_urbano" : "urbano";
+    }
+    else if (k.includes("peso")) out.peso_kg = parseFloat(v) || null;
+    else if (k.includes("servicio")) {
+      const t = normalizarTextoAdmin(v);
+      out.tipo_servicio = t.includes("next") ? "next_day" : t.includes("same") ? "same_day" : "";
+    }
+    else if (k.includes("cobro")) {
+      const t = normalizarTextoAdmin(v);
+      out.cobro_destino = t==="si" || t==="sí" || t==="true" || t==="1" || t==="x";
+    }
+    else if (k.includes("monto")) out.monto_cobrar = parseFloat(v) || null;
+  }
+  if (!out.ambito) out.ambito = "urbano";
+  return out;
+}
+
+const REGEX_ALFANUM_ADMIN = /^[a-zA-Z0-9-]+$/;
+
+function validarFilaAdmin(fila) {
+  const errores = [];
+  if (!fila.dest_nombre) errores.push("falta destinatario");
+  if (!fila.dest_direccion) errores.push("falta dirección");
+  if (!fila.dest_distrito) errores.push("falta distrito");
+  if (fila.cliente_referencia) {
+    if (fila.cliente_referencia.length > 15) errores.push("N° de orden supera 15 caracteres");
+    if (!REGEX_ALFANUM_ADMIN.test(fila.cliente_referencia)) errores.push("N° de orden debe ser alfanumérico");
+  }
+  return errores;
+}
+
+function parseArchivoAdmin(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type:"array" });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(sheet, { defval:"" });
+        resolve(json);
+      } catch (err) { reject(err); }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function descargarPlantillaAdmin() {
+  const ejemplo = ["PED-00123","Marco Salinas","987654321","Calle Las Flores 890","Frente al parque","Miraflores","urbano","1.2","Same Day","NO",""];
+  const ws = XLSX.utils.aoa_to_sheet([COLUMNAS_PLANTILLA_ADMIN, ejemplo]);
+  ws["!cols"] = COLUMNAS_PLANTILLA_ADMIN.map(()=>({ wch:22 }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Plantilla");
+  XLSX.writeFile(wb, "plantilla_pedidos_boaz.xlsx");
+}
+
+function ModalCargaMasiva({ repartidores, empresas, onClose, onSaved, toast }) {
+  const [empresaId, setEmpresaId] = useState("");
+  const [repartidorId, setRepartidorId] = useState("");
+  const [filas, setFilas] = useState([]);
+  const [nombreArchivo, setNombreArchivo] = useState("");
+  const [procesando, setProcesando] = useState(false);
+  const [resultado, setResultado] = useState(null);
+  const [errorArchivo, setErrorArchivo] = useState("");
+
+  const validas = filas.filter(f=>f.errores.length===0);
+  const invalidas = filas.filter(f=>f.errores.length>0);
+
+  const onSeleccionarArchivo = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setErrorArchivo(""); setResultado(null); setNombreArchivo(file.name);
+    try {
+      const json = await parseArchivoAdmin(file);
+      const procesadas = json.map(fila => {
+        const mapeada = mapearFilaAdmin(fila);
+        return { ...mapeada, errores: validarFilaAdmin(mapeada) };
+      });
+      setFilas(procesadas);
+    } catch (err) {
+      setErrorArchivo("No se pudo leer el archivo. Verifica que sea un .csv o .xlsx válido.");
+      setFilas([]);
+    }
+    e.target.value = "";
+  };
+
+  const confirmarCarga = async () => {
+    if (!empresaId) { toast("Selecciona a qué empresa pertenecen estos pedidos","error"); return; }
+    if (validas.length===0) return;
+    setProcesando(true);
+    const generados = [];
+    for (const fila of validas) {
+      const { data: codigo, error: errCodigo } = await sb.rpc("generar_codigo_boaz");
+      if (errCodigo || !codigo) { generados.push({ ...fila, ok:false, error:"no se pudo generar código" }); continue; }
+      const tarifa = getTarifaSameDay(fila.ambito, fila.peso_kg);
+      const { error: errInsert } = await sb.from("pedidos").insert({
+        omd: codigo,
+        empresa_id: empresaId,
+        repartidor_id: repartidorId || null,
+        cliente_referencia: fila.cliente_referencia || null,
+        dest_nombre: fila.dest_nombre,
+        dest_telefono: fila.dest_telefono || null,
+        dest_direccion: fila.dest_direccion,
+        dest_referencia: fila.dest_referencia || null,
+        dest_distrito: fila.dest_distrito,
+        ambito: fila.ambito,
+        peso_kg: fila.peso_kg || null,
+        tarifa_s: tarifa,
+        tipo_servicio: fila.tipo_servicio || null,
+        cobro_destino: !!fila.cobro_destino,
+        monto_cobrar: fila.cobro_destino ? (fila.monto_cobrar || null) : null,
+        estado: repartidorId ? "asignado" : "sin_asignar",
+        fecha_asignacion: repartidorId ? new Date().toISOString() : null,
+      });
+      if (errInsert) generados.push({ ...fila, ok:false, error:errInsert.message });
+      else generados.push({ ...fila, ok:true, codigo });
+    }
+    setProcesando(false);
+    setResultado(generados);
+    setFilas([]);
+    toast(`${generados.filter(g=>g.ok).length} pedidos creados ✓`);
+    onSaved();
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000,
+      display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+      <div style={{ background:B.white, borderRadius:16, padding:28, width:820,
+        maxHeight:"90vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+          <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>Cargar pedidos desde CSV o Excel</div>
+          <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20,
+            color:B.textSec, cursor:"pointer" }}>✕</button>
+        </div>
+
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16 }}>
+          <div>
+            <label style={lbl}>Cliente (empresa) *</label>
+            <select style={inp} value={empresaId} onChange={e=>setEmpresaId(e.target.value)}>
+              <option value="">— Selecciona —</option>
+              {empresas.map(e=><option key={e.id} value={e.id}>{e.codigo_interno ? `${e.codigo_interno} — ` : ""}{e.nombre}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={lbl}>Asignar a repartidor (opcional)</label>
+            <select style={inp} value={repartidorId} onChange={e=>setRepartidorId(e.target.value)}>
+              <option value="">— Sin asignar —</option>
+              {repartidores.filter(r=>r.activo).map(r=><option key={r.id} value={r.id}>{r.nombres} {r.apellidos}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginBottom:16 }}>
+          <BtnSec onClick={descargarPlantillaAdmin}>📥 Descargar plantilla</BtnSec>
+          <label style={{ background:`linear-gradient(135deg,${B.gold},${B.goldDk})`, color:B.navy,
+            padding:"9px 18px", borderRadius:8, fontSize:13, fontWeight:800, cursor:"pointer",
+            display:"inline-flex", alignItems:"center", gap:6 }}>
+            📤 Seleccionar archivo (.csv, .xlsx)
+            <input type="file" accept=".csv,.xlsx,.xls" onChange={onSeleccionarArchivo} style={{ display:"none" }}/>
+          </label>
+          {nombreArchivo && <div style={{ fontSize:12, color:B.textMut, alignSelf:"center" }}>{nombreArchivo}</div>}
+        </div>
+
+        {errorArchivo && (
+          <div style={{ marginBottom:14, background:"#FEF2F2", border:"1px solid #FECACA", borderRadius:8,
+            padding:"10px 14px", color:B.red, fontSize:12 }}>{errorArchivo}</div>
+        )}
+
+        {filas.length > 0 && (
+          <div style={{ border:`1px solid ${B.border}`, borderRadius:10, overflow:"hidden", marginBottom:16 }}>
+            <div style={{ padding:"12px 16px", borderBottom:`1px solid ${B.border}`, background:B.bg,
+              display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <div style={{ fontSize:12, fontWeight:700, color:B.navy }}>
+                {validas.length} válida{validas.length===1?"":"s"}, {invalidas.length} con error{invalidas.length===1?"":"es"}
+              </div>
+              <BtnPri onClick={confirmarCarga} disabled={validas.length===0 || !empresaId || procesando}>
+                {procesando ? "Generando..." : `Confirmar y cargar ${validas.length}`}
+              </BtnPri>
+            </div>
+            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+              <thead>
+                <tr style={{ background:B.bg }}>
+                  {["N° Orden","Destinatario","Distrito","Ámbito","Servicio","Estado"].map(h=>(
+                    <th key={h} style={{ padding:"8px 10px", fontSize:10, fontWeight:700, color:B.textMut,
+                      textTransform:"uppercase", borderBottom:`1px solid ${B.border}` }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filas.map((f,i)=>(
+                  <tr key={i} style={{ borderBottom:"1px solid #F1F5F9",
+                    background: f.errores.length>0 ? "#FEF2F2" : "transparent" }}>
+                    <td style={{ padding:"8px 10px" }}>{f.cliente_referencia||"—"}</td>
+                    <td style={{ padding:"8px 10px" }}>{f.dest_nombre||"—"}</td>
+                    <td style={{ padding:"8px 10px" }}>{f.dest_distrito||"—"}</td>
+                    <td style={{ padding:"8px 10px", textTransform:"capitalize" }}>{f.ambito?.replace("_"," ")}</td>
+                    <td style={{ padding:"8px 10px" }}>{f.tipo_servicio||"—"}</td>
+                    <td style={{ padding:"8px 10px" }}>
+                      {f.errores.length===0
+                        ? <span style={{ color:B.green, fontWeight:700 }}>✅ OK</span>
+                        : <span style={{ color:B.red, fontWeight:700 }} title={f.errores.join(", ")}>❌ {f.errores[0]}</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {resultado && (
+          <div style={{ border:`1px solid ${B.border}`, borderRadius:10, padding:16 }}>
+            <div style={{ fontSize:13, fontWeight:800, color:B.navy, marginBottom:10 }}>
+              {resultado.filter(r=>r.ok).length} pedido{resultado.filter(r=>r.ok).length===1?"":"s"} creado{resultado.filter(r=>r.ok).length===1?"":"s"}
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", gap:6, maxHeight:200, overflowY:"auto" }}>
+              {resultado.map((r,i)=>(
+                <div key={i} style={{ display:"flex", justifyContent:"space-between",
+                  padding:"6px 10px", background:B.bg, borderRadius:6, fontSize:12 }}>
+                  <span style={{ color:B.textSec }}>{r.cliente_referencia||"—"} · {r.dest_nombre}</span>
+                  <span style={{ fontWeight:700, color: r.ok?B.green:B.red }}>
+                    {r.ok ? r.codigo : `Error: ${r.error}`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div style={{ display:"flex", justifyContent:"flex-end", marginTop:20 }}>
+          <BtnSec onClick={onClose}>Cerrar</BtnSec>
         </div>
       </div>
     </div>
