@@ -222,7 +222,7 @@ export default function BoazTracking() {
                   {[
                     ["Peso", pedido.peso_kg?pedido.peso_kg+" kg":"—"],
                     ["Fecha programada", fmt.fecha(pedido.fecha_programada)],
-                    ["Fecha entrega", pedido.fecha_entrega?fmt.fecha(pedido.fecha_entrega)+" "+fmt.hora(pedido.fecha_entrega):"Pendiente"],
+                    ["Fecha entrega", (pedido.estado==="entregado" && pedido.fecha_entrega)?fmt.fecha(pedido.fecha_entrega)+" "+fmt.hora(pedido.fecha_entrega):"Pendiente"],
                     ["Cobro en destino", pedido.cobro_destino?`S/ ${pedido.monto_cobrar}`:"No aplica"],
                   ].map(([k,v])=>(
                     <div key={k} style={{ marginBottom:10 }}>
