@@ -871,26 +871,34 @@ function CargaMasiva({ empresaId, onCargaCompleta }) {
     if (validas.length===0) return;
     setProcesando(true);
     const generados = [];
-    for (const fila of validas) {
-      const { data: codigo, error: errCodigo } = await sb.rpc("generar_codigo_boaz");
-      if (errCodigo || !codigo) { generados.push({ ...fila, ok:false, error:"no se pudo generar código" }); continue; }
-      const { error: errInsert } = await sb.from("pedidos").insert({
-        omd: codigo,
-        empresa_id: empresaId,
-        cliente_referencia: fila.cliente_referencia || null,
-        dest_nombre: fila.dest_nombre,
-        dest_telefono: fila.dest_telefono || null,
-        dest_direccion: fila.dest_direccion,
-        dest_referencia: fila.dest_referencia || null,
-        dest_distrito: fila.dest_distrito,
-        peso_kg: fila.peso_kg || null,
-        tipo_servicio: fila.tipo_servicio || null,
-        cobro_destino: !!fila.cobro_destino,
-        monto_cobrar: fila.cobro_destino ? (fila.monto_cobrar || null) : null,
-        estado: "sin_asignar",
-      });
-      if (errInsert) generados.push({ ...fila, ok:false, error:errInsert.message });
-      else generados.push({ ...fila, ok:true, codigo });
+    try {
+      for (const fila of validas) {
+        try {
+          const { data: codigo, error: errCodigo } = await sb.rpc("generar_codigo_boaz");
+          if (errCodigo || !codigo) { generados.push({ ...fila, ok:false, error:"no se pudo generar código: "+(errCodigo?.message||"sin detalle") }); continue; }
+          const { error: errInsert } = await sb.from("pedidos").insert({
+            omd: codigo,
+            empresa_id: empresaId,
+            cliente_referencia: fila.cliente_referencia || null,
+            dest_nombre: fila.dest_nombre,
+            dest_telefono: fila.dest_telefono || null,
+            dest_direccion: fila.dest_direccion,
+            dest_referencia: fila.dest_referencia || null,
+            dest_distrito: fila.dest_distrito,
+            peso_kg: fila.peso_kg || null,
+            tipo_servicio: fila.tipo_servicio || null,
+            cobro_destino: !!fila.cobro_destino,
+            monto_cobrar: fila.cobro_destino ? (fila.monto_cobrar || null) : null,
+            estado: "sin_asignar",
+          });
+          if (errInsert) generados.push({ ...fila, ok:false, error:errInsert.message });
+          else generados.push({ ...fila, ok:true, codigo });
+        } catch (filaErr) {
+          generados.push({ ...fila, ok:false, error: filaErr.message || "error inesperado en esta fila" });
+        }
+      }
+    } catch (err) {
+      // seguimos igual hacia el resumen para que se vea el detalle disponible
     }
     setProcesando(false);
     setResultado(generados);
