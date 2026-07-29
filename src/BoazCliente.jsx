@@ -693,7 +693,7 @@ function Dashboard({ pedidos, onVerPedido }) {
   };
 
   const descargarCSV = () => {
-    const headers = ["Codigo Boaz","Estado","Tipo Servicio","Destinatario","Telefono","Direccion","Distrito","Fecha de Registro","Fecha Ultimo Estado"];
+    const headers = ["Tracking Boaz","Estado","Tipo Servicio","Destinatario","Telefono","Direccion","Distrito","Fecha de Registro","Fecha Ultimo Estado"];
     const rows = filtrados.map(p => [
       p.omd, ESTADOS[p.estado]?.label||p.estado, TIPOS_SERVICIO[p.tipo_servicio]?.label||"",
       p.dest_nombre, p.dest_telefono, p.dest_direccion, p.dest_distrito,
@@ -711,7 +711,7 @@ function Dashboard({ pedidos, onVerPedido }) {
       {/* Barra de búsqueda */}
       <div style={{ display:"flex", gap:10, marginBottom:14 }}>
         <input
-          placeholder="Buscar por código Boaz, tracking, destinatario, teléfono o distrito..."
+          placeholder="Buscar por Tracking Boaz, destinatario, teléfono o distrito..."
           value={busqueda} onChange={e=>setBusqueda(e.target.value)}
           style={{ flex:1, border:`1px solid ${C.border}`, borderRadius:10,
             padding:"12px 16px", fontSize:14, color:C.textPri, outline:"none",
@@ -786,7 +786,7 @@ function Dashboard({ pedidos, onVerPedido }) {
         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
           <thead>
             <tr style={{ background:C.bg, textAlign:"left" }}>
-              {["Código Boaz","Estado","Tipo servicio","Destinatario","Distrito","Fecha",""].map(h=>(
+              {["Tracking Boaz","Estado","Tipo servicio","Destinatario","Distrito","Fecha",""].map(h=>(
                 <th key={h} style={{ padding:"12px 14px", fontSize:11, fontWeight:700,
                   color:C.textSec, textTransform:"uppercase", letterSpacing:"0.4px",
                   borderBottom:`1px solid ${C.border}` }}>{h}</th>
@@ -900,7 +900,7 @@ function CargaMasiva({ empresaId, onCargaCompleta }) {
 
   const descargarResultado = () => {
     if (!resultado) return;
-    const headers = ["N Orden Cliente","Codigo Boaz","Destinatario","Estado"];
+    const headers = ["N Orden Cliente","Tracking Boaz","Destinatario","Estado"];
     const rows = resultado.map(r => [r.cliente_referencia||"", r.ok?r.codigo:"—", r.dest_nombre, r.ok?"Creado":("Error: "+r.error)]);
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
     ws["!cols"] = headers.map(()=>({ wch:20 }));

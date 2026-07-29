@@ -170,7 +170,7 @@ function Dashboard({ pedidos, repartidores, liquidaciones }) {
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead>
               <tr style={{ background:B.bg }}>
-                {["Código BZ","Destinatario","Distrito","Tarifa","Repartidor","Estado","Fecha"].map(h=>(
+                {["Tracking Boaz","Destinatario","Distrito","Tarifa","Repartidor","Estado","Fecha"].map(h=>(
                   <th key={h} style={{ padding:"8px 14px", textAlign:"left", fontSize:10,
                     color:B.textMut, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.7px" }}>{h}</th>
                 ))}
@@ -317,7 +317,7 @@ function Pedidos({ pedidos, repartidores, empresas, onRefresh, toast }) {
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
           <thead>
             <tr style={{ background:B.bg }}>
-              {["Código BZ","Destinatario","Dirección","Peso","Tarifa","Ámbito","Repartidor","Estado","Fecha","Acciones"].map(h=>(
+              {["Tracking Boaz","Destinatario","Dirección","Peso","Tarifa","Ámbito","Repartidor","Estado","Fecha","Acciones"].map(h=>(
                 <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:10,
                   color:B.textMut, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.7px" }}>{h}</th>
               ))}
@@ -415,8 +415,10 @@ function ModalNuevoPedido({ repartidores, empresas, onClose, onSaved, toast }) {
 
   const save = async () => {
     if (!f.dest_nombre || !f.dest_direccion) { toast("Completa nombre y dirección","error"); return; }
+    const { data: codigo, error: errCodigo } = await sb.rpc("generar_codigo_boaz");
+    if (errCodigo || !codigo) { toast("Error al generar el código de tracking: "+(errCodigo?.message||""),"error"); return; }
     const { error } = await sb.from("pedidos").insert([{
-      ...f, omd:"", tarifa_s: tarifa,
+      ...f, omd: codigo, tarifa_s: tarifa,
       peso_kg: parseFloat(f.peso_kg)||null,
       monto_cobrar: parseFloat(f.monto_cobrar)||null,
       empresa_id: f.empresa_id||null, repartidor_id: f.repartidor_id||null,
