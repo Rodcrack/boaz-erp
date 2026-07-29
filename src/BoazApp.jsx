@@ -63,18 +63,39 @@ function obtenerGPS() {
 }
 
 function comprimirImagen(file, maxWidth = 900, calidad = 0.72) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    const limite = setTimeout(() => {
+      reject(new Error("La foto tardó demasiado en procesarse. Intenta con otra foto o revisa tu conexión."));
+    }, 20000);
+
     const reader = new FileReader();
+    reader.onerror = () => {
+      clearTimeout(limite);
+      reject(new Error("No se pudo leer el archivo de la foto."));
+    };
     reader.onload = (e) => {
       const img = new Image();
+      img.onerror = () => {
+        clearTimeout(limite);
+        reject(new Error("La foto está dañada o en un formato no compatible. Vuelve a tomarla."));
+      };
       img.onload = () => {
-        const scale = Math.min(1, maxWidth / img.width);
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.round(img.width * scale);
-        canvas.height = Math.round(img.height * scale);
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        canvas.toBlob((blob) => resolve(blob), "image/jpeg", calidad);
+        try {
+          const scale = Math.min(1, maxWidth / img.width);
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          canvas.toBlob((blob) => {
+            clearTimeout(limite);
+            if (blob) resolve(blob);
+            else reject(new Error("No se pudo comprimir la foto."));
+          }, "image/jpeg", calidad);
+        } catch (err) {
+          clearTimeout(limite);
+          reject(err);
+        }
       };
       img.src = e.target.result;
     };
@@ -354,11 +375,13 @@ function CapturaFotos({ fotos, setFotos, minimo = 2, label = "Evidencias" }) {
   const agregarFoto = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setFotos(prev => [...prev, { file, preview: URL.createObjectURL(file) }]);
+    setFotos(prev => [...prev, { file, preview: URL.createObjectURL(file), rota:false }]);
     e.target.value = "";
   };
+  const marcarRota = (i) => setFotos(prev => prev.map((f,idx)=> idx===i ? { ...f, rota:true } : f));
   const quitar = (i) => setFotos(prev => prev.filter((_,idx)=>idx!==i));
   const completo = fotos.length >= minimo;
+  const hayRotas = fotos.some(f=>f.rota);
 
   return (
     <div>
@@ -369,14 +392,26 @@ function CapturaFotos({ fotos, setFotos, minimo = 2, label = "Evidencias" }) {
       <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:10 }}>
         {fotos.map((f,i)=>(
           <div key={i} style={{ position:"relative", width:70, height:70 }}>
-            <img src={f.preview} alt="" style={{ width:70, height:70, objectFit:"cover",
-              borderRadius:8, border:"1px solid #E2E8F0" }}/>
+            {f.rota ? (
+              <div style={{ width:70, height:70, borderRadius:8, border:`2px solid ${C.red}`,
+                background:"#FEF2F2", display:"flex", alignItems:"center", justifyContent:"center",
+                fontSize:22 }}>⚠️</div>
+            ) : (
+              <img src={f.preview} alt="" onError={()=>marcarRota(i)}
+                style={{ width:70, height:70, objectFit:"cover",
+                borderRadius:8, border:"1px solid #E2E8F0" }}/>
+            )}
             <button onClick={()=>quitar(i)} style={{ position:"absolute", top:-6, right:-6,
               width:20, height:20, borderRadius:"50%", background:C.red, color:"#fff",
               border:"none", fontSize:11, cursor:"pointer", lineHeight:"20px" }}>×</button>
           </div>
         ))}
       </div>
+      {hayRotas && (
+        <div style={{ fontSize:11, color:C.red, marginBottom:8, fontWeight:600 }}>
+          ⚠️ Una o más fotos no cargaron bien. Quítalas (×) y vuelve a tomarlas antes de guardar.
+        </div>
+      )}
       <div style={{ display:"flex", gap:8, marginBottom:6 }}>
         <button onClick={()=>inputCamara.current?.click()}
           style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
@@ -527,23 +562,29 @@ function DetallePedido({ pedido: p, onVolver, onActualizar, onActualizarLocal, t
 
   const confirmarEvidencia = async (nuevoEstado) => {
     if (fotos.length < 2) { toast("Se requieren mínimo 2 fotos de evidencia","error"); return; }
+    if (fotos.some(f=>f.rota)) { toast("Quita las fotos dañadas y vuelve a tomarlas antes de guardar","error"); return; }
     if (nuevoEstado === "no_entregado" && !motivo) {
       toast("Selecciona un motivo","error"); return;
     }
     setGuardando(true);
     const motivoFinal = motivo === "Otro" ? (detalleOtro || "Otro") : motivo;
-    const { offline } = await guardarEvidenciaYEstado({
-      pedidoId: p.id, nuevoEstado, fotosFiles: fotos,
-      motivo: motivoFinal, responsable: "",
-    });
-    setGuardando(false);
-    onActualizarLocal(p.id, nuevoEstado === "entregado"
-      ? { estado:"entregado", fecha_entrega:new Date().toISOString() }
-      : { estado:"no_entregado", motivo_no_entrega:motivoFinal });
-    toast(offline
-      ? "Sin conexión: guardado en el equipo, se sincronizará al recuperar señal ⏳"
-      : (nuevoEstado==="entregado" ? "¡Pedido entregado! ✓" : "Registrado como no entregado ✓"));
-    onVolver();
+    try {
+      const { offline } = await guardarEvidenciaYEstado({
+        pedidoId: p.id, nuevoEstado, fotosFiles: fotos,
+        motivo: motivoFinal, responsable: "",
+      });
+      onActualizarLocal(p.id, nuevoEstado === "entregado"
+        ? { estado:"entregado", fecha_entrega:new Date().toISOString() }
+        : { estado:"no_entregado", motivo_no_entrega:motivoFinal });
+      toast(offline
+        ? "Sin conexión: guardado en el equipo, se sincronizará al recuperar señal ⏳"
+        : (nuevoEstado==="entregado" ? "¡Pedido entregado! ✓" : "Registrado como no entregado ✓"));
+      onVolver();
+    } catch (err) {
+      toast(err.message || "No se pudo guardar. Vuelve a tomar las fotos e intenta de nuevo.", "error");
+    } finally {
+      setGuardando(false);
+    }
   };
 
   const abrirGoogleMaps = () => {
