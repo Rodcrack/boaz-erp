@@ -12,7 +12,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 const ESTADOS = {
   sin_asignar: { label:"Registrado",    icon:"📋", color:"#3B82F6", desc:"Tu pedido está registrado en nuestro sistema." },
   asignado:    { label:"Asignado",      icon:"🛵", color:"#F59E0B", desc:"Tu pedido fue asignado a un repartidor." },
-  en_ruta:     { label:"En camino",     icon:"🚀", color:"#8B5CF6", desc:"¡Tu pedido está en camino hacia ti!" },
+  en_ruta:     { label:"En camino",     icon:"🚐", color:"#8B5CF6", desc:"¡Tu pedido está en camino hacia ti!" },
   entregado:   { label:"Entregado",     icon:"✅", color:"#10B981", desc:"¡Tu pedido fue entregado exitosamente!" },
   no_entregado:{ label:"No entregado",  icon:"⚠️", color:"#EF4444", desc:"Tu pedido no pudo ser entregado. Nos pondremos en contacto contigo." },
 };
@@ -254,7 +254,7 @@ export default function BoazTracking() {
                     ["Asignado", pedido.fecha_asignacion],
                     ["En camino", pedido.fecha_en_ruta],
                     ["Entregado", pedido.fecha_entrega],
-                  ].filter(([,fecha]) => fecha).map(([label, fecha]) => (
+                  ].filter(([,fecha],i) => fecha && i <= idxActual).map(([label, fecha]) => (
                     <div key={label} style={{ display:"flex", justifyContent:"space-between",
                       padding:"8px 0", borderBottom:"1px solid #1E3560", fontSize:13 }}>
                       <span style={{ color:"#E8EAF0" }}>✓ {label}</span>
