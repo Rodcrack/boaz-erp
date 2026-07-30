@@ -1320,7 +1320,7 @@ function Repartidores({ repartidores, pedidos, onRefresh, toast }) {
 function Clientes({ empresas, pedidos, onRefresh, toast }) {
   const [modal, setModal] = useState(false);
   const [editando, setEditando] = useState(null);
-  const empty = { nombre:"", ruc:"", contacto:"", telefono:"", email:"", direccion:"" };
+  const empty = { nombre:"", ruc:"", contacto:"", telefono:"", email:"", direccion:"", puede_generar_etiquetas:false };
   const [f, setF] = useState(empty);
 
   const guardar = async () => {
@@ -1369,6 +1369,10 @@ function Clientes({ empresas, pedidos, onRefresh, toast }) {
                   <div key={i} style={{ fontSize:11, color:B.textSec, overflow:"hidden",
                     textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{ic} {v}</div>
                 ))}
+              </div>
+              <div style={{ fontSize:11, marginBottom:10,
+                color: e.puede_generar_etiquetas ? B.green : B.textMut }}>
+                {e.puede_generar_etiquetas ? "🏷️ Puede generar etiquetas" : "🏷️ Etiquetas deshabilitadas"}
               </div>
               <div style={{ background:B.bg, borderRadius:8, padding:10,
                 display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
@@ -1420,6 +1424,15 @@ function Clientes({ empresas, pedidos, onRefresh, toast }) {
                   <input style={inp} value={f[k]||""} onChange={e=>setF(p=>({...p,[k]:e.target.value}))}/>
                 </div>
               ))}
+            </div>
+            <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:16,
+              padding:"10px 12px", background:B.bg, borderRadius:8 }}>
+              <input type="checkbox" id="etiquetas" checked={!!f.puede_generar_etiquetas}
+                onChange={e=>setF(p=>({...p,puede_generar_etiquetas:e.target.checked}))}
+                style={{ width:16, height:16 }}/>
+              <label htmlFor="etiquetas" style={{ fontSize:13, color:B.textPri, cursor:"pointer" }}>
+                🏷️ Permitir que este cliente genere sus propias etiquetas en su portal
+              </label>
             </div>
             <div style={{ display:"flex", gap:10, marginTop:20, justifyContent:"flex-end" }}>
               <BtnSec onClick={()=>setModal(false)}>Cancelar</BtnSec>
