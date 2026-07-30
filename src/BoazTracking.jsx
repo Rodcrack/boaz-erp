@@ -22,7 +22,32 @@ const TIMELINE = ["sin_asignar","asignado","en_ruta","entregado"];
 const fmt = {
   fecha: (d) => d ? new Date(d).toLocaleDateString("es-PE",{day:"numeric",month:"long",year:"numeric"}) : "—",
   hora:  (d) => d ? new Date(d).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"}) : "",
+  fechaHora: (d) => d ? new Date(d).toLocaleString("es-PE",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}) : "",
 };
+
+const ICONOS_HIST = {
+  llamada:"📞", whatsapp:"💬", estado:"🔄",
+  foto_entrega:"📸", foto_no_entrega:"📸",
+};
+
+// Agrupa las fotos que pertenecen al mismo evento (misma marca de tiempo)
+// para mostrarlas una al lado de la otra en vez de una por línea.
+function agruparHistorial(historial) {
+  const grupos = [];
+  for (const h of historial) {
+    if ((h.tipo||"").startsWith("foto_")) {
+      const ultimo = grupos[grupos.length-1];
+      if (ultimo && ultimo.esFotoGrupo && ultimo.timestamp === h.timestamp) {
+        ultimo.urls.push(h.url);
+      } else {
+        grupos.push({ esFotoGrupo:true, tipo:h.tipo, timestamp:h.timestamp, urls:[h.url] });
+      }
+    } else {
+      grupos.push(h);
+    }
+  }
+  return grupos;
+}
 
 export default function BoazTracking() {
   const [codigo, setCodigo] = useState("");
@@ -244,35 +269,46 @@ export default function BoazTracking() {
                 </div>
               )}
 
-              {/* Historial de estados */}
-              {!esFinal && (
-                <div style={{ padding:"0 24px 20px" }}>
-                  <div style={{ fontSize:11, color:"#8FA3BA", textTransform:"uppercase",
-                    letterSpacing:"0.8px", marginBottom:12, fontWeight:700 }}>Historial</div>
-                  {[
-                    ["Registrado", pedido.created_at],
-                    ["Asignado", pedido.fecha_asignacion],
-                    ["En camino", pedido.fecha_en_ruta],
-                    ["Entregado", pedido.fecha_entrega],
-                  ].filter(([,fecha],i) => fecha && i <= idxActual).map(([label, fecha]) => (
-                    <div key={label} style={{ display:"flex", justifyContent:"space-between",
-                      padding:"8px 0", borderBottom:"1px solid #1E3560", fontSize:13 }}>
-                      <span style={{ color:"#E8EAF0" }}>✓ {label}</span>
-                      <span style={{ color:"#8FA3BA" }}>{fmt.fecha(fecha)}, {fmt.hora(fecha)}</span>
+              {/* Historial completo: cambios de estado, llamadas y fotos de evidencia */}
+              {(() => {
+                const historialAgrupado = agruparHistorial(
+                  [...(pedido.historial||[])].sort((a,b)=> new Date(b.timestamp) - new Date(a.timestamp))
+                );
+                if (historialAgrupado.length === 0) return null;
+                return (
+                  <div style={{ padding:"0 24px 20px" }}>
+                    <div style={{ fontSize:11, color:"#8FA3BA", textTransform:"uppercase",
+                      letterSpacing:"0.8px", marginBottom:12, fontWeight:700 }}>Historial del pedido</div>
+                    <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+                      {historialAgrupado.map((h,i)=>(
+                        <div key={i} style={{ display:"flex", gap:10, alignItems:"flex-start",
+                          borderBottom: i<historialAgrupado.length-1 ? "1px solid #1E3560" : "none",
+                          paddingBottom:12 }}>
+                          <span style={{ fontSize:16 }}>{ICONOS_HIST[h.tipo]||"•"}</span>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontSize:13, fontWeight:600, color:"#E8EAF0" }}>
+                              {h.tipo==="llamada" && "Llamada al destinatario"}
+                              {h.tipo==="whatsapp" && "Mensaje de WhatsApp"}
+                              {h.tipo==="estado" && h.detalle}
+                              {h.esFotoGrupo && "Fotos de evidencia"}
+                            </div>
+                            <div style={{ fontSize:11, color:"#8FA3BA" }}>{fmt.fechaHora(h.timestamp)}</div>
+                            {h.esFotoGrupo && (
+                              <div style={{ display:"flex", gap:8, marginTop:8, flexWrap:"wrap" }}>
+                                {h.urls.map((url,ui)=>(
+                                  <img key={ui} src={url} alt="" onClick={()=>window.open(url,"_blank")}
+                                    style={{ width:80, height:80, objectFit:"cover", borderRadius:8,
+                                      border:"1px solid #1E3560", cursor:"pointer" }}/>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Foto evidencia */}
-              {pedido.foto_evidencia && (
-                <div style={{ padding:"0 24px 20px" }}>
-                  <div style={{ fontSize:11, color:"#8FA3BA", textTransform:"uppercase",
-                    letterSpacing:"0.8px", marginBottom:8 }}>Foto de entrega</div>
-                  <img src={pedido.foto_evidencia} style={{ width:"100%",
-                    borderRadius:10, maxHeight:200, objectFit:"cover" }}/>
-                </div>
-              )}
+                  </div>
+                );
+              })()}
 
               {/* Footer contacto */}
               <div style={{ background:"#0D1E3D", padding:"16px 24px",
