@@ -630,7 +630,7 @@ function generarHtmlEtiquetas(pedidosSel, empresas) {
 <head>
 <meta charset="utf-8">
 <title>Etiquetas Boaz</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/JsBarcode/3.11.5/JsBarcode.all.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.12.3/JsBarcode.all.min.js"></script>
 <style>
   @page { size: 10cm 15cm; margin: 0.3cm; }
   * { box-sizing: border-box; }
@@ -654,10 +654,16 @@ function generarHtmlEtiquetas(pedidosSel, empresas) {
   ${filas}
   <script>
     window.addEventListener("load", function() {
+      if (typeof JsBarcode === "undefined") {
+        document.body.insertAdjacentHTML("afterbegin",
+          '<div style="background:#FEE;color:#900;padding:12px;text-align:center;font-family:Arial;">' +
+          '⚠️ No se pudo cargar la librería de códigos de barras (revisa tu conexión a internet e intenta de nuevo).</div>');
+        return;
+      }
       document.querySelectorAll("svg[data-code]").forEach(function(el){
         try {
           JsBarcode(el, el.getAttribute("data-code"), { format:"CODE128", width:2, height:44, displayValue:false, margin:0 });
-        } catch(e) {}
+        } catch(e) { console.error("Error generando código de barras:", e); }
       });
     });
   </script>
