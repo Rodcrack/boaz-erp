@@ -130,17 +130,15 @@ function encolar(accion) {
 }
 
 async function subirFotosYUrls(pedidoId, tipoEvento, blobsOBase64) {
-  const urls = [];
-  for (let i = 0; i < blobsOBase64.length; i++) {
-    let blob = blobsOBase64[i];
+  const subidas = blobsOBase64.map(async (blob, i) => {
     if (typeof blob === "string") blob = await base64ToBlob(blob);
     const path = `${pedidoId}/${tipoEvento}_${Date.now()}_${i}_${Math.random().toString(36).slice(2,6)}.jpg`;
     const { error } = await sb.storage.from("evidencias").upload(path, blob, { upsert: true, contentType: "image/jpeg" });
     if (error) throw error;
     const { data } = sb.storage.from("evidencias").getPublicUrl(path);
-    urls.push(data.publicUrl);
-  }
-  return urls;
+    return data.publicUrl;
+  });
+  return Promise.all(subidas);
 }
 
 function agruparHistorial(historial) {
@@ -163,20 +161,25 @@ function agruparHistorial(historial) {
 // Guarda un cambio de estado (entregado / no_entregado) con sus fotos y GPS.
 // Intenta online primero; si falla, encola en localStorage (con las fotos
 // ya comprimidas en base64) para sincronizar cuando vuelva la conexión.
-async function guardarEvidenciaYEstado({ pedidoId, nuevoEstado, fotosFiles, motivo, responsable }) {
-  const gpsPos = await obtenerGPS();
+async function guardarEvidenciaYEstado({ pedidoId, nuevoEstado, fotosFiles, motivo, responsable, recibidoPor, comentario }) {
+  const [gpsPos, comprimidas] = await Promise.all([
+    obtenerGPS(),
+    Promise.all(fotosFiles.map(f => comprimirImagen(f.file))),
+  ]);
   const timestamp = new Date().toISOString();
-  const comprimidas = [];
-  for (const f of fotosFiles) comprimidas.push(await comprimirImagen(f.file));
 
   const payload = { estado: nuevoEstado };
-  if (nuevoEstado === "entregado") payload.fecha_entrega = timestamp;
+  if (nuevoEstado === "entregado") {
+    payload.fecha_entrega = timestamp;
+    payload.recibido_por = recibidoPor;
+    payload.comentario_entrega = comentario || null;
+  }
   if (nuevoEstado === "no_entregado") {
     payload.motivo_no_entrega = motivo;
   }
   const tipoEvento = nuevoEstado === "entregado" ? "foto_entrega" : "foto_no_entrega";
   const detalleEvento = nuevoEstado === "entregado"
-    ? "Entregado"
+    ? `Entregado a ${recibidoPor}${comentario ? " — "+comentario : ""}`
     : `No entregado: ${motivo}`;
 
   try {
@@ -559,10 +562,15 @@ function DetallePedido({ pedido: p, onVolver, onActualizar, onActualizarLocal, t
   const [fotos, setFotos] = useState([]);
   const [motivo, setMotivo] = useState("");
   const [detalleOtro, setDetalleOtro] = useState("");
+  const [recibidoPor, setRecibidoPor] = useState("");
+  const [comentario, setComentario] = useState("");
 
   const confirmarEvidencia = async (nuevoEstado) => {
     if (fotos.length < 2) { toast("Se requieren mínimo 2 fotos de evidencia","error"); return; }
     if (fotos.some(f=>f.rota)) { toast("Quita las fotos dañadas y vuelve a tomarlas antes de guardar","error"); return; }
+    if (nuevoEstado === "entregado" && !recibidoPor) {
+      toast("Selecciona quién recibió el pedido","error"); return;
+    }
     if (nuevoEstado === "no_entregado" && !motivo) {
       toast("Selecciona un motivo","error"); return;
     }
@@ -572,9 +580,10 @@ function DetallePedido({ pedido: p, onVolver, onActualizar, onActualizarLocal, t
       const { offline } = await guardarEvidenciaYEstado({
         pedidoId: p.id, nuevoEstado, fotosFiles: fotos,
         motivo: motivoFinal, responsable: "",
+        recibidoPor, comentario: comentario.trim(),
       });
       onActualizarLocal(p.id, nuevoEstado === "entregado"
-        ? { estado:"entregado", fecha_entrega:new Date().toISOString() }
+        ? { estado:"entregado", fecha_entrega:new Date().toISOString(), recibido_por:recibidoPor, comentario_entrega:comentario.trim()||null }
         : { estado:"no_entregado", motivo_no_entrega:motivoFinal });
       toast(offline
         ? "Sin conexión: guardado en el equipo, se sincronizará al recuperar señal ⏳"
@@ -625,6 +634,34 @@ function DetallePedido({ pedido: p, onVolver, onActualizar, onActualizarLocal, t
             {esEntrega ? "✅ Confirmar entrega" : "⚠️ Registrar no entrega"}
           </div>
         </div>
+
+        {esEntrega && (
+          <div style={{ background:C.white, borderRadius:14, padding:18,
+            marginBottom:14, border:`1px solid #E2E8F0` }}>
+            <div style={{ fontSize:11, fontWeight:700, color:C.navy, textTransform:"uppercase",
+              marginBottom:10 }}>Recibido por</div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:14 }}>
+              {["Titular","Conserje","Familiar"].map(r=>(
+                <button key={r} onClick={()=>setRecibidoPor(r)}
+                  style={{ padding:"8px 14px", borderRadius:20, fontSize:12, fontWeight:700,
+                    cursor:"pointer",
+                    border: recibidoPor===r ? `2px solid ${C.green}` : `1px solid #E2E8F0`,
+                    background: recibidoPor===r ? "#ECFDF5" : C.white,
+                    color: recibidoPor===r ? C.green : C.textSec }}>
+                  {r}
+                </button>
+              ))}
+            </div>
+            <div style={{ fontSize:11, fontWeight:700, color:C.navy, textTransform:"uppercase",
+              marginBottom:8 }}>Comentarios (opcional)</div>
+            <textarea placeholder="Notas adicionales sobre la entrega..."
+              value={comentario} onChange={e=>setComentario(e.target.value)}
+              rows={2}
+              style={{ width:"100%", border:"1px solid #E2E8F0", borderRadius:10,
+                padding:"10px 14px", fontSize:13, boxSizing:"border-box", resize:"vertical",
+                fontFamily:"inherit" }}/>
+          </div>
+        )}
 
         {!esEntrega && (
           <div style={{ background:C.white, borderRadius:14, padding:18,
@@ -762,6 +799,17 @@ function DetallePedido({ pedido: p, onVolver, onActualizar, onActualizarLocal, t
             <div style={{ fontSize:13, color:"#991B1B" }}>{p.motivo_no_entrega}</div>
           </div>
         )}
+        {p.estado==="entregado" && p.recibido_por && (
+          <div style={{ marginTop:14, background:"#ECFDF5",
+            border:"2px solid #A7F3D0", borderRadius:10, padding:"12px 14px" }}>
+            <div style={{ fontSize:12, fontWeight:700, color:C.green, marginBottom:2 }}>
+              ✅ RECIBIDO POR: {p.recibido_por?.toUpperCase()}
+            </div>
+            {p.comentario_entrega && (
+              <div style={{ fontSize:13, color:"#065F46" }}>{p.comentario_entrega}</div>
+            )}
+          </div>
+        )}
       </div>
 
       <div style={{ background:C.white, borderRadius:14, padding:18,
@@ -772,7 +820,7 @@ function DetallePedido({ pedido: p, onVolver, onActualizar, onActualizarLocal, t
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
           {(p.estado==="asignado"||p.estado==="en_ruta") && (
             <>
-              <button onClick={()=>{ setFotos([]); setVista("entrega"); }}
+              <button onClick={()=>{ setFotos([]); setRecibidoPor(""); setComentario(""); setVista("entrega"); }}
                 style={{ background:`linear-gradient(135deg,${C.green},#059669)`,
                   color:C.white, border:"none", padding:16, borderRadius:12,
                   fontSize:15, fontWeight:800, cursor:"pointer" }}>
