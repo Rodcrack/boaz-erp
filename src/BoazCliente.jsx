@@ -835,13 +835,12 @@ function ModalEtiquetasCliente({ pedidos, empresa, onClose }) {
   );
 }
 
-function Dashboard({ pedidos, onVerPedido, empresa }) {
+function Dashboard({ pedidos, onVerPedido }) {
   const [busqueda, setBusqueda] = useState("");
   const [fechaInicio, setFechaInicio] = useState("");
   const [fechaFin, setFechaFin] = useState("");
   const [tipoServicio, setTipoServicio] = useState("");
   const [estado, setEstado] = useState("");
-  const [modalEtiquetas, setModalEtiquetas] = useState(false);
 
   const filtrados = pedidos.filter(p => {
     if (busqueda.trim()) {
@@ -911,20 +910,7 @@ function Dashboard({ pedidos, onVerPedido, empresa }) {
             display:"flex", alignItems:"center", gap:6, whiteSpace:"nowrap" }}>
           ⬇️ Descargar Excel
         </button>
-        {empresa?.puede_generar_etiquetas && (
-          <button onClick={()=>setModalEtiquetas(true)}
-            style={{ background:`linear-gradient(135deg,${C.gold},${C.goldDk})`, border:"none",
-              color:C.navy, padding:"0 18px", borderRadius:10, fontSize:13, fontWeight:800,
-              cursor:"pointer", display:"flex", alignItems:"center", gap:6, whiteSpace:"nowrap" }}>
-            🏷️ Generar etiquetas
-          </button>
-        )}
       </div>
-
-      {modalEtiquetas && (
-        <ModalEtiquetasCliente pedidos={filtrados} empresa={empresa}
-          onClose={()=>setModalEtiquetas(false)}/>
-      )}
 
       {/* Filtros */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:10, marginBottom:20 }}>
@@ -1030,12 +1016,13 @@ function Dashboard({ pedidos, onVerPedido, empresa }) {
 }
 
 // ── CARGA MASIVA DE PEDIDOS (CSV / EXCEL) ──────────────────────
-function CargaMasiva({ empresaId, onCargaCompleta }) {
+function CargaMasiva({ empresaId, empresa, onCargaCompleta }) {
   const [filas, setFilas] = useState([]);
   const [nombreArchivo, setNombreArchivo] = useState("");
   const [procesando, setProcesando] = useState(false);
   const [resultado, setResultado] = useState(null);
   const [errorArchivo, setErrorArchivo] = useState("");
+  const [mostrarEtiquetas, setMostrarEtiquetas] = useState(false);
 
   const validas = filas.filter(f=>f.errores.length===0);
   const invalidas = filas.filter(f=>f.errores.length>0);
@@ -1184,15 +1171,24 @@ function CargaMasiva({ empresaId, onCargaCompleta }) {
 
       {resultado && (
         <div style={{ background:C.white, borderRadius:14, padding:20, border:`1px solid ${C.border}` }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14, flexWrap:"wrap", gap:8 }}>
             <div style={{ fontSize:14, fontWeight:800, color:C.navy }}>
               {resultado.filter(r=>r.ok).length} pedido{resultado.filter(r=>r.ok).length===1?"":"s"} creado{resultado.filter(r=>r.ok).length===1?"":"s"} correctamente
             </div>
-            <button onClick={descargarResultado}
-              style={{ background:C.navy, color:"#E8EAF0", border:"none", padding:"8px 16px",
-                borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer" }}>
-              ⬇️ Descargar códigos generados
-            </button>
+            <div style={{ display:"flex", gap:8 }}>
+              {empresa?.puede_generar_etiquetas && resultado.some(r=>r.ok) && (
+                <button onClick={()=>setMostrarEtiquetas(true)}
+                  style={{ background:`linear-gradient(135deg,${C.gold},${C.goldDk})`, color:C.navy, border:"none",
+                    padding:"8px 16px", borderRadius:8, fontSize:12, fontWeight:800, cursor:"pointer" }}>
+                  🏷️ Generar etiquetas
+                </button>
+              )}
+              <button onClick={descargarResultado}
+                style={{ background:C.navy, color:"#E8EAF0", border:"none", padding:"8px 16px",
+                  borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer" }}>
+                ⬇️ Descargar códigos generados
+              </button>
+            </div>
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
             {resultado.map((r,i)=>(
@@ -1206,6 +1202,25 @@ function CargaMasiva({ empresaId, onCargaCompleta }) {
             ))}
           </div>
         </div>
+      )}
+
+      {mostrarEtiquetas && resultado && (
+        <ModalEtiquetasCliente
+          pedidos={resultado.filter(r=>r.ok).map(r => ({
+            id: r.codigo,
+            omd: r.codigo,
+            dest_nombre: r.dest_nombre,
+            dest_direccion: r.dest_direccion,
+            dest_distrito: r.dest_distrito,
+            tipo_servicio: r.tipo_servicio,
+            cobro_destino: r.cobro_destino,
+            monto_cobrar: r.monto_cobrar,
+            cliente_referencia: r.cliente_referencia,
+            created_at: new Date().toISOString(),
+          }))}
+          empresa={empresa}
+          onClose={()=>setMostrarEtiquetas(false)}
+        />
       )}
     </div>
   );
@@ -1465,11 +1480,11 @@ export default function BoazCliente() {
           Cargando pedidos...
         </div>
       ) : vista==="carga" ? (
-        <CargaMasiva empresaId={contacto.empresa_id} onCargaCompleta={()=>{ cargar(); }}/>
+        <CargaMasiva empresaId={contacto.empresa_id} empresa={contacto.empresa} onCargaCompleta={()=>{ cargar(); }}/>
       ) : vista==="reportes" ? (
         <Reportes pedidos={pedidos} contacto={contacto}/>
       ) : (
-        <Dashboard pedidos={pedidos} onVerPedido={setPedidoSel} empresa={contacto.empresa}/>
+        <Dashboard pedidos={pedidos} onVerPedido={setPedidoSel}/>
       )}
 
       {pedidoSel && (

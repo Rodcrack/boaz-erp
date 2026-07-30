@@ -272,7 +272,6 @@ function Pedidos({ pedidos, repartidores, empresas, onRefresh, toast }) {
   const [busqueda, setBusqueda] = useState("");
   const [modalNuevo, setModalNuevo] = useState(false);
   const [modalCarga, setModalCarga] = useState(false);
-  const [modalEtiquetas, setModalEtiquetas] = useState(false);
   const [modalDetalle, setModalDetalle] = useState(null);
   const [asignando, setAsignando] = useState(null);
 
@@ -324,7 +323,6 @@ function Pedidos({ pedidos, repartidores, empresas, onRefresh, toast }) {
           ))}
         </div>
         <span style={{ marginLeft:"auto", fontSize:12, color:B.textMut }}>{filtrados.length} pedidos</span>
-        <BtnSec onClick={()=>setModalEtiquetas(true)}>🏷️ Generar etiquetas</BtnSec>
         <BtnSec onClick={()=>setModalCarga(true)}>⬆️ Cargar masivo</BtnSec>
         <BtnPri onClick={()=>setModalNuevo(true)}>+ Nuevo pedido</BtnPri>
       </div>
@@ -406,8 +404,6 @@ function Pedidos({ pedidos, repartidores, empresas, onRefresh, toast }) {
         onClose={()=>setModalNuevo(false)} onSaved={()=>{setModalNuevo(false);onRefresh();}} toast={toast}/>}
       {modalCarga && <ModalCargaMasiva repartidores={repartidores} empresas={empresas}
         onClose={()=>setModalCarga(false)} onSaved={()=>{onRefresh();}} toast={toast}/>}
-      {modalEtiquetas && <ModalEtiquetas pedidos={filtrados} empresas={empresas}
-        onClose={()=>setModalEtiquetas(false)}/>}
       {modalDetalle && <ModalDetallePedido pedido={modalDetalle} repartidores={repartidores}
         onClose={()=>setModalDetalle(null)} onRefresh={onRefresh} toast={toast}/>}
     </div>
@@ -832,6 +828,7 @@ function ModalCargaMasiva({ repartidores, empresas, onClose, onSaved, toast }) {
   const [procesando, setProcesando] = useState(false);
   const [resultado, setResultado] = useState(null);
   const [errorArchivo, setErrorArchivo] = useState("");
+  const [mostrarEtiquetas, setMostrarEtiquetas] = useState(false);
 
   const validas = filas.filter(f=>f.errores.length===0);
   const invalidas = filas.filter(f=>f.errores.length>0);
@@ -996,8 +993,15 @@ function ModalCargaMasiva({ repartidores, empresas, onClose, onSaved, toast }) {
 
         {resultado && (
           <div style={{ border:`1px solid ${B.border}`, borderRadius:10, padding:16 }}>
-            <div style={{ fontSize:13, fontWeight:800, color:B.navy, marginBottom:10 }}>
-              {resultado.filter(r=>r.ok).length} pedido{resultado.filter(r=>r.ok).length===1?"":"s"} creado{resultado.filter(r=>r.ok).length===1?"":"s"}
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+              <div style={{ fontSize:13, fontWeight:800, color:B.navy }}>
+                {resultado.filter(r=>r.ok).length} pedido{resultado.filter(r=>r.ok).length===1?"":"s"} creado{resultado.filter(r=>r.ok).length===1?"":"s"}
+              </div>
+              {resultado.some(r=>r.ok) && (
+                <BtnPri onClick={()=>setMostrarEtiquetas(true)} style={{ fontSize:12, padding:"7px 14px" }}>
+                  🏷️ Generar etiquetas
+                </BtnPri>
+              )}
             </div>
             <div style={{ display:"flex", flexDirection:"column", gap:6, maxHeight:200, overflowY:"auto" }}>
               {resultado.map((r,i)=>(
@@ -1011,6 +1015,27 @@ function ModalCargaMasiva({ repartidores, empresas, onClose, onSaved, toast }) {
               ))}
             </div>
           </div>
+        )}
+
+        {mostrarEtiquetas && resultado && (
+          <ModalEtiquetas
+            pedidos={resultado.filter(r=>r.ok).map(r => ({
+              id: r.codigo,
+              omd: r.codigo,
+              dest_nombre: r.dest_nombre,
+              dest_direccion: r.dest_direccion,
+              dest_distrito: r.dest_distrito,
+              tipo_servicio: r.tipo_servicio,
+              cobro_destino: r.cobro_destino,
+              monto_cobrar: r.monto_cobrar,
+              cliente_referencia: r.cliente_referencia,
+              ambito: r.ambito,
+              empresa_id: empresaId,
+              created_at: new Date().toISOString(),
+            }))}
+            empresas={empresas}
+            onClose={()=>setMostrarEtiquetas(false)}
+          />
         )}
 
         <div style={{ display:"flex", justifyContent:"flex-end", marginTop:20 }}>
