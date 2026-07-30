@@ -333,25 +333,20 @@ async function procesarCola() {
 
 // ── PANTALLA LOGIN ─────────────────────────────────────────────
 function Login({ onLogin }) {
-  const [repartidores, setRepartidores] = useState([]);
   const [usuario, setUsuario] = useState("");
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
+  const [cargando, setCargando] = useState(false);
 
-  useEffect(() => {
-    sb.from("repartidores").select("id,nombres,apellidos,activo,password_hash,usuario")
-      .eq("activo",true)
-      .then(({data})=>{ if(data) setRepartidores(data); });
-  }, []);
-
-  const entrar = () => {
-    if (!usuario.trim()) { setError("Ingresa tu usuario"); return; }
-    const rep = repartidores.find(r=>
-      (r.usuario||"").trim().toLowerCase() === usuario.trim().toLowerCase()
-    );
-    if (!rep) { setError("Usuario no encontrado"); return; }
-    if (pin !== rep.password_hash) { setError("PIN incorrecto"); return; }
-    onLogin(rep);
+  const entrar = async () => {
+    if (!usuario.trim() || !pin.trim()) { setError("Ingresa tu usuario y PIN"); return; }
+    setCargando(true); setError("");
+    const { data, error: err } = await sb.rpc("verificar_login_repartidor", {
+      p_usuario: usuario.trim(), p_pin: pin.trim(),
+    });
+    setCargando(false);
+    if (err || !data || data.length===0) { setError("Usuario o PIN incorrecto"); return; }
+    onLogin(data[0]);
   };
 
   return (
@@ -407,11 +402,11 @@ function Login({ onLogin }) {
             fontSize:12, marginBottom:14, textAlign:"center" }}>{error}</div>
         )}
 
-        <button onClick={entrar}
+        <button onClick={entrar} disabled={cargando}
           style={{ width:"100%", background:`linear-gradient(135deg,${C.gold},${C.goldDk})`,
             border:"none", color:C.navy, padding:14, borderRadius:12,
-            fontSize:15, fontWeight:800, cursor:"pointer", letterSpacing:"0.5px" }}>
-          Entrar →
+            fontSize:15, fontWeight:800, cursor: cargando?"default":"pointer", letterSpacing:"0.5px" }}>
+          {cargando ? "Ingresando..." : "Entrar →"}
         </button>
 
         <div style={{ textAlign:"center", marginTop:16, fontSize:11, color:"#2A3F60" }}>

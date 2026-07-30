@@ -142,13 +142,11 @@ function Login({ onLogin }) {
     if (!usuario.trim() || !pin.trim()) { setError("Ingresa tu usuario y PIN"); return; }
     setCargando(true);
     setError("");
-    const { data: contacto, error: err1 } = await sb.from("clientes_usuarios")
-      .select("id,nombres,apellidos,usuario,password_hash,activo,empresa_id")
-      .eq("usuario", usuario.trim().toLowerCase())
-      .eq("activo", true)
-      .maybeSingle();
-    if (err1 || !contacto) { setError("Usuario no encontrado"); setCargando(false); return; }
-    if (pin !== contacto.password_hash) { setError("PIN incorrecto"); setCargando(false); return; }
+    const { data, error: err } = await sb.rpc("verificar_login_cliente", {
+      p_usuario: usuario.trim(), p_pin: pin.trim(),
+    });
+    if (err || !data || data.length===0) { setError("Usuario o PIN incorrecto"); setCargando(false); return; }
+    const contacto = data[0];
 
     const { data: empresa } = await sb.from("empresas")
       .select("id,nombre,ruc,contacto,telefono,email,codigo_interno,puede_generar_etiquetas")
