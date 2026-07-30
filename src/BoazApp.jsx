@@ -234,6 +234,57 @@ async function iniciarRutaMasivo(pedidoIds) {
   }
 }
 
+// ── RUTEO: distancia y vecino más cercano ──────────────────────
+function distanciaKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2-lat1) * Math.PI/180;
+  const dLng = (lng2-lng1) * Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// Ordena por vecino más cercano partiendo del origen (GPS del repartidor).
+// Requiere que TODOS los pedidos tengan dest_lat/dest_lng.
+function rutaPorVecinoCercano(pedidos, origen) {
+  const restantes = [...pedidos];
+  const ruta = [];
+  let actual = origen;
+  while (restantes.length) {
+    let mejorIdx = 0, mejorDist = Infinity;
+    restantes.forEach((p,i) => {
+      const d = distanciaKm(actual.lat, actual.lng, p.dest_lat, p.dest_lng);
+      if (d < mejorDist) { mejorDist = d; mejorIdx = i; }
+    });
+    const siguiente = restantes.splice(mejorIdx,1)[0];
+    ruta.push(siguiente);
+    actual = { lat: siguiente.dest_lat, lng: siguiente.dest_lng };
+  }
+  return ruta;
+}
+
+// Ruteo automático: usa GPS+coordenadas si están disponibles (óptimo real);
+// si faltan coordenadas, agrupa por distrito/dirección (aproximación básica).
+async function calcularRutaAutomatica(pedidos) {
+  const todosConCoords = pedidos.every(p => p.dest_lat && p.dest_lng);
+  if (todosConCoords) {
+    const gps = await obtenerGPS();
+    if (gps) {
+      return { ruta: rutaPorVecinoCercano(pedidos, gps), optimo: true };
+    }
+  }
+  const ordenados = [...pedidos].sort((a,b) =>
+    (a.dest_distrito||"").localeCompare(b.dest_distrito||"") ||
+    (a.dest_direccion||"").localeCompare(b.dest_direccion||"")
+  );
+  return { ruta: ordenados, optimo: false };
+}
+
+async function guardarOrdenRuta(pedidosEnOrden) {
+  await Promise.all(pedidosEnOrden.map((p, i) =>
+    sb.from("pedidos").update({ orden_ruta: i }).eq("id", p.id)
+  ));
+}
+
 async function procesarCola() {
   const q = leerCola();
   if (!q.length) return { ok: 0, fail: 0 };
@@ -441,11 +492,136 @@ function CapturaFotos({ fotos, setFotos, minimo = 2, label = "Evidencias" }) {
 }
 
 // ── PANTALLA INICIO ───────────────────────────────────────────
-function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, iniciando }) {
+// ── PANTALLA: ORDENAR MI RUTA (arrastre táctil + automático) ──
+const ALTO_FILA = 68;
+
+function OrdenarRuta({ pedidosIniciales, onVolver, onGuardado, toast }) {
+  const [orden, setOrden] = useState(pedidosIniciales);
+  const [arrastreId, setArrastreId] = useState(null);
+  const [offsetY, setOffsetY] = useState(0);
+  const [guardando, setGuardando] = useState(false);
+  const [calculando, setCalculando] = useState(false);
+  const startYRef = useRef(0);
+  const indexInicialRef = useRef(0);
+
+  const onPointerDown = (e, id, index) => {
+    startYRef.current = e.clientY;
+    indexInicialRef.current = index;
+    setOffsetY(0);
+    setArrastreId(id);
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const onPointerMove = (e) => {
+    if (arrastreId==null) return;
+    const delta = e.clientY - startYRef.current;
+    setOffsetY(delta);
+    const desplazamiento = Math.round(delta / ALTO_FILA);
+    const idxActual = orden.findIndex(p=>p.id===arrastreId);
+    const idxObjetivo = Math.min(orden.length-1, Math.max(0, indexInicialRef.current + desplazamiento));
+    if (idxObjetivo !== idxActual) {
+      setOrden(prev => {
+        const nuevo = [...prev];
+        const [item] = nuevo.splice(idxActual,1);
+        nuevo.splice(idxObjetivo,0,item);
+        return nuevo;
+      });
+    }
+  };
+  const onPointerUp = () => { setArrastreId(null); setOffsetY(0); };
+
+  const ejecutarAutomatico = async () => {
+    setCalculando(true);
+    const { ruta, optimo } = await calcularRutaAutomatica(orden);
+    setOrden(ruta);
+    setCalculando(false);
+    toast(optimo
+      ? "Ruta calculada según tu ubicación y la distancia a cada destino ✓"
+      : "Ordenado por zona/dirección — faltan coordenadas para un ruteo 100% óptimo","warn");
+  };
+
+  const guardar = async () => {
+    setGuardando(true);
+    await guardarOrdenRuta(orden);
+    setGuardando(false);
+    toast("Orden de ruta guardado ✓");
+    onGuardado(orden);
+  };
+
+  return (
+    <div style={{ padding:16 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16 }}>
+        <button onClick={onVolver}
+          style={{ background:C.white, border:`1px solid #E2E8F0`,
+            color:C.textSec, padding:"8px 14px", borderRadius:10,
+            fontSize:13, cursor:"pointer", fontWeight:600 }}>← Volver</button>
+        <div style={{ fontSize:16, fontWeight:800, color:C.navy }}>🗺️ Ordenar mi ruta</div>
+      </div>
+
+      <div style={{ fontSize:12, color:C.textMut, marginBottom:14 }}>
+        Arrastra ⠿ para reordenar manualmente, o usa el ruteo automático.
+      </div>
+
+      <button onClick={ejecutarAutomatico} disabled={calculando}
+        style={{ width:"100%", background:`linear-gradient(135deg,#7C3AED,#6D28D9)`,
+          color:C.white, border:"none", padding:14, borderRadius:12,
+          fontSize:14, fontWeight:800, cursor: calculando?"default":"pointer",
+          marginBottom:16 }}>
+        {calculando ? "Calculando..." : "🎯 Ruteo automático"}
+      </button>
+
+      <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:16 }}>
+        {orden.map((p,i)=>{
+          const esArrastrado = p.id===arrastreId;
+          return (
+            <div key={p.id}
+              style={{ display:"flex", alignItems:"center", gap:10,
+                background:C.white, borderRadius:12, padding:"10px 12px",
+                border:`1px solid #E2E8F0`, height:ALTO_FILA-14,
+                position:"relative",
+                transform: esArrastrado ? `translateY(${offsetY}px)` : "none",
+                zIndex: esArrastrado?10:1,
+                boxShadow: esArrastrado?"0 8px 20px #0003":"0 1px 3px #0D1E3D0A",
+                transition: esArrastrado?"none":"transform 0.15s" }}>
+              <div onPointerDown={(e)=>onPointerDown(e,p.id,i)}
+                onPointerMove={onPointerMove} onPointerUp={onPointerUp}
+                style={{ cursor:"grab", fontSize:20, color:C.textMut, padding:"4px 6px",
+                  touchAction:"none", userSelect:"none" }}>⠿</div>
+              <div style={{ width:24, height:24, borderRadius:"50%", background:C.gold,
+                color:C.navy, fontWeight:800, fontSize:12, display:"flex",
+                alignItems:"center", justifyContent:"center", flexShrink:0 }}>{i+1}</div>
+              <div style={{ flex:1, overflow:"hidden" }}>
+                <div style={{ fontSize:13, fontWeight:700, color:C.navy,
+                  whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                  {p.omd} · {p.dest_nombre}
+                </div>
+                <div style={{ fontSize:11, color:C.textMut,
+                  whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                  {p.dest_distrito}{!p.dest_lat && " · sin coordenadas"}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <button onClick={guardar} disabled={guardando}
+        style={{ width:"100%", background:`linear-gradient(135deg,${C.green},#059669)`,
+          color:C.white, border:"none", padding:16, borderRadius:12,
+          fontSize:15, fontWeight:800, cursor: guardando?"default":"pointer" }}>
+        {guardando ? "Guardando..." : "💾 Guardar orden de ruta"}
+      </button>
+    </div>
+  );
+}
+
+function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, iniciando, onOrdenarRuta }) {
   const hoy = new Date().toISOString().split("T")[0];
   const misAsignados = pedidos.filter(p=>p.repartidor_id===repartidor.id && p.estado==="asignado");
   const misEnRuta = pedidos.filter(p=>p.repartidor_id===repartidor.id && p.estado==="en_ruta");
-  const misP = [...misEnRuta, ...misAsignados];
+  const misP = [...misEnRuta, ...misAsignados].sort((a,b) => {
+    const oa = a.orden_ruta ?? 999999, ob = b.orden_ruta ?? 999999;
+    return oa - ob;
+  });
   const entregadosHoy = pedidos.filter(p=>
     p.repartidor_id===repartidor.id && p.estado==="entregado" && p.fecha_entrega?.startsWith(hoy)
   );
@@ -485,6 +661,15 @@ function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, ini
             fontSize:15, fontWeight:800, cursor: iniciando?"default":"pointer",
             marginBottom:16, boxShadow:"0 6px 16px #6D28D944" }}>
           {iniciando ? "Iniciando..." : `🚀 Iniciar Ruta (${misAsignados.length} pedido${misAsignados.length===1?"":"s"})`}
+        </button>
+      )}
+
+      {misP.length > 1 && (
+        <button onClick={onOrdenarRuta}
+          style={{ width:"100%", background:C.white, border:`2px solid ${C.gold}`,
+            color:C.goldDk, padding:12, borderRadius:14,
+            fontSize:13, fontWeight:800, cursor:"pointer", marginBottom:16 }}>
+          🗺️ Ordenar mi ruta ({misP.length} pedidos)
         </button>
       )}
 
@@ -1041,6 +1226,7 @@ export default function BoazApp() {
   const [pedidos, setPedidos] = useState([]);
   const [tab, setTab] = useState("inicio");
   const [pedidoSel, setPedidoSel] = useState(null);
+  const [ordenandoRuta, setOrdenandoRuta] = useState(false);
   const [toast, setToast] = useState(null);
   const [iniciandoRuta, setIniciandoRuta] = useState(false);
   const [liquidando, setLiquidando] = useState(false);
@@ -1159,16 +1345,32 @@ export default function BoazApp() {
             onActualizarLocal={actualizarLocal}
             toast={showToast}
           />
+        ) : ordenandoRuta ? (
+          <OrdenarRuta
+            pedidosIniciales={
+              [...pedidos.filter(p=>p.repartidor_id===repartidor.id && (p.estado==="asignado"||p.estado==="en_ruta"))]
+                .sort((a,b)=> (a.orden_ruta ?? 999999) - (b.orden_ruta ?? 999999))
+            }
+            onVolver={()=>setOrdenandoRuta(false)}
+            onGuardado={(ordenGuardado)=>{
+              setPedidos(prev => prev.map(p => {
+                const idx = ordenGuardado.findIndex(o=>o.id===p.id);
+                return idx>=0 ? { ...p, orden_ruta: idx } : p;
+              }));
+              setOrdenandoRuta(false);
+            }}
+            toast={showToast}
+          />
         ) : (
           <>
-            {tab==="inicio"      && <Inicio repartidor={repartidor} pedidos={pedidos} onVerPedido={setPedidoSel} onLogout={()=>setRepartidor(null)} onIniciarRuta={iniciarRuta} iniciando={iniciandoRuta}/>}
+            {tab==="inicio"      && <Inicio repartidor={repartidor} pedidos={pedidos} onVerPedido={setPedidoSel} onLogout={()=>setRepartidor(null)} onIniciarRuta={iniciarRuta} iniciando={iniciandoRuta} onOrdenarRuta={()=>setOrdenandoRuta(true)}/>}
             {tab==="liquidacion" && <MiLiquidacion repartidor={repartidor} pedidos={pedidos} onMarcarLiquidado={marcarLiquidado} liquidando={liquidando}/>}
             {tab==="perfil"      && <MiPerfil repartidor={repartidor} pedidos={pedidos} onLogout={()=>setRepartidor(null)}/>}
           </>
         )}
       </div>
 
-      {!pedidoSel && (
+      {!pedidoSel && !ordenandoRuta && (
         <div style={{ position:"fixed", bottom:0, left:"50%", transform:"translateX(-50%)",
           width:"100%", maxWidth:430, background:C.white,
           borderTop:`1px solid #E2E8F0`, display:"flex",
@@ -1196,11 +1398,11 @@ export default function BoazApp() {
       {toast && (
         <div style={{ position:"fixed", top:70, left:"50%",
           transform:"translateX(-50%)", zIndex:9999,
-          background:toast.tipo==="error"?C.red:C.green,
+          background:toast.tipo==="error"?C.red:toast.tipo==="warn"?C.orange:C.green,
           color:C.white, padding:"10px 20px", borderRadius:20,
           fontSize:13, fontWeight:700, boxShadow:"0 4px 20px #0003",
           maxWidth:360, textAlign:"center" }}>
-          {toast.tipo==="error"?"❌":"✅"} {toast.msg}
+          {toast.tipo==="error"?"❌":toast.tipo==="warn"?"⚠️":"✅"} {toast.msg}
         </div>
       )}
     </div>
