@@ -2631,9 +2631,6 @@ if (verificando) {
               style={{ background:B.bg, border:`1px solid ${B.border}`,
                 color:B.textSec, padding:"7px 14px", borderRadius:8,
                 cursor:"pointer", fontSize:12 }}>🔄 Actualizar</button>
-            {seccion==="pedidos" && (
-              <BtnPri onClick={()=>{}}>+ Nuevo pedido</BtnPri>
-            )}
             <div style={{ display:"flex", alignItems:"center", gap:8 }}>
   <div style={{ textAlign:"right" }}>
     <div style={{ fontSize:12, fontWeight:700, color:B.navy }}>{usuario.nombre}</div>
