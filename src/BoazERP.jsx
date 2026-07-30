@@ -937,7 +937,7 @@ function Repartidores({ repartidores, pedidos, onRefresh, toast }) {
 
   const guardar = async () => {
     if (!f.nombres || !f.dni) { toast("Nombre y DNI son obligatorios","error"); return; }
-    const payload = { ...f, activo:true };
+    const payload = { ...f, email: f.email?.trim() ? f.email.trim() : null, activo:true };
     let error;
     if (editando) {
       ({ error } = await sb.from("repartidores").update(payload).eq("id", editando.id));
