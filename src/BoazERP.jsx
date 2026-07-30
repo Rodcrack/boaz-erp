@@ -590,7 +590,6 @@ function generarHtmlEtiquetas(pedidosSel, empresas) {
               <span style="color:#0D1E3D;">BOA</span><span style="color:#E8780A;">Z</span>
             </div>
           </div>
-          <svg data-code="${codigo}" style="height:44px;"></svg>
         </div>
         <div style="font-size:11px;margin:8px 0;"><strong>TRACKING:</strong> ${codigo}</div>
         <div style="font-size:11px;margin-bottom:10px;">
