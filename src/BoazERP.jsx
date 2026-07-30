@@ -272,6 +272,7 @@ function Pedidos({ pedidos, repartidores, empresas, onRefresh, toast }) {
   const [busqueda, setBusqueda] = useState("");
   const [modalNuevo, setModalNuevo] = useState(false);
   const [modalCarga, setModalCarga] = useState(false);
+  const [modalEtiquetas, setModalEtiquetas] = useState(false);
   const [modalDetalle, setModalDetalle] = useState(null);
   const [asignando, setAsignando] = useState(null);
 
@@ -323,6 +324,7 @@ function Pedidos({ pedidos, repartidores, empresas, onRefresh, toast }) {
           ))}
         </div>
         <span style={{ marginLeft:"auto", fontSize:12, color:B.textMut }}>{filtrados.length} pedidos</span>
+        <BtnSec onClick={()=>setModalEtiquetas(true)}>🏷️ Generar etiquetas</BtnSec>
         <BtnSec onClick={()=>setModalCarga(true)}>⬆️ Cargar masivo</BtnSec>
         <BtnPri onClick={()=>setModalNuevo(true)}>+ Nuevo pedido</BtnPri>
       </div>
@@ -404,6 +406,8 @@ function Pedidos({ pedidos, repartidores, empresas, onRefresh, toast }) {
         onClose={()=>setModalNuevo(false)} onSaved={()=>{setModalNuevo(false);onRefresh();}} toast={toast}/>}
       {modalCarga && <ModalCargaMasiva repartidores={repartidores} empresas={empresas}
         onClose={()=>setModalCarga(false)} onSaved={()=>{onRefresh();}} toast={toast}/>}
+      {modalEtiquetas && <ModalEtiquetas pedidos={filtrados} empresas={empresas}
+        onClose={()=>setModalEtiquetas(false)}/>}
       {modalDetalle && <ModalDetallePedido pedido={modalDetalle} repartidores={repartidores}
         onClose={()=>setModalDetalle(null)} onRefresh={onRefresh} toast={toast}/>}
     </div>
@@ -558,6 +562,175 @@ function ModalNuevoPedido({ repartidores, empresas, onClose, onSaved, toast }) {
         <div style={{ display:"flex", gap:10, marginTop:20, justifyContent:"flex-end" }}>
           <BtnSec onClick={onClose}>Cancelar</BtnSec>
           <BtnPri onClick={save}>Crear pedido</BtnPri>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── ETIQUETAS CON CÓDIGO DE BARRAS ─────────────────────────────
+function escapeHtmlEtiqueta(str) {
+  return (str||"").toString()
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function generarHtmlEtiquetas(pedidosSel, empresas) {
+  const filas = pedidosSel.map(p => {
+    const empresa = empresas.find(e=>e.id===p.empresa_id);
+    const tipoServicio = p.tipo_servicio==="same_day" ? "Same Day"
+      : p.tipo_servicio==="next_day" ? "Next Day" : "—";
+    const cod = p.cobro_destino ? `COD — S/ ${p.monto_cobrar||""}` : "Pagado";
+    const codigo = escapeHtmlEtiqueta(p.omd);
+    return `
+      <div class="etiqueta">
+        <div class="fila-header">
+          <div>
+            <div style="font-size:10px;font-weight:bold;">ENVIADO POR:</div>
+            <div style="font-size:22px;font-weight:900;letter-spacing:2px;margin-top:2px;">
+              <span style="color:#0D1E3D;">BOA</span><span style="color:#E8780A;">Z</span>
+            </div>
+          </div>
+          <svg data-code="${codigo}" style="height:44px;"></svg>
+        </div>
+        <div style="font-size:11px;margin:8px 0;"><strong>TRACKING:</strong> ${codigo}</div>
+        <div style="font-size:11px;margin-bottom:10px;">
+          <strong>MÉTODO DE ENVÍO:</strong> ${escapeHtmlEtiqueta(tipoServicio)} &nbsp;|&nbsp;
+          <strong>ÁMBITO:</strong> ${escapeHtmlEtiqueta((p.ambito||"—").replace("_"," "))} &nbsp;|&nbsp;
+          <strong>MODALIDAD:</strong> ${escapeHtmlEtiqueta(cod)}
+        </div>
+        <div class="titulo-negro">
+          <div style="flex:1;">REMITENTE:</div>
+          <div style="flex:1;">DESTINATARIO:</div>
+        </div>
+        <div style="display:flex;">
+          <div class="col">
+            <div><strong>Empresa:</strong> ${escapeHtmlEtiqueta(empresa?.nombre||"Grupo Boaz S.A.C.")}</div>
+            <div><strong>Dirección:</strong> ${escapeHtmlEtiqueta(empresa?.direccion||"—")}</div>
+            <div><strong>Departamento:</strong> Lima</div>
+            <div><strong>Provincia:</strong> Lima</div>
+            <div><strong>Fecha de ingreso:</strong> ${fmt.fecha(p.created_at)}</div>
+          </div>
+          <div class="col">
+            <div><strong>Cliente:</strong> ${escapeHtmlEtiqueta(p.dest_nombre)}</div>
+            <div><strong>Dirección:</strong> ${escapeHtmlEtiqueta(p.dest_direccion)}</div>
+            <div><strong>Departamento:</strong> Lima</div>
+            <div><strong>Provincia:</strong> Lima</div>
+            <div><strong>Distrito:</strong> ${escapeHtmlEtiqueta(p.dest_distrito)}</div>
+          </div>
+        </div>
+        <div class="barcode-bottom">
+          <svg data-code="${codigo}" style="height:60px;width:90%;"></svg>
+          <div style="font-weight:bold;letter-spacing:3px;font-size:13px;margin-top:4px;">${codigo}</div>
+        </div>
+      </div>`;
+  }).join("");
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Etiquetas Boaz</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/JsBarcode/3.11.5/JsBarcode.all.min.js"></script>
+<style>
+  @page { size: 10cm 15cm; margin: 0.3cm; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; margin:0; background:#fff; }
+  .etiqueta { width:9.4cm; min-height:14.4cm; border:1.5px solid #000; padding:10px;
+    page-break-after: always; margin:0 auto; }
+  .etiqueta:last-child { page-break-after: auto; }
+  .fila-header { display:flex; justify-content:space-between; align-items:flex-start;
+    border-bottom:1.5px solid #000; padding-bottom:8px; }
+  .titulo-negro { display:flex; background:#000; color:#fff; font-weight:bold;
+    font-size:11px; padding:5px 8px; margin:6px 0; }
+  .col { flex:1; padding:6px 8px 0 0; font-size:10.5px; line-height:1.5; }
+  .barcode-bottom { text-align:center; margin-top:14px; border-top:1px dashed #999; padding-top:10px; }
+  @media print { .no-print { display:none; } }
+</style>
+</head>
+<body>
+  <div class="no-print" style="text-align:center;padding:14px;">
+    <button onclick="window.print()" style="padding:10px 20px;font-size:14px;cursor:pointer;">🖨️ Imprimir</button>
+  </div>
+  ${filas}
+  <script>
+    window.addEventListener("load", function() {
+      document.querySelectorAll("svg[data-code]").forEach(function(el){
+        try {
+          JsBarcode(el, el.getAttribute("data-code"), { format:"CODE128", width:2, height:44, displayValue:false, margin:0 });
+        } catch(e) {}
+      });
+    });
+  </script>
+</body>
+</html>`;
+}
+
+function ModalEtiquetas({ pedidos, empresas, onClose }) {
+  const [seleccionados, setSeleccionados] = useState(() => new Set(pedidos.map(p=>p.id)));
+
+  const toggle = (id) => setSeleccionados(prev => {
+    const nuevo = new Set(prev);
+    nuevo.has(id) ? nuevo.delete(id) : nuevo.add(id);
+    return nuevo;
+  });
+  const toggleTodos = () => setSeleccionados(prev =>
+    prev.size === pedidos.length ? new Set() : new Set(pedidos.map(p=>p.id))
+  );
+
+  const imprimir = () => {
+    const elegidos = pedidos.filter(p=>seleccionados.has(p.id));
+    if (elegidos.length===0) return;
+    const html = generarHtmlEtiquetas(elegidos, empresas);
+    const ventana = window.open("", "_blank");
+    if (!ventana) return;
+    ventana.document.write(html);
+    ventana.document.close();
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000,
+      display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+      <div style={{ background:B.white, borderRadius:16, padding:28, width:560,
+        maxHeight:"85vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+          <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>🏷️ Generar etiquetas con código de barras</div>
+          <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20,
+            color:B.textSec, cursor:"pointer" }}>✕</button>
+        </div>
+
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+          <button onClick={toggleTodos}
+            style={{ fontSize:12, color:B.blue, background:"none", border:"none", cursor:"pointer", fontWeight:600 }}>
+            {seleccionados.size===pedidos.length ? "Deseleccionar todos" : "Seleccionar todos"}
+          </button>
+          <span style={{ fontSize:12, color:B.textMut }}>{seleccionados.size} seleccionado{seleccionados.size===1?"":"s"}</span>
+        </div>
+
+        <div style={{ border:`1px solid ${B.border}`, borderRadius:10, overflow:"hidden", marginBottom:20 }}>
+          {pedidos.length===0 && (
+            <div style={{ padding:24, textAlign:"center", color:B.textMut, fontSize:13 }}>
+              No hay pedidos en la vista actual
+            </div>
+          )}
+          {pedidos.map((p,i)=>(
+            <label key={p.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 14px",
+              borderTop: i>0 ? `1px solid ${B.border}` : "none", cursor:"pointer",
+              background: seleccionados.has(p.id) ? "#FFF7ED" : B.white }}>
+              <input type="checkbox" checked={seleccionados.has(p.id)} onChange={()=>toggle(p.id)}
+                style={{ width:16, height:16 }}/>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:12, fontWeight:700, color:B.navy }}>{p.omd} · {p.dest_nombre}</div>
+                <div style={{ fontSize:11, color:B.textMut }}>{p.dest_distrito}</div>
+              </div>
+            </label>
+          ))}
+        </div>
+
+        <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+          <BtnSec onClick={onClose}>Cancelar</BtnSec>
+          <BtnPri onClick={imprimir} disabled={seleccionados.size===0}>
+            🖨️ Generar e imprimir ({seleccionados.size})
+          </BtnPri>
         </div>
       </div>
     </div>
