@@ -291,6 +291,7 @@ function Pedidos({ pedidos, repartidores, empresas, onRefresh, toast }) {
   const [busqueda, setBusqueda] = useState("");
   const [modalNuevo, setModalNuevo] = useState(false);
   const [modalCarga, setModalCarga] = useState(false);
+  const [modalGeocodificar, setModalGeocodificar] = useState(false);
   const [modalDetalle, setModalDetalle] = useState(null);
   const [asignando, setAsignando] = useState(null);
 
@@ -342,6 +343,11 @@ function Pedidos({ pedidos, repartidores, empresas, onRefresh, toast }) {
           ))}
         </div>
         <span style={{ marginLeft:"auto", fontSize:12, color:B.textMut }}>{filtrados.length} pedidos</span>
+        {pedidos.filter(p=>!p.dest_lat).length > 0 && (
+          <BtnSec onClick={()=>setModalGeocodificar(true)}>
+            📍 Geocodificar pendientes ({pedidos.filter(p=>!p.dest_lat).length})
+          </BtnSec>
+        )}
         <BtnSec onClick={()=>setModalCarga(true)}>⬆️ Cargar masivo</BtnSec>
         <BtnPri onClick={()=>setModalNuevo(true)}>+ Nuevo pedido</BtnPri>
       </div>
@@ -423,6 +429,8 @@ function Pedidos({ pedidos, repartidores, empresas, onRefresh, toast }) {
         onClose={()=>setModalNuevo(false)} onSaved={()=>{setModalNuevo(false);onRefresh();}} toast={toast}/>}
       {modalCarga && <ModalCargaMasiva repartidores={repartidores} empresas={empresas}
         onClose={()=>setModalCarga(false)} onSaved={()=>{onRefresh();}} toast={toast}/>}
+      {modalGeocodificar && <ModalGeocodificarPendientes pedidos={pedidos}
+        onClose={()=>setModalGeocodificar(false)} onDone={onRefresh} toast={toast}/>}
       {modalDetalle && <ModalDetallePedido pedido={modalDetalle} repartidores={repartidores}
         onClose={()=>setModalDetalle(null)} onRefresh={onRefresh} toast={toast}/>}
     </div>
@@ -747,6 +755,91 @@ function ModalEtiquetas({ pedidos, empresas, onClose }) {
             🖨️ Generar e imprimir ({seleccionados.size})
           </BtnPri>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Geocodifica retroactivamente pedidos ya existentes que no tienen coordenadas
+function ModalGeocodificarPendientes({ pedidos, onClose, onDone, toast }) {
+  const pendientes = pedidos.filter(p=>!p.dest_lat);
+  const [procesando, setProcesando] = useState(false);
+  const [progreso, setProgreso] = useState("");
+  const [resultado, setResultado] = useState(null);
+
+  const iniciar = async () => {
+    setProcesando(true);
+    let ubicados = 0, noUbicados = 0;
+    for (let i=0; i<pendientes.length; i++) {
+      const p = pendientes[i];
+      setProgreso(`Ubicando pedido ${i+1} de ${pendientes.length} (${p.omd})...`);
+      try {
+        const coords = await geocodificarDireccion(p.dest_direccion, p.dest_distrito);
+        if (coords) {
+          await sb.from("pedidos").update({ dest_lat: coords.lat, dest_lng: coords.lng }).eq("id", p.id);
+          ubicados++;
+        } else {
+          noUbicados++;
+        }
+      } catch (e) {
+        noUbicados++;
+      }
+      await esperar(1100);
+    }
+    setProgreso("");
+    setProcesando(false);
+    setResultado({ ubicados, noUbicados });
+    toast(`${ubicados} pedido${ubicados===1?"":"s"} ubicado${ubicados===1?"":"s"} en el mapa ✓`);
+    onDone();
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000,
+      display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+      <div style={{ background:B.white, borderRadius:16, padding:28, width:480,
+        boxShadow:"0 20px 60px #0003" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+          <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>📍 Geocodificar pedidos existentes</div>
+          <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20,
+            color:B.textSec, cursor:"pointer" }}>✕</button>
+        </div>
+
+        {!resultado ? (
+          <>
+            <div style={{ fontSize:13, color:B.textSec, marginBottom:16, lineHeight:1.6 }}>
+              Se encontraron <strong style={{ color:B.navy }}>{pendientes.length} pedido{pendientes.length===1?"":"s"}</strong> sin coordenadas guardadas.
+              Voy a buscar la ubicación de cada dirección (gratis, vía OpenStreetMap) para que aparezcan en el mapa de la app del repartidor.
+            </div>
+            <div style={{ background:"#FFFBEB", border:"1px solid #FDE68A", borderRadius:8,
+              padding:"10px 14px", marginBottom:20, fontSize:12, color:"#92400E" }}>
+              ⏱️ Esto puede tardar aproximadamente <strong>{Math.ceil(pendientes.length*1.1)} segundos</strong> (1 dirección por segundo, para respetar el servicio gratuito). No cierres esta ventana mientras procesa.
+            </div>
+            <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+              <BtnSec onClick={onClose}>Cancelar</BtnSec>
+              <BtnPri onClick={iniciar} disabled={procesando}>
+                {procesando ? (progreso||"Procesando...") : "Iniciar geocodificación"}
+              </BtnPri>
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ background:"#ECFDF5", border:"1px solid #A7F3D0", borderRadius:10,
+              padding:16, marginBottom:16, textAlign:"center" }}>
+              <div style={{ fontSize:28, fontWeight:900, color:B.green }}>{resultado.ubicados}</div>
+              <div style={{ fontSize:12, color:B.textSec }}>ubicados correctamente</div>
+            </div>
+            {resultado.noUbicados > 0 && (
+              <div style={{ background:"#FEF2F2", border:"1px solid #FECACA", borderRadius:10,
+                padding:16, marginBottom:16, textAlign:"center" }}>
+                <div style={{ fontSize:20, fontWeight:800, color:B.red }}>{resultado.noUbicados}</div>
+                <div style={{ fontSize:12, color:B.textSec }}>no se pudieron ubicar (dirección poco precisa) — puedes editarlos manualmente si hace falta</div>
+              </div>
+            )}
+            <div style={{ display:"flex", justifyContent:"flex-end" }}>
+              <BtnPri onClick={onClose}>Listo</BtnPri>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
