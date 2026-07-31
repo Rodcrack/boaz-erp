@@ -631,7 +631,8 @@ function MapaRuta({ pedidos, onVolver }) {
   const [cargando, setCargando] = useState(true);
   const [errorMapa, setErrorMapa] = useState("");
 
-  const conCoords = pedidos.filter(p => p.dest_lat && p.dest_lng);
+  const pedidosNumerados = pedidos.map((p,i) => ({ ...p, _num: i+1 }));
+  const conCoords = pedidosNumerados.filter(p => p.dest_lat && p.dest_lng);
   const sinCoords = pedidos.length - conCoords.length;
 
   useEffect(() => {
@@ -659,16 +660,16 @@ function MapaRuta({ pedidos, onVolver }) {
 
       const bounds = [];
       if (gps) bounds.push([gps.lat, gps.lng]);
-      conCoords.forEach((p,i) => {
+      conCoords.forEach((p) => {
         const color = p.estado==="entregado" ? "#10B981" : p.estado==="no_entregado" ? "#EF4444" : "#E87722";
         const icono = L.divIcon({
           html: `<div style="background:${color};color:#fff;border-radius:50%;width:26px;height:26px;
             display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;
-            border:2px solid #fff;box-shadow:0 2px 6px #0004;">${i+1}</div>`,
+            border:2px solid #fff;box-shadow:0 2px 6px #0004;">${p._num}</div>`,
           className: "", iconSize:[26,26], iconAnchor:[13,13],
         });
         L.marker([p.dest_lat, p.dest_lng], { icon: icono }).addTo(mapa)
-          .bindPopup(`<strong>${p.omd}</strong><br>${p.dest_nombre}<br>${p.dest_distrito||""}`);
+          .bindPopup(`<strong>#${p._num} — ${p.omd}</strong><br>${p.dest_nombre}<br>${p.dest_distrito||""}`);
         bounds.push([p.dest_lat, p.dest_lng]);
       });
 
@@ -814,12 +815,17 @@ function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, ini
         </div>
       ) : (
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-          {misP.map(p => (
+          {misP.map((p,i) => (
             <div key={p.id} onClick={()=>onVerPedido(p)}
               style={{ background:C.white, borderRadius:14, padding:16,
                 border:`1px solid #E2E8F0`, cursor:"pointer",
-                boxShadow:"0 2px 8px #0D1E3D0A",
+                boxShadow:"0 2px 8px #0D1E3D0A", position:"relative", paddingLeft:44,
                 borderLeft:`4px solid ${ESTADOS[p.estado]?.color||C.gold}` }}>
+              <div style={{ position:"absolute", left:14, top:16, width:24, height:24,
+                borderRadius:"50%", background:C.gold, color:C.navy, fontWeight:800,
+                fontSize:12, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                {i+1}
+              </div>
               <div style={{ display:"flex", justifyContent:"space-between",
                 alignItems:"flex-start", marginBottom:8 }}>
                 <div style={{ fontSize:14, fontWeight:800, color:C.navy }}>{p.omd}</div>
