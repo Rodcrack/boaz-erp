@@ -57,6 +57,23 @@ const getTarifaSameDay = (ambito, kg) => {
   return t.M + Math.ceil(peso - 7); // S/1 adicional por cada kg por encima de 7kg
 };
 
+// ── GEOCODIFICACIÓN GRATUITA (OpenStreetMap / Nominatim) ───────
+// Convierte una dirección en texto a coordenadas lat/lng. Gratis, sin API key.
+// Límite de uso: máx. 1 solicitud por segundo (por eso las cargas masivas
+// esperan un poco entre cada dirección).
+async function geocodificarDireccion(direccion, distrito) {
+  try {
+    const query = encodeURIComponent(`${direccion}, ${distrito||""}, Lima, Perú`);
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=pe&q=${query}`);
+    const data = await res.json();
+    if (data && data[0]) {
+      return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+    }
+  } catch (e) { /* si falla, el pedido se crea igual, sin coordenadas */ }
+  return null;
+}
+const esperar = (ms) => new Promise(r => setTimeout(r, ms));
+
 const ROLES_ACCESO = {
   admin: ["dashboard","pedidos","repartidores","clientes","liquidaciones","facturacion","reportes","configuracion"],
   operaciones: ["dashboard","pedidos","repartidores","clientes"],
@@ -422,11 +439,14 @@ function ModalNuevoPedido({ repartidores, empresas, onClose, onSaved, toast }) {
     descripcion:"", fecha_programada: new Date().toISOString().split("T")[0],
   });
   const tarifa = getTarifa(f.ambito, parseFloat(f.peso_kg));
+  const [guardando, setGuardando] = useState(false);
 
   const save = async () => {
     if (!f.dest_nombre || !f.dest_direccion) { toast("Completa nombre y dirección","error"); return; }
+    setGuardando(true);
     const { data: codigo, error: errCodigo } = await sb.rpc("generar_codigo_boaz");
-    if (errCodigo || !codigo) { toast("Error al generar el código de tracking: "+(errCodigo?.message||""),"error"); return; }
+    if (errCodigo || !codigo) { toast("Error al generar el código de tracking: "+(errCodigo?.message||""),"error"); setGuardando(false); return; }
+    const coords = await geocodificarDireccion(f.dest_direccion, f.dest_distrito);
     const { error } = await sb.from("pedidos").insert([{
       ...f, omd: codigo, tarifa_s: tarifa,
       peso_kg: parseFloat(f.peso_kg)||null,
@@ -434,9 +454,11 @@ function ModalNuevoPedido({ repartidores, empresas, onClose, onSaved, toast }) {
       empresa_id: f.empresa_id||null, repartidor_id: f.repartidor_id||null,
       estado: f.repartidor_id?"asignado":"sin_asignar",
       fecha_asignacion: f.repartidor_id?new Date().toISOString():null,
+      dest_lat: coords?.lat||null, dest_lng: coords?.lng||null,
     }]);
+    setGuardando(false);
     if (error) { toast("Error: "+error.message,"error"); return; }
-    toast("Pedido creado ✓");
+    toast(coords ? "Pedido creado ✓ (ubicación encontrada)" : "Pedido creado ✓ (no se encontró la ubicación exacta)");
     onSaved();
   };
 
@@ -549,7 +571,7 @@ function ModalNuevoPedido({ repartidores, empresas, onClose, onSaved, toast }) {
 
         <div style={{ display:"flex", gap:10, marginTop:20, justifyContent:"flex-end" }}>
           <BtnSec onClick={onClose}>Cancelar</BtnSec>
-          <BtnPri onClick={save}>Crear pedido</BtnPri>
+          <BtnPri onClick={save} disabled={guardando}>{guardando?"Ubicando dirección...":"Crear pedido"}</BtnPri>
         </div>
       </div>
     </div>
@@ -818,6 +840,7 @@ function ModalCargaMasiva({ repartidores, empresas, onClose, onSaved, toast }) {
   const [filas, setFilas] = useState([]);
   const [nombreArchivo, setNombreArchivo] = useState("");
   const [procesando, setProcesando] = useState(false);
+  const [progreso, setProgreso] = useState("");
   const [resultado, setResultado] = useState(null);
   const [errorArchivo, setErrorArchivo] = useState("");
   const [mostrarEtiquetas, setMostrarEtiquetas] = useState(false);
@@ -849,10 +872,13 @@ function ModalCargaMasiva({ repartidores, empresas, onClose, onSaved, toast }) {
     setProcesando(true);
     const generados = [];
     try {
-      for (const fila of validas) {
+      for (let i=0; i<validas.length; i++) {
+        const fila = validas[i];
+        setProgreso(`Ubicando dirección ${i+1} de ${validas.length}...`);
         try {
           const { data: codigo, error: errCodigo } = await sb.rpc("generar_codigo_boaz");
           if (errCodigo || !codigo) { generados.push({ ...fila, ok:false, error:"no se pudo generar código: "+(errCodigo?.message||"sin detalle") }); continue; }
+          const coords = await geocodificarDireccion(fila.dest_direccion, fila.dest_distrito);
           const tarifa = getTarifaSameDay(fila.ambito, fila.peso_kg);
           const { error: errInsert } = await sb.from("pedidos").insert({
             omd: codigo,
@@ -872,9 +898,11 @@ function ModalCargaMasiva({ repartidores, empresas, onClose, onSaved, toast }) {
             monto_cobrar: fila.cobro_destino ? (fila.monto_cobrar || null) : null,
             estado: repartidorId ? "asignado" : "sin_asignar",
             fecha_asignacion: repartidorId ? new Date().toISOString() : null,
+            dest_lat: coords?.lat||null, dest_lng: coords?.lng||null,
           });
           if (errInsert) generados.push({ ...fila, ok:false, error:errInsert.message });
-          else generados.push({ ...fila, ok:true, codigo });
+          else generados.push({ ...fila, ok:true, codigo, ubicado: !!coords });
+          await esperar(1100); // respeta el límite de 1 solicitud/segundo del geocodificador gratuito
         } catch (filaErr) {
           generados.push({ ...fila, ok:false, error: filaErr.message || "error inesperado en esta fila" });
         }
@@ -882,6 +910,7 @@ function ModalCargaMasiva({ repartidores, empresas, onClose, onSaved, toast }) {
     } catch (err) {
       toast("Error inesperado durante la carga: "+err.message,"error");
     }
+    setProgreso("");
     setProcesando(false);
     setResultado(generados);
     setFilas([]);
@@ -950,7 +979,7 @@ function ModalCargaMasiva({ repartidores, empresas, onClose, onSaved, toast }) {
                 {validas.length} válida{validas.length===1?"":"s"}, {invalidas.length} con error{invalidas.length===1?"":"es"}
               </div>
               <BtnPri onClick={confirmarCarga} disabled={validas.length===0 || !empresaId || procesando}>
-                {procesando ? "Generando..." : `Confirmar y cargar ${validas.length}`}
+                {procesando ? (progreso||"Generando...") : `Confirmar y cargar ${validas.length}`}
               </BtnPri>
             </div>
             <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
@@ -1001,7 +1030,7 @@ function ModalCargaMasiva({ repartidores, empresas, onClose, onSaved, toast }) {
                   padding:"6px 10px", background:B.bg, borderRadius:6, fontSize:12 }}>
                   <span style={{ color:B.textSec }}>{r.cliente_referencia||"—"} · {r.dest_nombre}</span>
                   <span style={{ fontWeight:700, color: r.ok?B.green:B.red }}>
-                    {r.ok ? r.codigo : `Error: ${r.error}`}
+                    {r.ok ? `${r.ubicado?"📍 ":"⚠️ "}${r.codigo}` : `Error: ${r.error}`}
                   </span>
                 </div>
               ))}

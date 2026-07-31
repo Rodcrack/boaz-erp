@@ -41,6 +41,21 @@ const fmt = {
   fechaHora: (d) => d ? new Date(d).toLocaleString("es-PE",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}) : "",
 };
 
+// ── GEOCODIFICACIÓN GRATUITA (OpenStreetMap / Nominatim) ───────
+// Límite de uso: máx. 1 solicitud por segundo.
+async function geocodificarDireccion(direccion, distrito) {
+  try {
+    const query = encodeURIComponent(`${direccion}, ${distrito||""}, Lima, Perú`);
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=pe&q=${query}`);
+    const data = await res.json();
+    if (data && data[0]) {
+      return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+    }
+  } catch (e) { /* si falla, el pedido se crea igual, sin coordenadas */ }
+  return null;
+}
+const esperar = (ms) => new Promise(r => setTimeout(r, ms));
+
 // Fecha del evento más reciente del pedido: último item del historial si existe,
 // si no, la fecha específica según el estado actual, y como último recurso el registro.
 function obtenerFechaUltimoEstado(p) {
@@ -1018,6 +1033,7 @@ function CargaMasiva({ empresaId, empresa, onCargaCompleta }) {
   const [filas, setFilas] = useState([]);
   const [nombreArchivo, setNombreArchivo] = useState("");
   const [procesando, setProcesando] = useState(false);
+  const [progreso, setProgreso] = useState("");
   const [resultado, setResultado] = useState(null);
   const [errorArchivo, setErrorArchivo] = useState("");
   const [mostrarEtiquetas, setMostrarEtiquetas] = useState(false);
@@ -1048,10 +1064,13 @@ function CargaMasiva({ empresaId, empresa, onCargaCompleta }) {
     setProcesando(true);
     const generados = [];
     try {
-      for (const fila of validas) {
+      for (let i=0; i<validas.length; i++) {
+        const fila = validas[i];
+        setProgreso(`Ubicando dirección ${i+1} de ${validas.length}...`);
         try {
           const { data: codigo, error: errCodigo } = await sb.rpc("generar_codigo_boaz");
           if (errCodigo || !codigo) { generados.push({ ...fila, ok:false, error:"no se pudo generar código: "+(errCodigo?.message||"sin detalle") }); continue; }
+          const coords = await geocodificarDireccion(fila.dest_direccion, fila.dest_distrito);
           const { error: errInsert } = await sb.from("pedidos").insert({
             omd: codigo,
             empresa_id: empresaId,
@@ -1066,9 +1085,11 @@ function CargaMasiva({ empresaId, empresa, onCargaCompleta }) {
             cobro_destino: !!fila.cobro_destino,
             monto_cobrar: fila.cobro_destino ? (fila.monto_cobrar || null) : null,
             estado: "sin_asignar",
+            dest_lat: coords?.lat||null, dest_lng: coords?.lng||null,
           });
           if (errInsert) generados.push({ ...fila, ok:false, error:errInsert.message });
-          else generados.push({ ...fila, ok:true, codigo });
+          else generados.push({ ...fila, ok:true, codigo, ubicado: !!coords });
+          await esperar(1100);
         } catch (filaErr) {
           generados.push({ ...fila, ok:false, error: filaErr.message || "error inesperado en esta fila" });
         }
@@ -1076,6 +1097,7 @@ function CargaMasiva({ empresaId, empresa, onCargaCompleta }) {
     } catch (err) {
       // seguimos igual hacia el resumen para que se vea el detalle disponible
     }
+    setProgreso("");
     setProcesando(false);
     setResultado(generados);
     setFilas([]);
@@ -1133,7 +1155,7 @@ function CargaMasiva({ empresaId, empresa, onCargaCompleta }) {
               style={{ background: validas.length>0 ? C.green : "#CBD5E1", color:C.white, border:"none",
                 padding:"10px 18px", borderRadius:10, fontSize:13, fontWeight:800,
                 cursor: validas.length>0 && !procesando ? "pointer" : "default" }}>
-              {procesando ? "Generando códigos..." : `✅ Confirmar y cargar ${validas.length} pedido${validas.length===1?"":"s"}`}
+              {procesando ? (progreso||"Generando códigos...") : `✅ Confirmar y cargar ${validas.length} pedido${validas.length===1?"":"s"}`}
             </button>
           </div>
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
@@ -1194,7 +1216,7 @@ function CargaMasiva({ empresaId, empresa, onCargaCompleta }) {
                 padding:"8px 12px", background:C.bg, borderRadius:8, fontSize:12 }}>
                 <span style={{ color:C.textSec }}>{r.cliente_referencia||"—"} · {r.dest_nombre}</span>
                 <span style={{ fontWeight:700, color: r.ok?C.green:C.red }}>
-                  {r.ok ? r.codigo : `Error: ${r.error}`}
+                  {r.ok ? `${r.ubicado?"📍 ":"⚠️ "}${r.codigo}` : `Error: ${r.error}`}
                 </span>
               </div>
             ))}
