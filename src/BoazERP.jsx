@@ -766,10 +766,12 @@ function ModalGeocodificarPendientes({ pedidos, onClose, onDone, toast }) {
   const [procesando, setProcesando] = useState(false);
   const [progreso, setProgreso] = useState("");
   const [resultado, setResultado] = useState(null);
+  const [mostrarLista, setMostrarLista] = useState(false);
 
   const iniciar = async () => {
     setProcesando(true);
-    let ubicados = 0, noUbicados = 0;
+    const fallidos = [];
+    let ubicados = 0;
     for (let i=0; i<pendientes.length; i++) {
       const p = pendientes[i];
       setProgreso(`Ubicando pedido ${i+1} de ${pendientes.length} (${p.omd})...`);
@@ -779,16 +781,16 @@ function ModalGeocodificarPendientes({ pedidos, onClose, onDone, toast }) {
           await sb.from("pedidos").update({ dest_lat: coords.lat, dest_lng: coords.lng }).eq("id", p.id);
           ubicados++;
         } else {
-          noUbicados++;
+          fallidos.push(p);
         }
       } catch (e) {
-        noUbicados++;
+        fallidos.push(p);
       }
       await esperar(1100);
     }
     setProgreso("");
     setProcesando(false);
-    setResultado({ ubicados, noUbicados });
+    setResultado({ ubicados, fallidos });
     toast(`${ubicados} pedido${ubicados===1?"":"s"} ubicado${ubicados===1?"":"s"} en el mapa ✓`);
     onDone();
   };
@@ -796,8 +798,8 @@ function ModalGeocodificarPendientes({ pedidos, onClose, onDone, toast }) {
   return (
     <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000,
       display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
-      <div style={{ background:B.white, borderRadius:16, padding:28, width:480,
-        boxShadow:"0 20px 60px #0003" }}>
+      <div style={{ background:B.white, borderRadius:16, padding:28, width:560,
+        maxHeight:"85vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
           <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>📍 Geocodificar pedidos existentes</div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20,
@@ -806,10 +808,28 @@ function ModalGeocodificarPendientes({ pedidos, onClose, onDone, toast }) {
 
         {!resultado ? (
           <>
-            <div style={{ fontSize:13, color:B.textSec, marginBottom:16, lineHeight:1.6 }}>
+            <div style={{ fontSize:13, color:B.textSec, marginBottom:12, lineHeight:1.6 }}>
               Se encontraron <strong style={{ color:B.navy }}>{pendientes.length} pedido{pendientes.length===1?"":"s"}</strong> sin coordenadas guardadas.
               Voy a buscar la ubicación de cada dirección (gratis, vía OpenStreetMap) para que aparezcan en el mapa de la app del repartidor.
             </div>
+            <button onClick={()=>setMostrarLista(s=>!s)}
+              style={{ fontSize:12, color:B.blue, background:"none", border:"none", cursor:"pointer",
+                fontWeight:600, marginBottom:12 }}>
+              {mostrarLista ? "Ocultar lista" : "Ver cuáles son →"}
+            </button>
+            {mostrarLista && (
+              <div style={{ border:`1px solid ${B.border}`, borderRadius:8, marginBottom:16,
+                maxHeight:220, overflowY:"auto" }}>
+                {pendientes.map((p,i)=>(
+                  <div key={p.id} style={{ padding:"8px 12px", fontSize:12,
+                    borderTop: i>0 ? `1px solid ${B.border}` : "none",
+                    background: i%2===0?B.white:"#F8FAFC" }}>
+                    <span style={{ fontWeight:700, color:B.navy }}>{p.omd}</span> — {p.dest_nombre}
+                    <div style={{ color:B.textMut }}>{p.dest_direccion}, {p.dest_distrito}</div>
+                  </div>
+                ))}
+              </div>
+            )}
             <div style={{ background:"#FFFBEB", border:"1px solid #FDE68A", borderRadius:8,
               padding:"10px 14px", marginBottom:20, fontSize:12, color:"#92400E" }}>
               ⏱️ Esto puede tardar aproximadamente <strong>{Math.ceil(pendientes.length*1.1)} segundos</strong> (1 dirección por segundo, para respetar el servicio gratuito). No cierres esta ventana mientras procesa.
@@ -828,11 +848,27 @@ function ModalGeocodificarPendientes({ pedidos, onClose, onDone, toast }) {
               <div style={{ fontSize:28, fontWeight:900, color:B.green }}>{resultado.ubicados}</div>
               <div style={{ fontSize:12, color:B.textSec }}>ubicados correctamente</div>
             </div>
-            {resultado.noUbicados > 0 && (
-              <div style={{ background:"#FEF2F2", border:"1px solid #FECACA", borderRadius:10,
-                padding:16, marginBottom:16, textAlign:"center" }}>
-                <div style={{ fontSize:20, fontWeight:800, color:B.red }}>{resultado.noUbicados}</div>
-                <div style={{ fontSize:12, color:B.textSec }}>no se pudieron ubicar (dirección poco precisa) — puedes editarlos manualmente si hace falta</div>
+            {resultado.fallidos.length > 0 && (
+              <div style={{ marginBottom:16 }}>
+                <div style={{ background:"#FEF2F2", border:"1px solid #FECACA", borderRadius:10,
+                  padding:"12px 16px", marginBottom:8 }}>
+                  <div style={{ fontSize:13, fontWeight:800, color:B.red, marginBottom:2 }}>
+                    {resultado.fallidos.length} no se pudieron ubicar
+                  </div>
+                  <div style={{ fontSize:11, color:B.textSec }}>
+                    Corrige la dirección de cada uno abriendo su detalle ("Ver") y usa "🔄 Guardar dirección y reintentar ubicación", o ingresa las coordenadas manualmente.
+                  </div>
+                </div>
+                <div style={{ border:`1px solid ${B.border}`, borderRadius:8, maxHeight:220, overflowY:"auto" }}>
+                  {resultado.fallidos.map((p,i)=>(
+                    <div key={p.id} style={{ padding:"8px 12px", fontSize:12,
+                      borderTop: i>0 ? `1px solid ${B.border}` : "none",
+                      background: i%2===0?B.white:"#F8FAFC" }}>
+                      <span style={{ fontWeight:700, color:B.navy }}>{p.omd}</span> — {p.dest_nombre}
+                      <div style={{ color:B.textMut }}>{p.dest_direccion}, {p.dest_distrito}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
             <div style={{ display:"flex", justifyContent:"flex-end" }}>
@@ -1163,12 +1199,45 @@ function ModalCargaMasiva({ repartidores, empresas, onClose, onSaved, toast }) {
 // Modal detalle pedido
 function ModalDetallePedido({ pedido: p, repartidores, onClose, onRefresh, toast }) {
   const rep = repartidores.find(r=>r.id===p.repartidor_id);
+  const [direccion, setDireccion] = useState(p.dest_direccion||"");
+  const [distrito, setDistrito] = useState(p.dest_distrito||"");
+  const [latManual, setLatManual] = useState(p.dest_lat||"");
+  const [lngManual, setLngManual] = useState(p.dest_lng||"");
+  const [ubicando, setUbicando] = useState(false);
   const timeline = [
     { label:"Creado", fecha: p.created_at, ok: true },
     { label:"Asignado", fecha: p.fecha_asignacion, ok: !!p.fecha_asignacion },
     { label:"En ruta", fecha: p.fecha_asignacion, ok: ["en_ruta","entregado"].includes(p.estado) },
     { label:"Entregado", fecha: p.fecha_entrega, ok: p.estado==="entregado" },
   ];
+
+  const reintentarUbicacion = async () => {
+    setUbicando(true);
+    // Si cambió la dirección o distrito, los guarda primero
+    if (direccion !== p.dest_direccion || distrito !== p.dest_distrito) {
+      await sb.from("pedidos").update({ dest_direccion: direccion, dest_distrito: distrito }).eq("id", p.id);
+    }
+    const coords = await geocodificarDireccion(direccion, distrito);
+    setUbicando(false);
+    if (coords) {
+      await sb.from("pedidos").update({ dest_lat: coords.lat, dest_lng: coords.lng }).eq("id", p.id);
+      setLatManual(coords.lat); setLngManual(coords.lng);
+      toast("Ubicación encontrada ✓");
+      onRefresh();
+    } else {
+      toast("No se encontró la ubicación con esa dirección. Intenta ajustarla o ingresa las coordenadas manualmente.","error");
+    }
+  };
+
+  const guardarManual = async () => {
+    const lat = parseFloat(latManual), lng = parseFloat(lngManual);
+    if (isNaN(lat) || isNaN(lng)) { toast("Ingresa latitud y longitud válidas","error"); return; }
+    const { error } = await sb.from("pedidos").update({ dest_lat: lat, dest_lng: lng }).eq("id", p.id);
+    if (error) { toast("Error: "+error.message,"error"); return; }
+    toast("Coordenadas guardadas ✓");
+    onRefresh();
+  };
+
   return (
     <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000,
       display:"flex", alignItems:"center", justifyContent:"center" }}>
@@ -1233,6 +1302,36 @@ function ModalDetallePedido({ pedido: p, repartidores, onClose, onRefresh, toast
             <img src={p.foto_evidencia} style={{ width:"100%", borderRadius:8, maxHeight:200, objectFit:"cover" }}/>
           </div>
         )}
+
+        <div style={{ marginTop:16, background:B.bg, borderRadius:10, padding:16 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:B.navy, textTransform:"uppercase",
+            letterSpacing:"0.8px", marginBottom:10 }}>📍 Ubicación en el mapa</div>
+          <div style={{ fontSize:12, marginBottom:12,
+            color: p.dest_lat ? B.green : B.red, fontWeight:600 }}>
+            {p.dest_lat ? `✓ Ubicado (${parseFloat(p.dest_lat).toFixed(5)}, ${parseFloat(p.dest_lng).toFixed(5)})` : "⚠️ Sin coordenadas — no aparece en el mapa del repartidor"}
+          </div>
+
+          <label style={{ ...lbl, marginTop:0 }}>Dirección (ajústala si la ubicación está mal)</label>
+          <input style={{ ...inp, marginBottom:8 }} value={direccion} onChange={e=>setDireccion(e.target.value)}/>
+          <label style={lbl}>Distrito</label>
+          <input style={{ ...inp, marginBottom:10 }} value={distrito} onChange={e=>setDistrito(e.target.value)}/>
+          <button onClick={reintentarUbicacion} disabled={ubicando}
+            style={{ width:"100%", background:`linear-gradient(135deg,${B.gold},${B.goldDk})`,
+              border:"none", color:B.navy, padding:10, borderRadius:8,
+              fontSize:12, fontWeight:800, cursor: ubicando?"default":"pointer", marginBottom:14 }}>
+            {ubicando ? "Buscando ubicación..." : "🔄 Guardar dirección y reintentar ubicación"}
+          </button>
+
+          <div style={{ borderTop:`1px solid ${B.border}`, paddingTop:12 }}>
+            <label style={lbl}>O ingresa las coordenadas manualmente (ej. copiadas de Google Maps)</label>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
+              <input style={inp} placeholder="Latitud" value={latManual} onChange={e=>setLatManual(e.target.value)}/>
+              <input style={inp} placeholder="Longitud" value={lngManual} onChange={e=>setLngManual(e.target.value)}/>
+            </div>
+            <BtnSec onClick={guardarManual} style={{ width:"100%" }}>Guardar coordenadas manuales</BtnSec>
+          </div>
+        </div>
+
         <div style={{ display:"flex", justifyContent:"flex-end", marginTop:20 }}>
           <BtnSec onClick={onClose}>Cerrar</BtnSec>
         </div>
