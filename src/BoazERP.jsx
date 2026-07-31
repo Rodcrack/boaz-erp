@@ -50,9 +50,11 @@ const TARIFAS_SAMEDAY = {
 };
 const getTarifaSameDay = (ambito, kg) => {
   const t = TARIFAS_SAMEDAY[ambito] || TARIFAS_SAMEDAY.urbano;
-  if (!kg || kg <= 1) return t.XS;
-  if (kg <= 3) return t.S;
-  return t.M;
+  const peso = kg || 0;
+  if (peso <= 1) return t.XS;
+  if (peso <= 3) return t.S;
+  if (peso <= 7) return t.M;
+  return t.M + Math.ceil(peso - 7); // S/1 adicional por cada kg por encima de 7kg
 };
 
 const ROLES_ACCESO = {
@@ -412,17 +414,7 @@ function Pedidos({ pedidos, repartidores, empresas, onRefresh, toast }) {
 
 // Modal nuevo pedido
 function ModalNuevoPedido({ repartidores, empresas, onClose, onSaved, toast }) {
-  const TARIFAS = {
-    urbano:      { XS:10, S:13, M:16 },
-    semi_urbano: { XS:12, S:15, M:18 },
-    periferico:  { XS:15, S:18, M:22 },
-  };
-  const getTarifa = (ambito, kg) => {
-    const t = TARIFAS[ambito] || TARIFAS.urbano;
-    if (!kg || kg <= 1) return t.XS;
-    if (kg <= 3) return t.S;
-    return t.M;
-  };
+  const getTarifa = getTarifaSameDay;
   const [f, setF] = useState({
     dest_nombre:"", dest_telefono:"", dest_direccion:"", dest_distrito:"",
     dest_referencia:"", peso_kg:"", ambito:"urbano", empresa_id:"",
@@ -2361,6 +2353,9 @@ function Configuracion({ toast }) {
             ))}
           </tbody>
         </table>
+        <div style={{ fontSize:11, color:B.textMut, marginTop:10 }}>
+          A partir de 7 kg se suma <strong style={{ color:B.gold }}>S/ 1.00 adicional por cada kg extra</strong> sobre la tarifa M.
+        </div>
       </div>
 
       {/* Zonas */}

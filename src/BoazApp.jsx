@@ -609,7 +609,114 @@ function OrdenarRuta({ pedidosIniciales, onVolver, onGuardado, toast }) {
   );
 }
 
-function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, iniciando, onOrdenarRuta }) {
+// ── PANTALLA: MAPA DE MI RUTA (Leaflet + OpenStreetMap, gratuito) ──
+function cargarLeaflet() {
+  return new Promise((resolve) => {
+    if (window.L) { resolve(window.L); return; }
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+    document.head.appendChild(link);
+    const script = document.createElement("script");
+    script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+    script.onload = () => resolve(window.L);
+    script.onerror = () => resolve(null);
+    document.head.appendChild(script);
+  });
+}
+
+function MapaRuta({ pedidos, onVolver }) {
+  const mapaRef = useRef(null);
+  const contenedorRef = useRef(null);
+  const [cargando, setCargando] = useState(true);
+  const [errorMapa, setErrorMapa] = useState("");
+
+  const conCoords = pedidos.filter(p => p.dest_lat && p.dest_lng);
+  const sinCoords = pedidos.length - conCoords.length;
+
+  useEffect(() => {
+    let activo = true;
+    (async () => {
+      const L = await cargarLeaflet();
+      if (!L) { setErrorMapa("No se pudo cargar el mapa. Verifica tu conexión a internet."); setCargando(false); return; }
+      const gps = await obtenerGPS();
+      if (!activo || !contenedorRef.current) return;
+
+      const centro = gps ? [gps.lat, gps.lng]
+        : conCoords.length ? [conCoords[0].dest_lat, conCoords[0].dest_lng]
+        : [-12.0464, -77.0428]; // Lima, por defecto
+
+      const mapa = L.map(contenedorRef.current).setView(centro, 13);
+      mapaRef.current = mapa;
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "© OpenStreetMap",
+      }).addTo(mapa);
+
+      if (gps) {
+        L.circleMarker([gps.lat, gps.lng], { radius:9, color:"#fff", weight:3,
+          fillColor:"#7C3AED", fillOpacity:1 }).addTo(mapa).bindPopup("📍 Tú estás aquí");
+      }
+
+      const bounds = [];
+      if (gps) bounds.push([gps.lat, gps.lng]);
+      conCoords.forEach((p,i) => {
+        const color = p.estado==="entregado" ? "#10B981" : p.estado==="no_entregado" ? "#EF4444" : "#E87722";
+        const icono = L.divIcon({
+          html: `<div style="background:${color};color:#fff;border-radius:50%;width:26px;height:26px;
+            display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;
+            border:2px solid #fff;box-shadow:0 2px 6px #0004;">${i+1}</div>`,
+          className: "", iconSize:[26,26], iconAnchor:[13,13],
+        });
+        L.marker([p.dest_lat, p.dest_lng], { icon: icono }).addTo(mapa)
+          .bindPopup(`<strong>${p.omd}</strong><br>${p.dest_nombre}<br>${p.dest_distrito||""}`);
+        bounds.push([p.dest_lat, p.dest_lng]);
+      });
+
+      if (bounds.length > 1) mapa.fitBounds(bounds, { padding:[40,40] });
+      setCargando(false);
+    })();
+    return () => { if (mapaRef.current) { mapaRef.current.remove(); mapaRef.current = null; } activo = false; };
+  }, []);
+
+  return (
+    <div style={{ padding:16 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14 }}>
+        <button onClick={onVolver}
+          style={{ background:C.white, border:`1px solid #E2E8F0`,
+            color:C.textSec, padding:"8px 14px", borderRadius:10,
+            fontSize:13, cursor:"pointer", fontWeight:600 }}>← Volver</button>
+        <div style={{ fontSize:16, fontWeight:800, color:C.navy }}>🗺️ Mapa de mi ruta</div>
+      </div>
+
+      {sinCoords > 0 && (
+        <div style={{ background:"#FFFBEB", border:"1px solid #FDE68A", borderRadius:10,
+          padding:"10px 14px", marginBottom:12, fontSize:12, color:"#92400E", fontWeight:600 }}>
+          ⚠️ {sinCoords} pedido{sinCoords===1?"":"s"} sin coordenadas — no se muestra{sinCoords===1?"":"n"} en el mapa.
+        </div>
+      )}
+
+      <div style={{ position:"relative", borderRadius:14, overflow:"hidden",
+        border:"1px solid #E2E8F0", height:420 }}>
+        {cargando && (
+          <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center",
+            justifyContent:"center", background:C.bg, zIndex:10, fontSize:13, color:C.textMut }}>
+            Cargando mapa...
+          </div>
+        )}
+        {errorMapa && (
+          <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center",
+            justifyContent:"center", background:C.bg, zIndex:10, fontSize:13, color:C.red,
+            textAlign:"center", padding:20 }}>
+            {errorMapa}
+          </div>
+        )}
+        <div ref={contenedorRef} style={{ width:"100%", height:"100%" }}/>
+      </div>
+    </div>
+  );
+}
+
+function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, iniciando, onOrdenarRuta, onVerMapa }) {
   const hoy = new Date().toISOString().split("T")[0];
   const misAsignados = pedidos.filter(p=>p.repartidor_id===repartidor.id && p.estado==="asignado");
   const misEnRuta = pedidos.filter(p=>p.repartidor_id===repartidor.id && p.estado==="en_ruta");
@@ -663,8 +770,17 @@ function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, ini
         <button onClick={onOrdenarRuta}
           style={{ width:"100%", background:C.white, border:`2px solid ${C.gold}`,
             color:C.goldDk, padding:12, borderRadius:14,
-            fontSize:13, fontWeight:800, cursor:"pointer", marginBottom:16 }}>
+            fontSize:13, fontWeight:800, cursor:"pointer", marginBottom:10 }}>
           🗺️ Ordenar mi ruta ({misP.length} pedidos)
+        </button>
+      )}
+
+      {misP.length > 0 && (
+        <button onClick={onVerMapa}
+          style={{ width:"100%", background:C.white, border:`2px solid #7C3AED`,
+            color:"#7C3AED", padding:12, borderRadius:14,
+            fontSize:13, fontWeight:800, cursor:"pointer", marginBottom:16 }}>
+          📍 Ver mapa de mi ruta
         </button>
       )}
 
@@ -1222,6 +1338,7 @@ export default function BoazApp() {
   const [tab, setTab] = useState("inicio");
   const [pedidoSel, setPedidoSel] = useState(null);
   const [ordenandoRuta, setOrdenandoRuta] = useState(false);
+  const [viendoMapa, setViendoMapa] = useState(false);
   const [toast, setToast] = useState(null);
   const [iniciandoRuta, setIniciandoRuta] = useState(false);
   const [liquidando, setLiquidando] = useState(false);
@@ -1356,16 +1473,24 @@ export default function BoazApp() {
             }}
             toast={showToast}
           />
+        ) : viendoMapa ? (
+          <MapaRuta
+            pedidos={
+              [...pedidos.filter(p=>p.repartidor_id===repartidor.id && (p.estado==="asignado"||p.estado==="en_ruta"))]
+                .sort((a,b)=> (a.orden_ruta ?? 999999) - (b.orden_ruta ?? 999999))
+            }
+            onVolver={()=>setViendoMapa(false)}
+          />
         ) : (
           <>
-            {tab==="inicio"      && <Inicio repartidor={repartidor} pedidos={pedidos} onVerPedido={setPedidoSel} onLogout={()=>setRepartidor(null)} onIniciarRuta={iniciarRuta} iniciando={iniciandoRuta} onOrdenarRuta={()=>setOrdenandoRuta(true)}/>}
+            {tab==="inicio"      && <Inicio repartidor={repartidor} pedidos={pedidos} onVerPedido={setPedidoSel} onLogout={()=>setRepartidor(null)} onIniciarRuta={iniciarRuta} iniciando={iniciandoRuta} onOrdenarRuta={()=>setOrdenandoRuta(true)} onVerMapa={()=>setViendoMapa(true)}/>}
             {tab==="liquidacion" && <MiLiquidacion repartidor={repartidor} pedidos={pedidos} onMarcarLiquidado={marcarLiquidado} liquidando={liquidando}/>}
             {tab==="perfil"      && <MiPerfil repartidor={repartidor} pedidos={pedidos} onLogout={()=>setRepartidor(null)}/>}
           </>
         )}
       </div>
 
-      {!pedidoSel && !ordenandoRuta && (
+      {!pedidoSel && !ordenandoRuta && !viendoMapa && (
         <div style={{ position:"fixed", bottom:0, left:"50%", transform:"translateX(-50%)",
           width:"100%", maxWidth:430, background:C.white,
           borderTop:`1px solid #E2E8F0`, display:"flex",
