@@ -75,9 +75,9 @@ async function geocodificarDireccion(direccion, distrito) {
 const esperar = (ms) => new Promise(r => setTimeout(r, ms));
 
 const ROLES_ACCESO = {
-  admin: ["dashboard","pedidos","repartidores","clientes","liquidaciones","facturacion","reportes","configuracion"],
-  operaciones: ["dashboard","pedidos","repartidores","clientes"],
-  finanzas: ["dashboard","liquidaciones","facturacion","reportes"],
+  admin: ["dashboard","pedidos","repartidores","clientes","unidades","liquidaciones","facturacion","reportes","configuracion"],
+  operaciones: ["dashboard","pedidos","repartidores","clientes","unidades"],
+  finanzas: ["dashboard","liquidaciones","facturacion","reportes","unidades"],
 };
 const Chip = ({ estado, size="sm" }) => {
   const s = ESTADOS_PEDIDO[estado] || { bg:"#F3F4F6", color:"#374151", label: estado };
@@ -1699,6 +1699,258 @@ function Clientes({ empresas, pedidos, lineasNegocio, onRefresh, toast }) {
 }
 
 // ══════════════════════════════════════════════════════════════
+// MÓDULO: UNIDADES DE TRANSPORTE (clientes de Transporte y Carga)
+// ══════════════════════════════════════════════════════════════
+function Unidades({ unidades, asignaciones, empresas, tiposServicio, onRefresh, toast }) {
+  const [vista, setVista] = useState("asignaciones");
+  const [modalUnidad, setModalUnidad] = useState(false);
+  const [modalAsignacion, setModalAsignacion] = useState(false);
+  const [editandoUnidad, setEditandoUnidad] = useState(null);
+
+  const calcularDias = (a) => {
+    const inicio = new Date(a.fecha_inicio+"T00:00:00");
+    const fin = a.fecha_fin ? new Date(a.fecha_fin+"T00:00:00") : new Date();
+    return Math.max(1, Math.round((fin-inicio)/86400000)+1);
+  };
+  const calcularMonto = (a) => calcularDias(a) * (parseFloat(a.tarifa_dia)||0);
+
+  const finalizarAsignacion = async (a) => {
+    const hoy = new Date().toISOString().split("T")[0];
+    const { error } = await sb.from("asignaciones_unidad").update({ fecha_fin: hoy, estado:"finalizada" }).eq("id", a.id);
+    if (error) { toast("Error: "+error.message, "error"); return; }
+    toast("Asignación finalizada ✓");
+    onRefresh();
+  };
+
+  const marcarLiquidado = async (a) => {
+    const { error } = await sb.from("asignaciones_unidad").update({ liquidado:true }).eq("id", a.id);
+    if (error) { toast("Error: "+error.message, "error"); return; }
+    toast("Marcado como liquidado ✓");
+    onRefresh();
+  };
+
+  return (
+    <div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+        <div style={{ display:"flex", gap:6 }}>
+          {[["asignaciones","📋 Asignaciones"],["unidades","🚛 Unidades"]].map(([id,label])=>(
+            <button key={id} onClick={()=>setVista(id)}
+              style={{ padding:"8px 16px", borderRadius:8, fontSize:12, cursor:"pointer",
+                border:`1px solid ${vista===id?B.gold:B.border}`,
+                background:vista===id?B.gold:"transparent",
+                color:vista===id?B.navy:B.textSec, fontWeight:vista===id?700:400 }}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {vista==="unidades" ? (
+          <BtnPri onClick={()=>{setEditandoUnidad(null); setModalUnidad(true);}}>+ Nueva unidad</BtnPri>
+        ) : (
+          <BtnPri onClick={()=>setModalAsignacion(true)}>+ Nueva asignación</BtnPri>
+        )}
+      </div>
+
+      {vista==="unidades" ? (
+        <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden", boxShadow:"0 2px 8px #0D1E3D0A" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead><tr style={{ background:B.bg }}>
+              {["Placa","Tipo","Conductor","Teléfono","Estado","Acciones"].map(h=>(
+                <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:10, color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {unidades.map((u,i)=>(
+                <tr key={u.id} style={{ borderTop:`1px solid ${B.border}`, background:i%2===0?B.white:"#F8FAFC" }}>
+                  <td style={{ padding:"11px 14px", fontSize:12, fontWeight:700, color:B.navy }}>{u.placa}</td>
+                  <td style={{ padding:"11px 14px", fontSize:12, color:B.textSec, textTransform:"capitalize" }}>{u.tipo_vehiculo||"—"}</td>
+                  <td style={{ padding:"11px 14px", fontSize:12, color:B.textSec }}>{u.conductor_nombre||"—"}</td>
+                  <td style={{ padding:"11px 14px", fontSize:12, color:B.textSec }}>{u.conductor_telefono||"—"}</td>
+                  <td style={{ padding:"11px 14px" }}>
+                    <span style={{ fontSize:10, padding:"3px 8px", borderRadius:10, fontWeight:700,
+                      background:u.activo?"#ECFDF5":"#F3F4F6", color:u.activo?B.green:B.textMut }}>
+                      {u.activo?"Activa":"Inactiva"}
+                    </span>
+                  </td>
+                  <td style={{ padding:"11px 14px" }}>
+                    <button onClick={()=>{setEditandoUnidad(u); setModalUnidad(true);}}
+                      style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer" }}>Editar</button>
+                  </td>
+                </tr>
+              ))}
+              {unidades.length===0 && <tr><td colSpan={6} style={{ padding:32, textAlign:"center", color:B.textMut, fontSize:13 }}>No hay unidades registradas</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden", boxShadow:"0 2px 8px #0D1E3D0A" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead><tr style={{ background:B.bg }}>
+              {["Unidad","Cliente","Servicio","Desde","Hasta","Días","Tarifa/día","Total","Estado","Acciones"].map(h=>(
+                <th key={h} style={{ padding:"10px 12px", textAlign:"left", fontSize:10, color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {asignaciones.map((a,i)=>{
+                const unidad = unidades.find(u=>u.id===a.unidad_id);
+                const empresa = empresas.find(e=>e.id===a.empresa_id);
+                const servicio = tiposServicio.find(t=>t.id===a.tipo_servicio_id);
+                const dias = calcularDias(a);
+                const monto = calcularMonto(a);
+                return (
+                  <tr key={a.id} style={{ borderTop:`1px solid ${B.border}`, background:i%2===0?B.white:"#F8FAFC" }}>
+                    <td style={{ padding:"10px 12px", fontSize:12, fontWeight:700, color:B.navy }}>{unidad?.placa||"—"}</td>
+                    <td style={{ padding:"10px 12px", fontSize:12, color:B.textPri }}>{empresa?.nombre||"—"}</td>
+                    <td style={{ padding:"10px 12px", fontSize:11, color:B.textSec }}>{servicio?.codigo||"—"}</td>
+                    <td style={{ padding:"10px 12px", fontSize:11, color:B.textMut }}>{fmt.fecha(a.fecha_inicio)}</td>
+                    <td style={{ padding:"10px 12px", fontSize:11, color:B.textMut }}>{a.fecha_fin?fmt.fecha(a.fecha_fin):"En curso"}</td>
+                    <td style={{ padding:"10px 12px", fontSize:12, fontWeight:700, color:B.navy }}>{dias}</td>
+                    <td style={{ padding:"10px 12px", fontSize:12, color:B.textSec }}>{fmt.sol(a.tarifa_dia)}</td>
+                    <td style={{ padding:"10px 12px", fontSize:13, fontWeight:800, color:B.gold }}>{fmt.sol(monto)}</td>
+                    <td style={{ padding:"10px 12px" }}>
+                      <span style={{ fontSize:10, padding:"3px 8px", borderRadius:10, fontWeight:700,
+                        background: a.liquidado?"#ECFDF5":a.estado==="activa"?"#FFFBEB":"#F3F4F6",
+                        color: a.liquidado?B.green:a.estado==="activa"?B.goldDk:B.textMut }}>
+                        {a.liquidado?"Liquidado":a.estado==="activa"?"Activa":"Finalizada"}
+                      </span>
+                    </td>
+                    <td style={{ padding:"10px 12px" }}>
+                      <div style={{ display:"flex", gap:6 }}>
+                        {a.estado==="activa" && (
+                          <button onClick={()=>finalizarAsignacion(a)} style={{ fontSize:11, color:B.red, background:"none", border:"none", cursor:"pointer" }}>Finalizar</button>
+                        )}
+                        {!a.liquidado && a.estado==="finalizada" && (
+                          <button onClick={()=>marcarLiquidado(a)} style={{ fontSize:11, color:B.green, background:"none", border:"none", cursor:"pointer" }}>Liquidar</button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {asignaciones.length===0 && <tr><td colSpan={10} style={{ padding:32, textAlign:"center", color:B.textMut, fontSize:13 }}>No hay asignaciones registradas</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {modalUnidad && (
+        <ModalUnidad unidad={editandoUnidad} onClose={()=>setModalUnidad(false)}
+          onSaved={()=>{setModalUnidad(false); onRefresh();}} toast={toast}/>
+      )}
+      {modalAsignacion && (
+        <ModalAsignacionUnidad unidades={unidades} empresas={empresas} tiposServicio={tiposServicio}
+          onClose={()=>setModalAsignacion(false)} onSaved={()=>{setModalAsignacion(false); onRefresh();}} toast={toast}/>
+      )}
+    </div>
+  );
+}
+
+function ModalUnidad({ unidad, onClose, onSaved, toast }) {
+  const [f, setF] = useState(unidad || { placa:"", tipo_vehiculo:"camion", conductor_nombre:"", conductor_telefono:"" });
+  const guardar = async () => {
+    if (!f.placa) { toast("La placa es obligatoria","error"); return; }
+    let error;
+    if (unidad) {
+      ({ error } = await sb.from("unidades_transporte").update(f).eq("id", unidad.id));
+    } else {
+      ({ error } = await sb.from("unidades_transporte").insert([{ ...f, activo:true }]));
+    }
+    if (error) { toast("Error: "+error.message,"error"); return; }
+    toast(unidad?"Unidad actualizada ✓":"Unidad registrada ✓");
+    onSaved();
+  };
+  const toggleActivo = async () => {
+    await sb.from("unidades_transporte").update({ activo: !f.activo }).eq("id", unidad.id);
+    toast(f.activo?"Unidad desactivada":"Unidad activada");
+    onSaved();
+  };
+  return (
+    <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center" }}>
+      <div style={{ background:B.white, borderRadius:16, padding:28, width:460, boxShadow:"0 20px 60px #0003" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:20 }}>
+          <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>{unidad?"Editar unidad":"Nueva unidad"}</div>
+          <button onClick={onClose} style={{ background:"none", border:"none", fontSize:18, color:B.textSec, cursor:"pointer" }}>✕</button>
+        </div>
+        <label style={lbl}>Placa</label>
+        <input style={{ ...inp, marginBottom:12, textTransform:"uppercase" }} value={f.placa} onChange={e=>setF(p=>({...p,placa:e.target.value.toUpperCase()}))}/>
+        <label style={lbl}>Tipo de vehículo</label>
+        <select style={{ ...inp, marginBottom:12 }} value={f.tipo_vehiculo} onChange={e=>setF(p=>({...p,tipo_vehiculo:e.target.value}))}>
+          <option value="camion">Camión</option>
+          <option value="van">Van</option>
+          <option value="furgon">Furgón</option>
+          <option value="moto">Moto</option>
+          <option value="auto">Auto</option>
+        </select>
+        <label style={lbl}>Conductor</label>
+        <input style={{ ...inp, marginBottom:12 }} value={f.conductor_nombre||""} onChange={e=>setF(p=>({...p,conductor_nombre:e.target.value}))}/>
+        <label style={lbl}>Teléfono del conductor</label>
+        <input style={{ ...inp, marginBottom:20 }} value={f.conductor_telefono||""} onChange={e=>setF(p=>({...p,conductor_telefono:e.target.value}))}/>
+        <div style={{ display:"flex", gap:10, justifyContent:"space-between" }}>
+          {unidad && <BtnSec onClick={toggleActivo}>{f.activo?"Desactivar":"Activar"}</BtnSec>}
+          <div style={{ display:"flex", gap:10, marginLeft:"auto" }}>
+            <BtnSec onClick={onClose}>Cancelar</BtnSec>
+            <BtnPri onClick={guardar}>{unidad?"Guardar cambios":"Registrar"}</BtnPri>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModalAsignacionUnidad({ unidades, empresas, tiposServicio, onClose, onSaved, toast }) {
+  const [f, setF] = useState({
+    unidad_id:"", empresa_id:"", tipo_servicio_id:"",
+    fecha_inicio: new Date().toISOString().split("T")[0],
+    tarifa_dia:"", notas:"",
+  });
+  const guardar = async () => {
+    if (!f.unidad_id || !f.empresa_id || !f.fecha_inicio) { toast("Selecciona unidad, cliente y fecha de inicio","error"); return; }
+    const { error } = await sb.from("asignaciones_unidad").insert([{
+      ...f, tarifa_dia: parseFloat(f.tarifa_dia)||null, estado:"activa",
+    }]);
+    if (error) { toast("Error: "+error.message,"error"); return; }
+    toast("Asignación creada ✓");
+    onSaved();
+  };
+  return (
+    <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center" }}>
+      <div style={{ background:B.white, borderRadius:16, padding:28, width:480, boxShadow:"0 20px 60px #0003" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:20 }}>
+          <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>Nueva asignación de unidad</div>
+          <button onClick={onClose} style={{ background:"none", border:"none", fontSize:18, color:B.textSec, cursor:"pointer" }}>✕</button>
+        </div>
+        <label style={lbl}>Unidad</label>
+        <select style={{ ...inp, marginBottom:12 }} value={f.unidad_id} onChange={e=>setF(p=>({...p,unidad_id:e.target.value}))}>
+          <option value="">— Selecciona —</option>
+          {unidades.filter(u=>u.activo).map(u=><option key={u.id} value={u.id}>{u.placa} — {u.conductor_nombre||"sin conductor"}</option>)}
+        </select>
+        <label style={lbl}>Cliente</label>
+        <select style={{ ...inp, marginBottom:12 }} value={f.empresa_id} onChange={e=>setF(p=>({...p,empresa_id:e.target.value}))}>
+          <option value="">— Selecciona —</option>
+          {empresas.map(e=><option key={e.id} value={e.id}>{e.codigo_interno?`${e.codigo_interno} — `:""}{e.nombre}</option>)}
+        </select>
+        <label style={lbl}>Tipo de servicio</label>
+        <select style={{ ...inp, marginBottom:12 }} value={f.tipo_servicio_id} onChange={e=>setF(p=>({...p,tipo_servicio_id:e.target.value}))}>
+          <option value="">— Sin especificar —</option>
+          {tiposServicio.map(t=><option key={t.id} value={t.id}>{t.codigo} — {t.nombre}</option>)}
+        </select>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12 }}>
+          <div><label style={lbl}>Fecha de inicio</label>
+            <input type="date" style={inp} value={f.fecha_inicio} onChange={e=>setF(p=>({...p,fecha_inicio:e.target.value}))}/></div>
+          <div><label style={lbl}>Tarifa por día (S/)</label>
+            <input type="number" style={inp} value={f.tarifa_dia} onChange={e=>setF(p=>({...p,tarifa_dia:e.target.value}))}/></div>
+        </div>
+        <label style={lbl}>Notas (opcional)</label>
+        <input style={{ ...inp, marginBottom:20 }} value={f.notas} onChange={e=>setF(p=>({...p,notas:e.target.value}))}/>
+        <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+          <BtnSec onClick={onClose}>Cancelar</BtnSec>
+          <BtnPri onClick={guardar}>Crear asignación</BtnPri>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
 // MÓDULO 5: LIQUIDACIONES
 // ══════════════════════════════════════════════════════════════
 function Liquidaciones({ repartidores, pedidos, toast, onRefresh }) {
@@ -2918,6 +3170,8 @@ export default function BoazERP() {
   const [liquidaciones, setLiquidaciones] = useState([]);
   const [lineasNegocio, setLineasNegocio] = useState([]);
   const [tiposServicio, setTiposServicio] = useState([]);
+  const [unidades, setUnidades] = useState([]);
+  const [asignacionesUnidad, setAsignacionesUnidad] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [toast, setToast] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -2927,13 +3181,15 @@ export default function BoazERP() {
   const cargar = useCallback(async (opts={}) => {
     if (!opts.silencioso) setCargando(true);
     try {
-      const [p,r,e,l,ln,ts] = await Promise.all([
+      const [p,r,e,l,ln,ts,u,au] = await Promise.all([
         sb.from("pedidos").select("*").order("created_at",{ascending:false}),
         sb.from("repartidores").select("*").order("nombres"),
         sb.from("empresas").select("*").order("nombre"),
         sb.from("liquidaciones").select("*").order("created_at",{ascending:false}),
         sb.from("lineas_negocio").select("*").order("codigo"),
         sb.from("tipos_servicio").select("*").order("codigo"),
+        sb.from("unidades_transporte").select("*").order("placa"),
+        sb.from("asignaciones_unidad").select("*").order("fecha_inicio",{ascending:false}),
       ]);
       if(p.data) setPedidos(p.data);
       if(r.data) setRepartidores(r.data);
@@ -2941,6 +3197,8 @@ export default function BoazERP() {
       if(l.data) setLiquidaciones(l.data);
       if(ln.data) setLineasNegocio(ln.data);
       if(ts.data) setTiposServicio(ts.data);
+      if(u.data) setUnidades(u.data);
+      if(au.data) setAsignacionesUnidad(au.data);
     } catch(err) { console.error(err); }
     if (!opts.silencioso) setCargando(false);
   }, []);
@@ -2965,6 +3223,8 @@ export default function BoazERP() {
     { id:"repartidores", icon:"🛵", label:"Repartidores" },
     { section:"COMERCIAL" },
     { id:"clientes",     icon:"🏢", label:"Clientes" },
+    { section:"TRANSPORTE" },
+    { id:"unidades",     icon:"🚛", label:"Unidades" },
     { section:"FINANZAS" },
     { id:"liquidaciones",icon:"💰", label:"Liquidaciones",
       badge: liquidaciones.filter(l=>l.estado==="pendiente").length || null },
@@ -3125,6 +3385,7 @@ if (verificando) {
               {seccion==="pedidos"       && <Pedidos pedidos={pedidos} repartidores={repartidores} empresas={empresas} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="repartidores"  && <Repartidores repartidores={repartidores} pedidos={pedidos} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="clientes"      && <Clientes empresas={empresas} pedidos={pedidos} lineasNegocio={lineasNegocio} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccion==="unidades"      && <Unidades unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="liquidaciones" && <Liquidaciones repartidores={repartidores} pedidos={pedidos} liquidaciones={liquidaciones} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="facturacion"   && <Facturacion empresas={empresas} pedidos={pedidos} tiposServicio={tiposServicio} toast={showToast}/>}
               {seccion==="reportes"      && <Reportes pedidos={pedidos} repartidores={repartidores} empresas={empresas} toast={showToast}/>}
