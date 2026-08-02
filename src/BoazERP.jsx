@@ -1555,10 +1555,10 @@ function Repartidores({ repartidores, pedidos, onRefresh, toast }) {
 // ══════════════════════════════════════════════════════════════
 // MÓDULO 4: CLIENTES / EMPRESAS
 // ══════════════════════════════════════════════════════════════
-function Clientes({ empresas, pedidos, onRefresh, toast }) {
+function Clientes({ empresas, pedidos, lineasNegocio, onRefresh, toast }) {
   const [modal, setModal] = useState(false);
   const [editando, setEditando] = useState(null);
-  const empty = { nombre:"", ruc:"", contacto:"", telefono:"", email:"", direccion:"", puede_generar_etiquetas:false };
+  const empty = { nombre:"", ruc:"", contacto:"", telefono:"", email:"", direccion:"", puede_generar_etiquetas:false, linea_negocio_id:"" };
   const [f, setF] = useState(empty);
 
   const guardar = async () => {
@@ -1597,6 +1597,14 @@ function Clientes({ empresas, pedidos, onRefresh, toast }) {
                     )}
                   </div>
                   <div style={{ fontSize:11, color:B.textMut }}>RUC: {e.ruc||"—"}</div>
+                  {e.linea_negocio_id && (
+                    <div style={{ marginTop:4 }}>
+                      <span style={{ fontSize:10, fontWeight:700, color:B.navy, background:`${B.navy}10`,
+                        padding:"2px 8px", borderRadius:8 }}>
+                        {(lineasNegocio.find(ln=>ln.id===e.linea_negocio_id)||{}).codigo} — {(lineasNegocio.find(ln=>ln.id===e.linea_negocio_id)||{}).nombre}
+                      </span>
+                    </div>
+                  )}
                 </div>
                 <button onClick={()=>{setEditando(e);setF({...e});setModal(true);}}
                   style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer" }}>✏️ Editar</button>
@@ -1662,6 +1670,13 @@ function Clientes({ empresas, pedidos, onRefresh, toast }) {
                   <input style={inp} value={f[k]||""} onChange={e=>setF(p=>({...p,[k]:e.target.value}))}/>
                 </div>
               ))}
+              <div style={{ gridColumn:"span 2" }}>
+                <label style={lbl}>Línea de negocio</label>
+                <select style={inp} value={f.linea_negocio_id||""} onChange={e=>setF(p=>({...p,linea_negocio_id:e.target.value||null}))}>
+                  <option value="">— Sin clasificar —</option>
+                  {lineasNegocio.map(ln=><option key={ln.id} value={ln.id}>{ln.codigo} — {ln.nombre}</option>)}
+                </select>
+              </div>
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:16,
               padding:"10px 12px", background:B.bg, borderRadius:8 }}>
@@ -1836,19 +1851,29 @@ function Liquidaciones({ repartidores, pedidos, toast, onRefresh }) {
 // ══════════════════════════════════════════════════════════════
 // MÓDULO 6: FACTURACIÓN
 // ══════════════════════════════════════════════════════════════
-function Facturacion({ empresas, pedidos, toast }) {
+function Facturacion({ empresas, pedidos, tiposServicio, toast }) {
   const [facturas, setFacturas] = useState([]);
   const [modal, setModal] = useState(false);
   const [f, setF] = useState({
     empresa_id:"", serie:"F001", numero:"", descripcion:
     "Servicio de transporte y distribución multipunto - Same Day",
     cantidad:1, valor_unit_s:"", fecha_emision: new Date().toISOString().split("T")[0],
+    tipo_servicio_id:"",
   });
 
   useEffect(()=>{
     sb.from("facturas").select("*,empresas(nombre)").order("created_at",{ascending:false})
       .then(({data})=>{ if(data) setFacturas(data); });
   },[]);
+
+  const seleccionarTipoServicio = (id) => {
+    const t = tiposServicio.find(ts=>ts.id===id);
+    setF(p=>({
+      ...p, tipo_servicio_id:id,
+      descripcion: t ? `Servicio de ${t.nombre} (${t.unidad_medida||"—"})` : p.descripcion,
+      valor_unit_s: t?.tarifa_base ? String(t.tarifa_base) : p.valor_unit_s,
+    }));
+  };
 
   const igv = parseFloat(f.valor_unit_s||0) * 0.18;
   const total = parseFloat(f.valor_unit_s||0) * 1.18;
@@ -1858,7 +1883,8 @@ function Facturacion({ empresas, pedidos, toast }) {
       toast("Completa empresa, número y valor","error"); return;
     }
     const { error } = await sb.from("facturas").insert([{
-      ...f, igv_s: igv, total_s: total, estado:"emitida",
+      ...f, tipo_servicio_id: f.tipo_servicio_id||null,
+      igv_s: igv, total_s: total, estado:"emitida",
       unidad_medida:"ZZ",
     }]);
     if (error) { toast("Error: "+error.message,"error"); return; }
@@ -1942,6 +1968,13 @@ function Facturacion({ empresas, pedidos, toast }) {
                 <input style={inp} value={f.serie} onChange={e=>setF(p=>({...p,serie:e.target.value}))}/></div>
               <div><label style={lbl}>Número</label>
                 <input style={inp} placeholder="00000001" value={f.numero} onChange={e=>setF(p=>({...p,numero:e.target.value}))}/></div>
+              <div style={{ gridColumn:"span 2" }}>
+                <label style={lbl}>Tipo de servicio (opcional — autocompleta descripción y tarifa)</label>
+                <select style={inp} value={f.tipo_servicio_id} onChange={e=>seleccionarTipoServicio(e.target.value)}>
+                  <option value="">— Ingresar manualmente —</option>
+                  {tiposServicio.map(t=><option key={t.id} value={t.id}>{t.codigo} — {t.nombre}</option>)}
+                </select>
+              </div>
               <div style={{ gridColumn:"span 2" }}>
                 <label style={lbl}>Descripción (SUNAT)</label>
                 <input style={inp} value={f.descripcion} onChange={e=>setF(p=>({...p,descripcion:e.target.value}))}/>
@@ -2507,7 +2540,111 @@ function Reportes({ pedidos, repartidores, empresas, toast }) {
 // ══════════════════════════════════════════════════════════════
 // MÓDULO 8: CONFIGURACIÓN
 // ══════════════════════════════════════════════════════════════
-function Configuracion({ toast }) {
+function ModalLineaNegocio({ onClose, onSaved, toast }) {
+  const [f, setF] = useState({ codigo:"", nombre:"", descripcion:"" });
+
+  const guardar = async () => {
+    if (!f.codigo || !f.nombre) { toast("Código y nombre son obligatorios","error"); return; }
+    const { error } = await sb.from("lineas_negocio").insert([{ ...f, activo:true }]);
+    if (error) { toast("Error: "+error.message,"error"); return; }
+    toast("Línea de negocio creada ✓");
+    onSaved();
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000,
+      display:"flex", alignItems:"center", justifyContent:"center" }}>
+      <div style={{ background:B.white, borderRadius:16, padding:28, width:460,
+        boxShadow:"0 20px 60px #0003" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:20 }}>
+          <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>Nueva línea de negocio</div>
+          <button onClick={onClose} style={{ background:"none", border:"none", fontSize:18,
+            color:B.textSec, cursor:"pointer" }}>✕</button>
+        </div>
+        <label style={lbl}>Código (ej. LOG-TC)</label>
+        <input style={{ ...inp, marginBottom:12, textTransform:"uppercase" }} value={f.codigo}
+          onChange={e=>setF(p=>({...p,codigo:e.target.value.toUpperCase()}))}/>
+        <label style={lbl}>Nombre</label>
+        <input style={{ ...inp, marginBottom:12 }} value={f.nombre}
+          onChange={e=>setF(p=>({...p,nombre:e.target.value}))}/>
+        <label style={lbl}>Descripción (opcional)</label>
+        <input style={{ ...inp, marginBottom:20 }} value={f.descripcion}
+          onChange={e=>setF(p=>({...p,descripcion:e.target.value}))}/>
+        <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+          <BtnSec onClick={onClose}>Cancelar</BtnSec>
+          <BtnPri onClick={guardar}>Registrar</BtnPri>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModalTipoServicio({ lineaNegocioId, lineasNegocio, onClose, onSaved, toast }) {
+  const [f, setF] = useState({
+    linea_negocio_id: lineaNegocioId, codigo:"", nombre:"", unidad_medida:"unidad", tarifa_base:"",
+  });
+
+  const guardar = async () => {
+    if (!f.codigo || !f.nombre || !f.linea_negocio_id) { toast("Completa línea, código y nombre","error"); return; }
+    const { error } = await sb.from("tipos_servicio").insert([{
+      ...f, tarifa_base: parseFloat(f.tarifa_base)||null, activo:true,
+    }]);
+    if (error) { toast("Error: "+error.message,"error"); return; }
+    toast("Tipo de servicio creado ✓");
+    onSaved();
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000,
+      display:"flex", alignItems:"center", justifyContent:"center" }}>
+      <div style={{ background:B.white, borderRadius:16, padding:28, width:460,
+        boxShadow:"0 20px 60px #0003" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:20 }}>
+          <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>Nuevo tipo de servicio</div>
+          <button onClick={onClose} style={{ background:"none", border:"none", fontSize:18,
+            color:B.textSec, cursor:"pointer" }}>✕</button>
+        </div>
+        <label style={lbl}>Línea de negocio</label>
+        <select style={{ ...inp, marginBottom:12 }} value={f.linea_negocio_id}
+          onChange={e=>setF(p=>({...p,linea_negocio_id:e.target.value}))}>
+          <option value="">— Selecciona —</option>
+          {lineasNegocio.map(ln=><option key={ln.id} value={ln.id}>{ln.codigo} — {ln.nombre}</option>)}
+        </select>
+        <label style={lbl}>Código (ej. TC-UNI)</label>
+        <input style={{ ...inp, marginBottom:12, textTransform:"uppercase" }} value={f.codigo}
+          onChange={e=>setF(p=>({...p,codigo:e.target.value.toUpperCase()}))}/>
+        <label style={lbl}>Nombre</label>
+        <input style={{ ...inp, marginBottom:12 }} value={f.nombre}
+          onChange={e=>setF(p=>({...p,nombre:e.target.value}))}/>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:20 }}>
+          <div>
+            <label style={lbl}>Unidad de medida</label>
+            <select style={inp} value={f.unidad_medida} onChange={e=>setF(p=>({...p,unidad_medida:e.target.value}))}>
+              <option value="unidad">Unidad</option>
+              <option value="dia">Día</option>
+              <option value="entrega">Entrega</option>
+              <option value="km">Kilómetro</option>
+              <option value="hora">Hora</option>
+            </select>
+          </div>
+          <div>
+            <label style={lbl}>Tarifa base S/ (opcional)</label>
+            <input type="number" style={inp} value={f.tarifa_base}
+              onChange={e=>setF(p=>({...p,tarifa_base:e.target.value}))}/>
+          </div>
+        </div>
+        <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+          <BtnSec onClick={onClose}>Cancelar</BtnSec>
+          <BtnPri onClick={guardar}>Registrar</BtnPri>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Configuracion({ lineasNegocio, tiposServicio, onRefresh, toast }) {
+  const [modalLinea, setModalLinea] = useState(false);
+  const [modalTipo, setModalTipo] = useState(null); // guarda la linea_negocio_id, o "nueva-sin-linea"
   const TARIFAS = {
     urbano:      { XS:10, S:13, M:16 },
     semi_urbano: { XS:12, S:15, M:18 },
@@ -2599,7 +2736,65 @@ function Configuracion({ toast }) {
         ))}
       </div>
 
-      {/* Integraciones próximamente */}
+      {/* Catálogo de servicios: líneas de negocio + tipos de servicio */}
+      <div style={{ background:B.white, border:`1px solid ${B.border}`,
+        borderRadius:12, padding:20, boxShadow:"0 2px 8px #0D1E3D0A", gridColumn:"span 2" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
+          marginBottom:16, paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>
+          <div style={{ fontSize:14, fontWeight:800, color:B.navy }}>🗂️ Catálogo de Servicios</div>
+          <BtnPri onClick={()=>setModalLinea(true)} style={{ fontSize:12, padding:"7px 14px" }}>+ Nueva línea de negocio</BtnPri>
+        </div>
+        <div style={{ fontSize:12, color:B.textMut, marginBottom:16 }}>
+          Clasifica tus servicios por línea de negocio (ej. Transporte y Carga, Distribución y Última Milla) y sus tipos específicos, cada uno con su propio código — útil para asignar a clientes y para armar facturas de forma consistente.
+        </div>
+        {lineasNegocio.length===0 ? (
+          <div style={{ padding:24, textAlign:"center", color:B.textMut, fontSize:13 }}>
+            Aún no hay líneas de negocio registradas
+          </div>
+        ) : (
+          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+            {lineasNegocio.map(ln=>(
+              <div key={ln.id} style={{ border:`1px solid ${B.border}`, borderRadius:10, padding:16 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                  <div>
+                    <span style={{ fontSize:10, fontWeight:800, color:B.gold, background:`${B.gold}18`,
+                      padding:"2px 8px", borderRadius:8, marginRight:8 }}>{ln.codigo}</span>
+                    <span style={{ fontSize:13, fontWeight:700, color:B.navy }}>{ln.nombre}</span>
+                  </div>
+                  <button onClick={()=>setModalTipo(ln.id)}
+                    style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer", fontWeight:600 }}>
+                    + Tipo de servicio
+                  </button>
+                </div>
+                {ln.descripcion && <div style={{ fontSize:11, color:B.textMut, marginBottom:10 }}>{ln.descripcion}</div>}
+                <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+                  {tiposServicio.filter(t=>t.linea_negocio_id===ln.id).map(t=>(
+                    <div key={t.id} style={{ background:B.bg, borderRadius:8, padding:"6px 12px", fontSize:11 }}>
+                      <span style={{ fontWeight:800, color:B.navy }}>{t.codigo}</span>
+                      <span style={{ color:B.textSec }}> — {t.nombre}</span>
+                      {t.unidad_medida && <span style={{ color:B.textMut }}> ({t.unidad_medida})</span>}
+                    </div>
+                  ))}
+                  {tiposServicio.filter(t=>t.linea_negocio_id===ln.id).length===0 && (
+                    <div style={{ fontSize:11, color:B.textMut, fontStyle:"italic" }}>Sin tipos de servicio aún</div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {modalLinea && (
+        <ModalLineaNegocio onClose={()=>setModalLinea(false)}
+          onSaved={()=>{setModalLinea(false); onRefresh();}} toast={toast}/>
+      )}
+      {modalTipo && (
+        <ModalTipoServicio lineaNegocioId={modalTipo} lineasNegocio={lineasNegocio}
+          onClose={()=>setModalTipo(null)}
+          onSaved={()=>{setModalTipo(null); onRefresh();}} toast={toast}/>
+      )}
+
       <div style={{ background:B.white, border:`1px solid ${B.border}`,
         borderRadius:12, padding:20, boxShadow:"0 2px 8px #0D1E3D0A", gridColumn:"span 2" }}>
         <div style={{ fontSize:14, fontWeight:800, color:B.navy, marginBottom:16,
@@ -2721,6 +2916,8 @@ export default function BoazERP() {
   const [repartidores, setRepartidores] = useState([]);
   const [empresas, setEmpresas] = useState([]);
   const [liquidaciones, setLiquidaciones] = useState([]);
+  const [lineasNegocio, setLineasNegocio] = useState([]);
+  const [tiposServicio, setTiposServicio] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [toast, setToast] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -2730,16 +2927,20 @@ export default function BoazERP() {
   const cargar = useCallback(async (opts={}) => {
     if (!opts.silencioso) setCargando(true);
     try {
-      const [p,r,e,l] = await Promise.all([
+      const [p,r,e,l,ln,ts] = await Promise.all([
         sb.from("pedidos").select("*").order("created_at",{ascending:false}),
         sb.from("repartidores").select("*").order("nombres"),
         sb.from("empresas").select("*").order("nombre"),
         sb.from("liquidaciones").select("*").order("created_at",{ascending:false}),
+        sb.from("lineas_negocio").select("*").order("codigo"),
+        sb.from("tipos_servicio").select("*").order("codigo"),
       ]);
       if(p.data) setPedidos(p.data);
       if(r.data) setRepartidores(r.data);
       if(e.data) setEmpresas(e.data);
       if(l.data) setLiquidaciones(l.data);
+      if(ln.data) setLineasNegocio(ln.data);
+      if(ts.data) setTiposServicio(ts.data);
     } catch(err) { console.error(err); }
     if (!opts.silencioso) setCargando(false);
   }, []);
@@ -2923,11 +3124,11 @@ if (verificando) {
               {seccion==="dashboard"     && <Dashboard pedidos={pedidos} repartidores={repartidores} liquidaciones={liquidaciones}/>}
               {seccion==="pedidos"       && <Pedidos pedidos={pedidos} repartidores={repartidores} empresas={empresas} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="repartidores"  && <Repartidores repartidores={repartidores} pedidos={pedidos} onRefresh={cargarSilencioso} toast={showToast}/>}
-              {seccion==="clientes"      && <Clientes empresas={empresas} pedidos={pedidos} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccion==="clientes"      && <Clientes empresas={empresas} pedidos={pedidos} lineasNegocio={lineasNegocio} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="liquidaciones" && <Liquidaciones repartidores={repartidores} pedidos={pedidos} liquidaciones={liquidaciones} onRefresh={cargarSilencioso} toast={showToast}/>}
-              {seccion==="facturacion"   && <Facturacion empresas={empresas} pedidos={pedidos} toast={showToast}/>}
+              {seccion==="facturacion"   && <Facturacion empresas={empresas} pedidos={pedidos} tiposServicio={tiposServicio} toast={showToast}/>}
               {seccion==="reportes"      && <Reportes pedidos={pedidos} repartidores={repartidores} empresas={empresas} toast={showToast}/>}
-              {seccion==="configuracion" && <Configuracion toast={showToast}/>}
+              {seccion==="configuracion" && <Configuracion lineasNegocio={lineasNegocio} tiposServicio={tiposServicio} onRefresh={cargarSilencioso} toast={showToast}/>}
             </>
           )}
         </div>
