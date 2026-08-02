@@ -48,13 +48,22 @@ const TARIFAS_SAMEDAY = {
   semi_urbano: { XS:12, S:15, M:18 },
   periferico:  { XS:15, S:18, M:22 },
 };
-const getTarifaSameDay = (ambito, kg) => {
-  const t = TARIFAS_SAMEDAY[ambito] || TARIFAS_SAMEDAY.urbano;
+// tarifaPersonalizada (opcional): { tarifa_xs, tarifa_s, tarifa_m, extra_kg } negociado con un cliente.
+// Si se pasa, se usa en vez del tarifario genérico por ámbito.
+const getTarifaSameDay = (ambito, kg, tarifaPersonalizada) => {
+  const t = tarifaPersonalizada
+    ? { XS:tarifaPersonalizada.tarifa_xs, S:tarifaPersonalizada.tarifa_s, M:tarifaPersonalizada.tarifa_m }
+    : (TARIFAS_SAMEDAY[ambito] || TARIFAS_SAMEDAY.urbano);
+  const extraKg = tarifaPersonalizada?.extra_kg ?? 1;
   const peso = kg || 0;
   if (peso <= 1) return t.XS;
   if (peso <= 3) return t.S;
   if (peso <= 7) return t.M;
-  return t.M + Math.ceil(peso - 7); // S/1 adicional por cada kg por encima de 7kg
+  return t.M + Math.ceil(peso - 7) * extraKg; // cargo por cada kg por encima de 7kg
+};
+const obtenerTarifaEmpresa = (empresaId, ambito, tarifariosCliente) => {
+  if (!empresaId) return null;
+  return tarifariosCliente.find(t=>t.empresa_id===empresaId && t.ambito===ambito && t.activo) || null;
 };
 
 // ── GEOCODIFICACIÓN GRATUITA (OpenStreetMap / Nominatim) ───────
@@ -286,7 +295,7 @@ function Dashboard({ pedidos, repartidores, liquidaciones }) {
 // ══════════════════════════════════════════════════════════════
 // MÓDULO 2: PEDIDOS COMPLETO
 // ══════════════════════════════════════════════════════════════
-function Pedidos({ pedidos, repartidores, empresas, onRefresh, toast }) {
+function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, onRefresh, toast }) {
   const [filtroEstado, setFiltroEstado] = useState("todos");
   const [busqueda, setBusqueda] = useState("");
   const [modalNuevo, setModalNuevo] = useState(false);
@@ -425,9 +434,9 @@ function Pedidos({ pedidos, repartidores, empresas, onRefresh, toast }) {
         </table>
       </div>
 
-      {modalNuevo && <ModalNuevoPedido repartidores={repartidores} empresas={empresas}
+      {modalNuevo && <ModalNuevoPedido repartidores={repartidores} empresas={empresas} tarifariosCliente={tarifariosCliente}
         onClose={()=>setModalNuevo(false)} onSaved={()=>{setModalNuevo(false);onRefresh();}} toast={toast}/>}
-      {modalCarga && <ModalCargaMasiva repartidores={repartidores} empresas={empresas}
+      {modalCarga && <ModalCargaMasiva repartidores={repartidores} empresas={empresas} tarifariosCliente={tarifariosCliente}
         onClose={()=>setModalCarga(false)} onSaved={()=>{onRefresh();}} toast={toast}/>}
       {modalGeocodificar && <ModalGeocodificarPendientes pedidos={pedidos}
         onClose={()=>setModalGeocodificar(false)} onDone={onRefresh} toast={toast}/>}
@@ -438,7 +447,7 @@ function Pedidos({ pedidos, repartidores, empresas, onRefresh, toast }) {
 }
 
 // Modal nuevo pedido
-function ModalNuevoPedido({ repartidores, empresas, onClose, onSaved, toast }) {
+function ModalNuevoPedido({ repartidores, empresas, tarifariosCliente, onClose, onSaved, toast }) {
   const getTarifa = getTarifaSameDay;
   const [f, setF] = useState({
     dest_nombre:"", dest_telefono:"", dest_direccion:"", dest_distrito:"",
@@ -446,7 +455,8 @@ function ModalNuevoPedido({ repartidores, empresas, onClose, onSaved, toast }) {
     repartidor_id:"", cobro_destino:false, monto_cobrar:"",
     descripcion:"", fecha_programada: new Date().toISOString().split("T")[0],
   });
-  const tarifa = getTarifa(f.ambito, parseFloat(f.peso_kg));
+  const tarifaPersonalizada = obtenerTarifaEmpresa(f.empresa_id, f.ambito, tarifariosCliente);
+  const tarifa = getTarifa(f.ambito, parseFloat(f.peso_kg), tarifaPersonalizada);
   const [guardando, setGuardando] = useState(false);
 
   const save = async () => {
@@ -491,7 +501,10 @@ function ModalNuevoPedido({ repartidores, empresas, onClose, onSaved, toast }) {
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
           <div>
             <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>Nuevo pedido</div>
-            <div style={{ fontSize:11, color:B.textMut }}>Tarifa calculada: <strong style={{color:B.gold}}>{fmt.sol(tarifa)}</strong> ({f.ambito.replace("_"," ")})</div>
+            <div style={{ fontSize:11, color:B.textMut }}>
+              Tarifa calculada: <strong style={{color:B.gold}}>{fmt.sol(tarifa)}</strong> ({f.ambito.replace("_"," ")})
+              {tarifaPersonalizada && <span style={{ color:B.green, fontWeight:700 }}> · tarifario personalizado ✓</span>}
+            </div>
           </div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20,
             color:B.textSec, cursor:"pointer" }}>✕</button>
@@ -963,7 +976,7 @@ function descargarPlantillaAdmin() {
   XLSX.writeFile(wb, "plantilla_pedidos_boaz.xlsx");
 }
 
-function ModalCargaMasiva({ repartidores, empresas, onClose, onSaved, toast }) {
+function ModalCargaMasiva({ repartidores, empresas, tarifariosCliente, onClose, onSaved, toast }) {
   const [empresaId, setEmpresaId] = useState("");
   const [repartidorId, setRepartidorId] = useState("");
   const [filas, setFilas] = useState([]);
@@ -1008,7 +1021,8 @@ function ModalCargaMasiva({ repartidores, empresas, onClose, onSaved, toast }) {
           const { data: codigo, error: errCodigo } = await sb.rpc("generar_codigo_boaz");
           if (errCodigo || !codigo) { generados.push({ ...fila, ok:false, error:"no se pudo generar código: "+(errCodigo?.message||"sin detalle") }); continue; }
           const coords = await geocodificarDireccion(fila.dest_direccion, fila.dest_distrito);
-          const tarifa = getTarifaSameDay(fila.ambito, fila.peso_kg);
+          const tarifaPersonalizada = obtenerTarifaEmpresa(empresaId, fila.ambito, tarifariosCliente);
+          const tarifa = getTarifaSameDay(fila.ambito, fila.peso_kg, tarifaPersonalizada);
           const { error: errInsert } = await sb.from("pedidos").insert({
             omd: codigo,
             empresa_id: empresaId,
@@ -1555,9 +1569,10 @@ function Repartidores({ repartidores, pedidos, onRefresh, toast }) {
 // ══════════════════════════════════════════════════════════════
 // MÓDULO 4: CLIENTES / EMPRESAS
 // ══════════════════════════════════════════════════════════════
-function Clientes({ empresas, pedidos, lineasNegocio, onRefresh, toast }) {
+function Clientes({ empresas, pedidos, lineasNegocio, tarifariosCliente, onRefresh, toast }) {
   const [modal, setModal] = useState(false);
   const [editando, setEditando] = useState(null);
+  const [modalTarifario, setModalTarifario] = useState(null); // guarda la empresa seleccionada
   const empty = { nombre:"", ruc:"", contacto:"", telefono:"", email:"", direccion:"", puede_generar_etiquetas:false, linea_negocio_id:"" };
   const [f, setF] = useState(empty);
 
@@ -1606,8 +1621,12 @@ function Clientes({ empresas, pedidos, lineasNegocio, onRefresh, toast }) {
                     </div>
                   )}
                 </div>
-                <button onClick={()=>{setEditando(e);setF({...e});setModal(true);}}
-                  style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer" }}>✏️ Editar</button>
+                <div style={{ display:"flex", flexDirection:"column", gap:4, alignItems:"flex-end" }}>
+                  <button onClick={()=>{setEditando(e);setF({...e});setModal(true);}}
+                    style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer" }}>✏️ Editar</button>
+                  <button onClick={()=>setModalTarifario(e)}
+                    style={{ fontSize:11, color:B.gold, background:"none", border:"none", cursor:"pointer", fontWeight:700 }}>💰 Tarifario</button>
+                </div>
               </div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:14 }}>
                 {[["👤",e.contacto||"—"],["📱",e.telefono||"—"],
@@ -1694,6 +1713,113 @@ function Clientes({ empresas, pedidos, lineasNegocio, onRefresh, toast }) {
           </div>
         </div>
       )}
+      {modalTarifario && (
+        <ModalTarifarioCliente empresa={modalTarifario} tarifariosCliente={tarifariosCliente}
+          onClose={()=>setModalTarifario(null)} onSaved={()=>{onRefresh();}} toast={toast}/>
+      )}
+    </div>
+  );
+}
+
+function ModalTarifarioCliente({ empresa, tarifariosCliente, onClose, onSaved, toast }) {
+  const AMBITOS = [
+    { id:"urbano", label:"Urbano" },
+    { id:"semi_urbano", label:"Semi Urbano" },
+    { id:"periferico", label:"Periférico" },
+  ];
+  const inicial = {};
+  AMBITOS.forEach(a=>{
+    const existente = tarifariosCliente.find(t=>t.empresa_id===empresa.id && t.ambito===a.id);
+    inicial[a.id] = existente
+      ? { xs:existente.tarifa_xs, s:existente.tarifa_s, m:existente.tarifa_m, extra:existente.extra_kg??1 }
+      : { xs:"", s:"", m:"", extra:1 };
+  });
+  const [valores, setValores] = useState(inicial);
+  const [guardando, setGuardando] = useState(false);
+
+  const set = (ambito, campo, valor) => setValores(p=>({ ...p, [ambito]: { ...p[ambito], [campo]:valor } }));
+
+  const guardar = async () => {
+    setGuardando(true);
+    for (const a of AMBITOS) {
+      const v = valores[a.id];
+      const completo = v.xs!=="" && v.s!=="" && v.m!=="";
+      if (!completo) continue; // ámbito sin personalizar, no se guarda (usa el genérico)
+      await sb.from("tarifarios_cliente").upsert({
+        empresa_id: empresa.id, ambito: a.id,
+        tarifa_xs: parseFloat(v.xs), tarifa_s: parseFloat(v.s), tarifa_m: parseFloat(v.m),
+        extra_kg: parseFloat(v.extra)||1, activo:true,
+      }, { onConflict: "empresa_id,ambito" });
+    }
+    setGuardando(false);
+    toast("Tarifario guardado ✓");
+    onSaved();
+    onClose();
+  };
+
+  const quitarAmbito = async (ambitoId) => {
+    await sb.from("tarifarios_cliente").delete().eq("empresa_id", empresa.id).eq("ambito", ambitoId);
+    set(ambitoId, "xs", ""); set(ambitoId, "s", ""); set(ambitoId, "m", "");
+    toast(`Tarifario personalizado de ${ambitoId.replace("_"," ")} eliminado — vuelve a usar el genérico`);
+    onSaved();
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000,
+      display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+      <div style={{ background:B.white, borderRadius:16, padding:28, width:560,
+        maxHeight:"85vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+          <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>💰 Tarifario de {empresa.nombre}</div>
+          <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20,
+            color:B.textSec, cursor:"pointer" }}>✕</button>
+        </div>
+        <div style={{ fontSize:12, color:B.textMut, marginBottom:20 }}>
+          Deja un ámbito en blanco para que ese cliente siga usando el tarifario genérico. Completa los tres valores (XS/S/M) de un ámbito para activar su tarifa negociada ahí.
+        </div>
+
+        {AMBITOS.map(a=>{
+          const v = valores[a.id];
+          const activo = v.xs!=="" && v.s!=="" && v.m!=="";
+          return (
+            <div key={a.id} style={{ border:`1px solid ${B.border}`, borderRadius:10, padding:14, marginBottom:12,
+              background: activo ? "#FFF8EF" : B.bg }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:B.navy }}>
+                  {a.label} {activo && <span style={{ color:B.green, fontSize:11 }}>· personalizado ✓</span>}
+                </div>
+                {activo && (
+                  <button onClick={()=>quitarAmbito(a.id)}
+                    style={{ fontSize:11, color:B.red, background:"none", border:"none", cursor:"pointer" }}>Quitar</button>
+                )}
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:8 }}>
+                <div>
+                  <label style={{ ...lbl, marginBottom:4 }}>XS (0-1kg)</label>
+                  <input type="number" style={inp} value={v.xs} onChange={e=>set(a.id,"xs",e.target.value)}/>
+                </div>
+                <div>
+                  <label style={{ ...lbl, marginBottom:4 }}>S (1-3kg)</label>
+                  <input type="number" style={inp} value={v.s} onChange={e=>set(a.id,"s",e.target.value)}/>
+                </div>
+                <div>
+                  <label style={{ ...lbl, marginBottom:4 }}>M (3-7kg)</label>
+                  <input type="number" style={inp} value={v.m} onChange={e=>set(a.id,"m",e.target.value)}/>
+                </div>
+                <div>
+                  <label style={{ ...lbl, marginBottom:4 }}>S/ x kg extra</label>
+                  <input type="number" style={inp} value={v.extra} onChange={e=>set(a.id,"extra",e.target.value)}/>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:8 }}>
+          <BtnSec onClick={onClose}>Cerrar</BtnSec>
+          <BtnPri onClick={guardar} disabled={guardando}>{guardando?"Guardando...":"Guardar tarifario"}</BtnPri>
+        </div>
+      </div>
     </div>
   );
 }
@@ -3172,6 +3298,7 @@ export default function BoazERP() {
   const [tiposServicio, setTiposServicio] = useState([]);
   const [unidades, setUnidades] = useState([]);
   const [asignacionesUnidad, setAsignacionesUnidad] = useState([]);
+  const [tarifariosCliente, setTarifariosCliente] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [toast, setToast] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -3181,7 +3308,7 @@ export default function BoazERP() {
   const cargar = useCallback(async (opts={}) => {
     if (!opts.silencioso) setCargando(true);
     try {
-      const [p,r,e,l,ln,ts,u,au] = await Promise.all([
+      const [p,r,e,l,ln,ts,u,au,tc] = await Promise.all([
         sb.from("pedidos").select("*").order("created_at",{ascending:false}),
         sb.from("repartidores").select("*").order("nombres"),
         sb.from("empresas").select("*").order("nombre"),
@@ -3190,6 +3317,7 @@ export default function BoazERP() {
         sb.from("tipos_servicio").select("*").order("codigo"),
         sb.from("unidades_transporte").select("*").order("placa"),
         sb.from("asignaciones_unidad").select("*").order("fecha_inicio",{ascending:false}),
+        sb.from("tarifarios_cliente").select("*"),
       ]);
       if(p.data) setPedidos(p.data);
       if(r.data) setRepartidores(r.data);
@@ -3199,6 +3327,7 @@ export default function BoazERP() {
       if(ts.data) setTiposServicio(ts.data);
       if(u.data) setUnidades(u.data);
       if(au.data) setAsignacionesUnidad(au.data);
+      if(tc.data) setTarifariosCliente(tc.data);
     } catch(err) { console.error(err); }
     if (!opts.silencioso) setCargando(false);
   }, []);
@@ -3382,9 +3511,9 @@ if (verificando) {
           ) : (
             <>
               {seccion==="dashboard"     && <Dashboard pedidos={pedidos} repartidores={repartidores} liquidaciones={liquidaciones}/>}
-              {seccion==="pedidos"       && <Pedidos pedidos={pedidos} repartidores={repartidores} empresas={empresas} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccion==="pedidos"       && <Pedidos pedidos={pedidos} repartidores={repartidores} empresas={empresas} tarifariosCliente={tarifariosCliente} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="repartidores"  && <Repartidores repartidores={repartidores} pedidos={pedidos} onRefresh={cargarSilencioso} toast={showToast}/>}
-              {seccion==="clientes"      && <Clientes empresas={empresas} pedidos={pedidos} lineasNegocio={lineasNegocio} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccion==="clientes"      && <Clientes empresas={empresas} pedidos={pedidos} lineasNegocio={lineasNegocio} tarifariosCliente={tarifariosCliente} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="unidades"      && <Unidades unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="liquidaciones" && <Liquidaciones repartidores={repartidores} pedidos={pedidos} liquidaciones={liquidaciones} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="facturacion"   && <Facturacion empresas={empresas} pedidos={pedidos} tiposServicio={tiposServicio} toast={showToast}/>}
