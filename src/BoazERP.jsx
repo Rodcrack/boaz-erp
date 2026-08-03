@@ -1827,7 +1827,7 @@ function ModalTarifarioCliente({ empresa, tarifariosCliente, onClose, onSaved, t
 // ══════════════════════════════════════════════════════════════
 // MÓDULO: UNIDADES DE TRANSPORTE (clientes de Transporte y Carga)
 // ══════════════════════════════════════════════════════════════
-function Unidades({ unidades, asignaciones, empresas, tiposServicio, onRefresh, toast }) {
+function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidores, onRefresh, toast }) {
   const [vista, setVista] = useState("asignaciones");
   const [modalUnidad, setModalUnidad] = useState(false);
   const [modalAsignacion, setModalAsignacion] = useState(false);
@@ -1885,12 +1885,14 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, onRefresh, 
               ))}
             </tr></thead>
             <tbody>
-              {unidades.map((u,i)=>(
+              {unidades.map((u,i)=>{
+                const conductor = repartidores.find(r=>r.id===u.repartidor_id);
+                return (
                 <tr key={u.id} style={{ borderTop:`1px solid ${B.border}`, background:i%2===0?B.white:"#F8FAFC" }}>
                   <td style={{ padding:"11px 14px", fontSize:12, fontWeight:700, color:B.navy }}>{u.placa}</td>
                   <td style={{ padding:"11px 14px", fontSize:12, color:B.textSec, textTransform:"capitalize" }}>{u.tipo_vehiculo||"—"}</td>
-                  <td style={{ padding:"11px 14px", fontSize:12, color:B.textSec }}>{u.conductor_nombre||"—"}</td>
-                  <td style={{ padding:"11px 14px", fontSize:12, color:B.textSec }}>{u.conductor_telefono||"—"}</td>
+                  <td style={{ padding:"11px 14px", fontSize:12, color:B.textSec }}>{conductor?`${conductor.nombres} ${conductor.apellidos}`:"Sin asignar"}</td>
+                  <td style={{ padding:"11px 14px", fontSize:12, color:B.textSec }}>{conductor?.telefono||"—"}</td>
                   <td style={{ padding:"11px 14px" }}>
                     <span style={{ fontSize:10, padding:"3px 8px", borderRadius:10, fontWeight:700,
                       background:u.activo?"#ECFDF5":"#F3F4F6", color:u.activo?B.green:B.textMut }}>
@@ -1902,7 +1904,8 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, onRefresh, 
                       style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer" }}>Editar</button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
               {unidades.length===0 && <tr><td colSpan={6} style={{ padding:32, textAlign:"center", color:B.textMut, fontSize:13 }}>No hay unidades registradas</td></tr>}
             </tbody>
           </table>
@@ -1959,26 +1962,27 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, onRefresh, 
       )}
 
       {modalUnidad && (
-        <ModalUnidad unidad={editandoUnidad} onClose={()=>setModalUnidad(false)}
+        <ModalUnidad unidad={editandoUnidad} repartidores={repartidores} onClose={()=>setModalUnidad(false)}
           onSaved={()=>{setModalUnidad(false); onRefresh();}} toast={toast}/>
       )}
       {modalAsignacion && (
-        <ModalAsignacionUnidad unidades={unidades} empresas={empresas} tiposServicio={tiposServicio}
+        <ModalAsignacionUnidad unidades={unidades} empresas={empresas} tiposServicio={tiposServicio} repartidores={repartidores}
           onClose={()=>setModalAsignacion(false)} onSaved={()=>{setModalAsignacion(false); onRefresh();}} toast={toast}/>
       )}
     </div>
   );
 }
 
-function ModalUnidad({ unidad, onClose, onSaved, toast }) {
-  const [f, setF] = useState(unidad || { placa:"", tipo_vehiculo:"camion", conductor_nombre:"", conductor_telefono:"" });
+function ModalUnidad({ unidad, repartidores, onClose, onSaved, toast }) {
+  const [f, setF] = useState(unidad || { placa:"", tipo_vehiculo:"camion", repartidor_id:"" });
   const guardar = async () => {
     if (!f.placa) { toast("La placa es obligatoria","error"); return; }
+    const payload = { placa:f.placa, tipo_vehiculo:f.tipo_vehiculo, repartidor_id:f.repartidor_id||null };
     let error;
     if (unidad) {
-      ({ error } = await sb.from("unidades_transporte").update(f).eq("id", unidad.id));
+      ({ error } = await sb.from("unidades_transporte").update(payload).eq("id", unidad.id));
     } else {
-      ({ error } = await sb.from("unidades_transporte").insert([{ ...f, activo:true }]));
+      ({ error } = await sb.from("unidades_transporte").insert([{ ...payload, activo:true }]));
     }
     if (error) { toast("Error: "+error.message,"error"); return; }
     toast(unidad?"Unidad actualizada ✓":"Unidad registrada ✓");
@@ -2006,10 +2010,16 @@ function ModalUnidad({ unidad, onClose, onSaved, toast }) {
           <option value="moto">Moto</option>
           <option value="auto">Auto</option>
         </select>
-        <label style={lbl}>Conductor</label>
-        <input style={{ ...inp, marginBottom:12 }} value={f.conductor_nombre||""} onChange={e=>setF(p=>({...p,conductor_nombre:e.target.value}))}/>
-        <label style={lbl}>Teléfono del conductor</label>
-        <input style={{ ...inp, marginBottom:20 }} value={f.conductor_telefono||""} onChange={e=>setF(p=>({...p,conductor_telefono:e.target.value}))}/>
+        <label style={lbl}>Conductor (elige de Repartidores)</label>
+        <select style={{ ...inp, marginBottom:6 }} value={f.repartidor_id||""} onChange={e=>setF(p=>({...p,repartidor_id:e.target.value}))}>
+          <option value="">— Sin asignar —</option>
+          {repartidores.filter(r=>r.activo).map(r=>(
+            <option key={r.id} value={r.id}>{r.nombres} {r.apellidos}{r.telefono?` — ${r.telefono}`:""}</option>
+          ))}
+        </select>
+        <div style={{ fontSize:11, color:B.textMut, marginBottom:20 }}>
+          ¿El conductor todavía no está registrado? Créalo primero en el módulo <strong>Repartidores</strong> — así puede usarse tanto para pedidos de última milla como para unidades de transporte.
+        </div>
         <div style={{ display:"flex", gap:10, justifyContent:"space-between" }}>
           {unidad && <BtnSec onClick={toggleActivo}>{f.activo?"Desactivar":"Activar"}</BtnSec>}
           <div style={{ display:"flex", gap:10, marginLeft:"auto" }}>
@@ -2022,7 +2032,7 @@ function ModalUnidad({ unidad, onClose, onSaved, toast }) {
   );
 }
 
-function ModalAsignacionUnidad({ unidades, empresas, tiposServicio, onClose, onSaved, toast }) {
+function ModalAsignacionUnidad({ unidades, empresas, tiposServicio, repartidores, onClose, onSaved, toast }) {
   const [f, setF] = useState({
     unidad_id:"", empresa_id:"", tipo_servicio_id:"",
     fecha_inicio: new Date().toISOString().split("T")[0],
@@ -2047,7 +2057,10 @@ function ModalAsignacionUnidad({ unidades, empresas, tiposServicio, onClose, onS
         <label style={lbl}>Unidad</label>
         <select style={{ ...inp, marginBottom:12 }} value={f.unidad_id} onChange={e=>setF(p=>({...p,unidad_id:e.target.value}))}>
           <option value="">— Selecciona —</option>
-          {unidades.filter(u=>u.activo).map(u=><option key={u.id} value={u.id}>{u.placa} — {u.conductor_nombre||"sin conductor"}</option>)}
+          {unidades.filter(u=>u.activo).map(u=>{
+            const conductor = repartidores.find(r=>r.id===u.repartidor_id);
+            return <option key={u.id} value={u.id}>{u.placa} — {conductor?`${conductor.nombres} ${conductor.apellidos}`:"sin conductor"}</option>;
+          })}
         </select>
         <label style={lbl}>Cliente</label>
         <select style={{ ...inp, marginBottom:12 }} value={f.empresa_id} onChange={e=>setF(p=>({...p,empresa_id:e.target.value}))}>
@@ -3514,7 +3527,7 @@ if (verificando) {
               {seccion==="pedidos"       && <Pedidos pedidos={pedidos} repartidores={repartidores} empresas={empresas} tarifariosCliente={tarifariosCliente} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="repartidores"  && <Repartidores repartidores={repartidores} pedidos={pedidos} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="clientes"      && <Clientes empresas={empresas} pedidos={pedidos} lineasNegocio={lineasNegocio} tarifariosCliente={tarifariosCliente} onRefresh={cargarSilencioso} toast={showToast}/>}
-              {seccion==="unidades"      && <Unidades unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccion==="unidades"      && <Unidades unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} repartidores={repartidores} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="liquidaciones" && <Liquidaciones repartidores={repartidores} pedidos={pedidos} liquidaciones={liquidaciones} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="facturacion"   && <Facturacion empresas={empresas} pedidos={pedidos} tiposServicio={tiposServicio} toast={showToast}/>}
               {seccion==="reportes"      && <Reportes pedidos={pedidos} repartidores={repartidores} empresas={empresas} toast={showToast}/>}
