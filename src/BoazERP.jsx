@@ -1549,6 +1549,7 @@ function Repartidores({ repartidores, pedidos, onRefresh, toast }) {
               </div>
               <div><label style={lbl}>Zona default</label>
                 <select style={inp} value={f.zona_default} onChange={e=>setF(p=>({...p,zona_default:e.target.value}))}>
+                  <option value="todas">Todas</option>
                   <option value="urbano">Urbano</option>
                   <option value="semi_urbano">Semi Urbano</option>
                   <option value="periferico">Periférico</option>
