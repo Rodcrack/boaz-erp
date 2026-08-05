@@ -1848,6 +1848,8 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
     return Math.max(1, Math.round((fin-inicio)/86400000)+1);
   };
   const calcularMonto = (a) => calcularDias(a) * (parseFloat(a.tarifa_dia)||0);
+  const calcularIGV = (a) => calcularMonto(a) * 0.18;
+  const calcularTotalConIGV = (a) => calcularMonto(a) * 1.18;
 
   const finalizarAsignacion = async (a) => {
     const hoy = new Date().toISOString().split("T")[0];
@@ -1923,7 +1925,7 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
         <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden", boxShadow:"0 2px 8px #0D1E3D0A" }}>
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead><tr style={{ background:B.bg }}>
-              {["Unidad","Cliente","Servicio","Desde","Hasta","Días","Tarifa/día","Total","Estado","Acciones"].map(h=>(
+              {["Unidad","Cliente","Servicio","Desde","Hasta","Días","Tarifa/día","Subtotal","IGV (18%)","Total a facturar","Estado","Acciones"].map(h=>(
                 <th key={h} style={{ padding:"10px 12px", textAlign:"left", fontSize:10, color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
               ))}
             </tr></thead>
@@ -1934,6 +1936,8 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
                 const servicio = tiposServicio.find(t=>t.id===a.tipo_servicio_id);
                 const dias = calcularDias(a);
                 const monto = calcularMonto(a);
+                const igv = calcularIGV(a);
+                const totalConIGV = calcularTotalConIGV(a);
                 const tieneRegistro = diasServicio.some(d=>d.asignacion_id===a.id);
                 return (
                   <tr key={a.id} style={{ borderTop:`1px solid ${B.border}`, background:i%2===0?B.white:"#F8FAFC" }}>
@@ -1949,7 +1953,9 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
                       </span>
                     </td>
                     <td style={{ padding:"10px 12px", fontSize:12, color:B.textSec }}>{fmt.sol(a.tarifa_dia)}</td>
-                    <td style={{ padding:"10px 12px", fontSize:13, fontWeight:800, color:B.gold }}>{fmt.sol(monto)}</td>
+                    <td style={{ padding:"10px 12px", fontSize:12, color:B.textSec }}>{fmt.sol(monto)}</td>
+                    <td style={{ padding:"10px 12px", fontSize:12, color:B.textMut }}>{fmt.sol(igv)}</td>
+                    <td style={{ padding:"10px 12px", fontSize:13, fontWeight:800, color:B.gold }}>{fmt.sol(totalConIGV)}</td>
                     <td style={{ padding:"10px 12px" }}>
                       <span style={{ fontSize:10, padding:"3px 8px", borderRadius:10, fontWeight:700,
                         background: a.liquidado?"#ECFDF5":a.estado==="activa"?"#FFFBEB":"#F3F4F6",
@@ -1971,7 +1977,7 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
                   </tr>
                 );
               })}
-              {asignaciones.length===0 && <tr><td colSpan={10} style={{ padding:32, textAlign:"center", color:B.textMut, fontSize:13 }}>No hay asignaciones registradas</td></tr>}
+              {asignaciones.length===0 && <tr><td colSpan={12} style={{ padding:32, textAlign:"center", color:B.textMut, fontSize:13 }}>No hay asignaciones registradas</td></tr>}
             </tbody>
           </table>
         </div>
@@ -2040,6 +2046,9 @@ function ModalCalendarioServicio({ asignacion, diasServicio, unidad, empresa, on
   const mapa = {};
   diasServicio.forEach(d=>{ mapa[d.fecha] = d.prestado; });
   const totalPrestados = fechas.filter(f => mapa[f] !== false).length;
+  const subtotal = totalPrestados * (parseFloat(asignacion.tarifa_dia)||0);
+  const igv = subtotal * 0.18;
+  const totalConIGV = subtotal * 1.18;
 
   return (
     <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000,
@@ -2054,13 +2063,27 @@ function ModalCalendarioServicio({ asignacion, diasServicio, unidad, empresa, on
         <div style={{ fontSize:12, color:B.textSec, marginBottom:16 }}>
           {unidad?.placa||"—"} — {empresa?.nombre||"—"}
         </div>
-        <div style={{ background:B.bg, borderRadius:10, padding:"12px 16px", marginBottom:16,
-          display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-          <div style={{ fontSize:12, color:B.textSec, maxWidth:260 }}>
+        <div style={{ background:B.bg, borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
+          <div style={{ fontSize:12, color:B.textSec, marginBottom:10 }}>
             Toca un día para marcar/desmarcar si hubo servicio real ese día
           </div>
-          <div style={{ fontSize:22, fontWeight:900, color:B.gold, textAlign:"right" }}>
-            {totalPrestados}<div style={{ fontSize:10, color:B.textMut, fontWeight:400 }}>días prestados</div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:10, textAlign:"center" }}>
+            <div>
+              <div style={{ fontSize:18, fontWeight:900, color:B.navy }}>{totalPrestados}</div>
+              <div style={{ fontSize:9, color:B.textMut, textTransform:"uppercase" }}>Días</div>
+            </div>
+            <div>
+              <div style={{ fontSize:14, fontWeight:700, color:B.textSec }}>{fmt.sol(subtotal)}</div>
+              <div style={{ fontSize:9, color:B.textMut, textTransform:"uppercase" }}>Subtotal</div>
+            </div>
+            <div>
+              <div style={{ fontSize:14, fontWeight:700, color:B.textMut }}>{fmt.sol(igv)}</div>
+              <div style={{ fontSize:9, color:B.textMut, textTransform:"uppercase" }}>IGV 18%</div>
+            </div>
+            <div>
+              <div style={{ fontSize:16, fontWeight:900, color:B.gold }}>{fmt.sol(totalConIGV)}</div>
+              <div style={{ fontSize:9, color:B.textMut, textTransform:"uppercase" }}>Total</div>
+            </div>
           </div>
         </div>
 
