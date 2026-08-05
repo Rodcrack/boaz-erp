@@ -862,34 +862,21 @@ function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, ini
 
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:16 }}>
         {[
-          { label:"En ruta", value: misEnRuta.length, color:"#7C3AED", icon:"🛵" },
-          { label:"Entregados", value: entregadosHoy.length, color:C.green, icon:"✅" },
-          { label:"No entreg.", value: noEntregadosHoy.length, color:C.red, icon:"⚠️" },
+          { id:"ruta", label:"En ruta", value: misP.length, color:"#7C3AED", icon:"🛵" },
+          { id:"entregados", label:"Entregados", value: entregadosHoy.length, color:C.green, icon:"✅" },
+          { id:"no_entregados", label:"No entreg.", value: noEntregadosHoy.length, color:C.red, icon:"⚠️" },
         ].map((k,i)=>(
-          <div key={i} style={{ background:C.white, borderRadius:12, padding:14,
-            textAlign:"center", border:`1px solid ${C.border}`,
-            boxShadow:"0 2px 8px #0D1E3D0A",
-            borderTop:`3px solid ${k.color}` }}>
+          <div key={i} onClick={()=>setFiltroLista(k.id)}
+            style={{ background:C.white, borderRadius:12, padding:14,
+              textAlign:"center", cursor:"pointer",
+              border: filtroLista===k.id ? `2px solid ${k.color}` : `1px solid ${C.border}`,
+              boxShadow: filtroLista===k.id ? `0 4px 12px ${k.color}33` : "0 2px 8px #0D1E3D0A",
+              borderTop:`3px solid ${k.color}`, transition:"all 0.15s" }}>
             <div style={{ fontSize:20, marginBottom:4 }}>{k.icon}</div>
             <div style={{ fontSize:20, fontWeight:800, color:C.textPri }}>{k.value}</div>
-            <div style={{ fontSize:10, color:C.textMut, textTransform:"uppercase" }}>{k.label}</div>
+            <div style={{ fontSize:10, color: filtroLista===k.id ? k.color : C.textMut,
+              textTransform:"uppercase", fontWeight: filtroLista===k.id ? 700 : 400 }}>{k.label}</div>
           </div>
-        ))}
-      </div>
-
-      <div style={{ display:"flex", gap:6, marginBottom:14 }}>
-        {[
-          { id:"ruta", label:"En ruta", count:misP.length, color:"#7C3AED" },
-          { id:"entregados", label:"Entregados", count:entregadosHoy.length, color:C.green },
-          { id:"no_entregados", label:"No entreg.", count:noEntregadosHoy.length, color:C.red },
-        ].map(t=>(
-          <button key={t.id} onClick={()=>setFiltroLista(t.id)}
-            style={{ flex:1, padding:"10px 6px", borderRadius:10, fontSize:11, fontWeight:700,
-              cursor:"pointer", border: filtroLista===t.id ? `2px solid ${t.color}` : `1px solid #E2E8F0`,
-              background: filtroLista===t.id ? `${t.color}14` : C.white,
-              color: filtroLista===t.id ? t.color : C.textSec }}>
-            {t.label} ({t.count})
-          </button>
         ))}
       </div>
 
