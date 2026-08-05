@@ -176,11 +176,12 @@ async function guardarEvidenciaYEstado({ pedidoId, nuevoEstado, fotosFiles, moti
   }
   if (nuevoEstado === "no_entregado") {
     payload.motivo_no_entrega = motivo;
+    payload.comentario_no_entrega = comentario || null;
   }
   const tipoEvento = nuevoEstado === "entregado" ? "foto_entrega" : "foto_no_entrega";
   const detalleEvento = nuevoEstado === "entregado"
     ? `Entregado a ${recibidoPor}${comentario ? " — "+comentario : ""}`
-    : `No entregado: ${motivo}`;
+    : `No entregado: ${motivo}${comentario ? " — "+comentario : ""}`;
 
   try {
     const urls = await subirFotosYUrls(pedidoId, tipoEvento, comprimidas);
@@ -717,7 +718,70 @@ function MapaRuta({ pedidos, onVolver }) {
   );
 }
 
-function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, iniciando, onOrdenarRuta, onVerMapa }) {
+// ── PANTALLA: RUTA FINALIZADA (mensaje de cierre del día) ──────
+function PantallaFinalRuta({ resumen, repartidor, onCerrar }) {
+  const fmtHora = (iso) => iso ? new Date(iso).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"}) : "—";
+  const duracionMin = resumen.horaInicio && resumen.horaFin
+    ? Math.round((new Date(resumen.horaFin) - new Date(resumen.horaInicio)) / 60000)
+    : null;
+  const horas = duracionMin!=null ? Math.floor(duracionMin/60) : null;
+  const mins = duracionMin!=null ? duracionMin%60 : null;
+
+  return (
+    <div style={{ minHeight:"100vh", background:`linear-gradient(135deg,${C.navy},${C.navyLt})`,
+      display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+      padding:24, textAlign:"center" }}>
+      <div style={{ fontSize:64, marginBottom:16 }}>🎉</div>
+      <div style={{ fontSize:22, fontWeight:900, color:"#E8EAF0", marginBottom:6 }}>
+        ¡Buen trabajo, {repartidor.nombres}!
+      </div>
+      <div style={{ fontSize:14, color:C.textMut, marginBottom:28, maxWidth:280 }}>
+        Terminaste tu ruta de hoy. Descansa, mañana volvemos 💪
+      </div>
+
+      <div style={{ background:C.navyMd, borderRadius:16, padding:24, width:"100%", maxWidth:320,
+        border:"1px solid #1E3560", marginBottom:28 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:20 }}>
+          <div>
+            <div style={{ fontSize:28, fontWeight:900, color:C.green }}>{resumen.entregados}</div>
+            <div style={{ fontSize:10, color:C.textMut, textTransform:"uppercase" }}>Entregados</div>
+          </div>
+          <div>
+            <div style={{ fontSize:28, fontWeight:900, color:C.red }}>{resumen.noEntregados}</div>
+            <div style={{ fontSize:10, color:C.textMut, textTransform:"uppercase" }}>No entregados</div>
+          </div>
+        </div>
+        <div style={{ borderTop:"1px solid #1E3560", paddingTop:16,
+          display:"flex", justifyContent:"space-between", fontSize:12 }}>
+          <div>
+            <div style={{ color:C.textMut }}>Inicio</div>
+            <div style={{ color:"#E8EAF0", fontWeight:700 }}>{fmtHora(resumen.horaInicio)}</div>
+          </div>
+          <div>
+            <div style={{ color:C.textMut }}>Fin</div>
+            <div style={{ color:"#E8EAF0", fontWeight:700 }}>{fmtHora(resumen.horaFin)}</div>
+          </div>
+          {duracionMin!=null && (
+            <div>
+              <div style={{ color:C.textMut }}>Duración</div>
+              <div style={{ color:C.gold, fontWeight:700 }}>{horas}h {mins}m</div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <button onClick={onCerrar}
+        style={{ background:`linear-gradient(135deg,${C.gold},${C.goldDk})`,
+          border:"none", color:C.navy, padding:"14px 32px", borderRadius:12,
+          fontSize:14, fontWeight:800, cursor:"pointer" }}>
+        Volver al inicio
+      </button>
+    </div>
+  );
+}
+
+function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, iniciando, onOrdenarRuta, onVerMapa, rutaActiva, onFinalizarRuta }) {
+  const [filtroLista, setFiltroLista] = useState("ruta");
   const hoy = new Date().toISOString().split("T")[0];
   const misAsignados = pedidos.filter(p=>p.repartidor_id===repartidor.id && p.estado==="asignado");
   const misEnRuta = pedidos.filter(p=>p.repartidor_id===repartidor.id && p.estado==="en_ruta");
@@ -731,6 +795,7 @@ function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, ini
   const noEntregadosHoy = pedidos.filter(p=>
     p.repartidor_id===repartidor.id && p.estado==="no_entregado"
   );
+  const listaActual = filtroLista==="ruta" ? misP : filtroLista==="entregados" ? entregadosHoy : noEntregadosHoy;
 
   return (
     <div style={{ padding:16 }}>
@@ -764,6 +829,16 @@ function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, ini
             fontSize:15, fontWeight:800, cursor: iniciando?"default":"pointer",
             marginBottom:16, boxShadow:"0 6px 16px #6D28D944" }}>
           {iniciando ? "Iniciando..." : `🚀 Iniciar Ruta (${misAsignados.length} pedido${misAsignados.length===1?"":"s"})`}
+        </button>
+      )}
+
+      {misP.length===0 && rutaActiva && (
+        <button onClick={onFinalizarRuta}
+          style={{ width:"100%", background:`linear-gradient(135deg,${C.green},#059669)`,
+            color:C.white, border:"none", padding:16, borderRadius:14,
+            fontSize:15, fontWeight:800, cursor:"pointer",
+            marginBottom:16, boxShadow:"0 6px 16px #10B98144" }}>
+          🏁 Finalizar mi ruta de hoy
         </button>
       )}
 
@@ -802,30 +877,48 @@ function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, ini
         ))}
       </div>
 
-      <div style={{ fontSize:13, fontWeight:700, color:C.textPri, marginBottom:10 }}>
-        Mis pedidos ({misP.length})
+      <div style={{ display:"flex", gap:6, marginBottom:14 }}>
+        {[
+          { id:"ruta", label:"En ruta", count:misP.length, color:"#7C3AED" },
+          { id:"entregados", label:"Entregados", count:entregadosHoy.length, color:C.green },
+          { id:"no_entregados", label:"No entreg.", count:noEntregadosHoy.length, color:C.red },
+        ].map(t=>(
+          <button key={t.id} onClick={()=>setFiltroLista(t.id)}
+            style={{ flex:1, padding:"10px 6px", borderRadius:10, fontSize:11, fontWeight:700,
+              cursor:"pointer", border: filtroLista===t.id ? `2px solid ${t.color}` : `1px solid #E2E8F0`,
+              background: filtroLista===t.id ? `${t.color}14` : C.white,
+              color: filtroLista===t.id ? t.color : C.textSec }}>
+            {t.label} ({t.count})
+          </button>
+        ))}
       </div>
 
-      {misP.length===0 ? (
+      {listaActual.length===0 ? (
         <div style={{ background:C.white, borderRadius:14, padding:32,
           textAlign:"center", color:C.textMut, border:`1px solid #E2E8F0` }}>
-          <div style={{ fontSize:36, marginBottom:8 }}>🎉</div>
-          <div style={{ fontSize:14, fontWeight:600 }}>¡Sin pedidos pendientes!</div>
-          <div style={{ fontSize:12, marginTop:4 }}>Todos los pedidos están atendidos.</div>
+          <div style={{ fontSize:36, marginBottom:8 }}>
+            {filtroLista==="ruta" ? "🎉" : filtroLista==="entregados" ? "📦" : "✅"}
+          </div>
+          <div style={{ fontSize:14, fontWeight:600 }}>
+            {filtroLista==="ruta" ? "¡Sin pedidos pendientes!" : filtroLista==="entregados" ? "Aún no hay entregas hoy" : "Sin pedidos no entregados"}
+          </div>
         </div>
       ) : (
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-          {misP.map((p,i) => (
+          {listaActual.map((p,i) => (
             <div key={p.id} onClick={()=>onVerPedido(p)}
               style={{ background:C.white, borderRadius:14, padding:16,
                 border:`1px solid #E2E8F0`, cursor:"pointer",
-                boxShadow:"0 2px 8px #0D1E3D0A", position:"relative", paddingLeft:44,
+                boxShadow:"0 2px 8px #0D1E3D0A", position:"relative",
+                paddingLeft: filtroLista==="ruta" ? 44 : 16,
                 borderLeft:`4px solid ${ESTADOS[p.estado]?.color||C.gold}` }}>
-              <div style={{ position:"absolute", left:14, top:16, width:24, height:24,
-                borderRadius:"50%", background:C.gold, color:C.navy, fontWeight:800,
-                fontSize:12, display:"flex", alignItems:"center", justifyContent:"center" }}>
-                {i+1}
-              </div>
+              {filtroLista==="ruta" && (
+                <div style={{ position:"absolute", left:14, top:16, width:24, height:24,
+                  borderRadius:"50%", background:C.gold, color:C.navy, fontWeight:800,
+                  fontSize:12, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  {i+1}
+                </div>
+              )}
               <div style={{ display:"flex", justifyContent:"space-between",
                 alignItems:"flex-start", marginBottom:8 }}>
                 <div style={{ fontSize:14, fontWeight:800, color:C.navy }}>{p.omd}</div>
@@ -886,7 +979,7 @@ function DetallePedido({ pedido: p, onVolver, onActualizar, onActualizarLocal, t
       });
       onActualizarLocal(p.id, nuevoEstado === "entregado"
         ? { estado:"entregado", fecha_entrega:new Date().toISOString(), recibido_por:recibidoPor, comentario_entrega:comentario.trim()||null }
-        : { estado:"no_entregado", motivo_no_entrega:motivoFinal });
+        : { estado:"no_entregado", motivo_no_entrega:motivoFinal, comentario_no_entrega:comentario.trim()||null });
       toast(offline
         ? "Sin conexión: guardado en el equipo, se sincronizará al recuperar señal ⏳"
         : (nuevoEstado==="entregado" ? "¡Pedido entregado! ✓" : "Registrado como no entregado ✓"));
@@ -990,6 +1083,19 @@ function DetallePedido({ pedido: p, onVolver, onActualizar, onActualizarLocal, t
           marginBottom:14, border:`1px solid #E2E8F0` }}>
           <CapturaFotos fotos={fotos} setFotos={setFotos} minimo={2}
             label={esEntrega ? "Fotos de entrega" : "Fotos de evidencia"} />
+
+          {!esEntrega && (
+            <div style={{ marginTop:14, paddingTop:14, borderTop:"1px solid #F1F5F9" }}>
+              <div style={{ fontSize:11, fontWeight:700, color:C.navy, textTransform:"uppercase",
+                marginBottom:8 }}>Comentarios (opcional)</div>
+              <textarea placeholder="Notas adicionales sobre la incidencia..."
+                value={comentario} onChange={e=>setComentario(e.target.value)}
+                rows={2}
+                style={{ width:"100%", border:"1px solid #E2E8F0", borderRadius:10,
+                  padding:"10px 14px", fontSize:13, boxSizing:"border-box", resize:"vertical",
+                  fontFamily:"inherit" }}/>
+            </div>
+          )}
         </div>
 
         <button onClick={()=>confirmarEvidencia(esEntrega ? "entregado" : "no_entregado")}
@@ -1099,6 +1205,9 @@ function DetallePedido({ pedido: p, onVolver, onActualizar, onActualizarLocal, t
               ⚠️ NO ENTREGADO
             </div>
             <div style={{ fontSize:13, color:"#991B1B" }}>{p.motivo_no_entrega}</div>
+            {p.comentario_no_entrega && (
+              <div style={{ fontSize:12, color:"#991B1B", marginTop:6, fontStyle:"italic" }}>{p.comentario_no_entrega}</div>
+            )}
           </div>
         )}
         {p.estado==="entregado" && p.recibido_por && (
@@ -1128,7 +1237,7 @@ function DetallePedido({ pedido: p, onVolver, onActualizar, onActualizarLocal, t
                   fontSize:15, fontWeight:800, cursor:"pointer" }}>
                 ✅ Marcar entregado
               </button>
-              <button onClick={()=>{ setFotos([]); setMotivo(""); setDetalleOtro(""); setVista("no_entrega"); }}
+              <button onClick={()=>{ setFotos([]); setMotivo(""); setDetalleOtro(""); setComentario(""); setVista("no_entrega"); }}
                 style={{ background:`linear-gradient(135deg,${C.red},#B91C1C)`,
                   color:C.white, border:"none", padding:16, borderRadius:12,
                   fontSize:15, fontWeight:800, cursor:"pointer" }}>
@@ -1349,6 +1458,8 @@ export default function BoazApp() {
   const [iniciandoRuta, setIniciandoRuta] = useState(false);
   const [liquidando, setLiquidando] = useState(false);
   const [pendientesSync, setPendientesSync] = useState(leerCola().length);
+  const [rutaActiva, setRutaActiva] = useState(null);
+  const [pantallaFinal, setPantallaFinal] = useState(null); // resumen a mostrar tras finalizar
 
   const showToast = useCallback((msg, tipo="ok") => {
     setToast({msg,tipo});
@@ -1361,6 +1472,11 @@ export default function BoazApp() {
       .eq("repartidor_id", repartidor.id)
       .order("created_at",{ascending:false});
     if (data) setPedidos(data);
+    const hoy = new Date().toISOString().split("T")[0];
+    const { data: ruta } = await sb.from("rutas_repartidor").select("*")
+      .eq("repartidor_id", repartidor.id).eq("fecha", hoy).is("hora_fin", null)
+      .order("created_at",{ascending:false}).limit(1).maybeSingle();
+    setRutaActiva(ruta || null);
   },[repartidor]);
 
   useEffect(() => { cargar(); }, [cargar]);
@@ -1405,6 +1521,31 @@ export default function BoazApp() {
     setPedidos(prev => prev.map(p => ids.includes(p.id) ? { ...p, estado:"en_ruta" } : p));
     setPendientesSync(leerCola().length);
     showToast(offline ? "Sin conexión: se sincronizará al recuperar señal ⏳" : `Ruta iniciada con ${ids.length} pedidos ✓`);
+
+    if (!rutaActiva) {
+      const hoy = new Date().toISOString().split("T")[0];
+      const { data } = await sb.from("rutas_repartidor").insert([{
+        repartidor_id: repartidor.id, fecha: hoy,
+        hora_inicio: new Date().toISOString(), total_pedidos: ids.length,
+      }]).select().single();
+      if (data) setRutaActiva(data);
+    }
+  };
+
+  const finalizarRuta = async () => {
+    if (!rutaActiva) return;
+    const hoy = new Date().toISOString().split("T")[0];
+    const entregadosHoy = pedidos.filter(p=>p.repartidor_id===repartidor.id && p.estado==="entregado" && p.fecha_entrega?.startsWith(hoy)).length;
+    const noEntregados = pedidos.filter(p=>p.repartidor_id===repartidor.id && p.estado==="no_entregado").length;
+    const horaFin = new Date().toISOString();
+    await sb.from("rutas_repartidor").update({
+      hora_fin: horaFin, entregados: entregadosHoy, no_entregados: noEntregados,
+    }).eq("id", rutaActiva.id);
+    setPantallaFinal({
+      horaInicio: rutaActiva.hora_inicio, horaFin,
+      entregados: entregadosHoy, noEntregados,
+    });
+    setRutaActiva(null);
   };
 
   const marcarLiquidado = async (ids) => {
@@ -1479,6 +1620,9 @@ export default function BoazApp() {
             }}
             toast={showToast}
           />
+        ) : pantallaFinal ? (
+          <PantallaFinalRuta resumen={pantallaFinal} repartidor={repartidor}
+            onCerrar={()=>setPantallaFinal(null)}/>
         ) : viendoMapa ? (
           <MapaRuta
             pedidos={
@@ -1489,14 +1633,14 @@ export default function BoazApp() {
           />
         ) : (
           <>
-            {tab==="inicio"      && <Inicio repartidor={repartidor} pedidos={pedidos} onVerPedido={setPedidoSel} onLogout={()=>setRepartidor(null)} onIniciarRuta={iniciarRuta} iniciando={iniciandoRuta} onOrdenarRuta={()=>setOrdenandoRuta(true)} onVerMapa={()=>setViendoMapa(true)}/>}
+            {tab==="inicio"      && <Inicio repartidor={repartidor} pedidos={pedidos} onVerPedido={setPedidoSel} onLogout={()=>setRepartidor(null)} onIniciarRuta={iniciarRuta} iniciando={iniciandoRuta} onOrdenarRuta={()=>setOrdenandoRuta(true)} onVerMapa={()=>setViendoMapa(true)} rutaActiva={rutaActiva} onFinalizarRuta={finalizarRuta}/>}
             {tab==="liquidacion" && <MiLiquidacion repartidor={repartidor} pedidos={pedidos} onMarcarLiquidado={marcarLiquidado} liquidando={liquidando}/>}
             {tab==="perfil"      && <MiPerfil repartidor={repartidor} pedidos={pedidos} onLogout={()=>setRepartidor(null)}/>}
           </>
         )}
       </div>
 
-      {!pedidoSel && !ordenandoRuta && !viendoMapa && (
+      {!pedidoSel && !ordenandoRuta && !viendoMapa && !pantallaFinal && (
         <div style={{ position:"fixed", bottom:0, left:"50%", transform:"translateX(-50%)",
           width:"100%", maxWidth:430, background:C.white,
           borderTop:`1px solid #E2E8F0`, display:"flex",
