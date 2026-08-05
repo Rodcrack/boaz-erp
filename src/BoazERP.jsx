@@ -2099,7 +2099,7 @@ function ModalCalendarioServicio({ asignacion, diasServicio, unidad, empresa, on
 }
 
 function ModalUnidad({ unidad, repartidores, onClose, onSaved, toast }) {
-  const [f, setF] = useState(unidad || { placa:"", tipo_vehiculo:"camion", repartidor_id:"" });
+  const [f, setF] = useState(unidad || { placa:"", tipo_vehiculo:"moto", repartidor_id:"" });
   const guardar = async () => {
     if (!f.placa) { toast("La placa es obligatoria","error"); return; }
     const payload = { placa:f.placa, tipo_vehiculo:f.tipo_vehiculo, repartidor_id:f.repartidor_id||null };
@@ -2129,11 +2129,13 @@ function ModalUnidad({ unidad, repartidores, onClose, onSaved, toast }) {
         <input style={{ ...inp, marginBottom:12, textTransform:"uppercase" }} value={f.placa} onChange={e=>setF(p=>({...p,placa:e.target.value.toUpperCase()}))}/>
         <label style={lbl}>Tipo de vehículo</label>
         <select style={{ ...inp, marginBottom:12 }} value={f.tipo_vehiculo} onChange={e=>setF(p=>({...p,tipo_vehiculo:e.target.value}))}>
-          <option value="camion">Camión</option>
-          <option value="van">Van</option>
-          <option value="furgon">Furgón</option>
           <option value="moto">Moto</option>
+          <option value="bicicleta">Bicicleta</option>
           <option value="auto">Auto</option>
+          <option value="furgoneta">Furgoneta</option>
+          <option value="minivan">Minivan</option>
+          <option value="van">Van</option>
+          <option value="porter">Porter</option>
         </select>
         <label style={lbl}>Conductor (elige de Repartidores)</label>
         <select style={{ ...inp, marginBottom:6 }} value={f.repartidor_id||""} onChange={e=>setF(p=>({...p,repartidor_id:e.target.value}))}>
