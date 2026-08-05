@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
 import * as XLSX from "xlsx";
 
@@ -1828,13 +1828,21 @@ function ModalTarifarioCliente({ empresa, tarifariosCliente, onClose, onSaved, t
 // ══════════════════════════════════════════════════════════════
 // MÓDULO: UNIDADES DE TRANSPORTE (clientes de Transporte y Carga)
 // ══════════════════════════════════════════════════════════════
-function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidores, onRefresh, toast }) {
+function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidores, diasServicio, onRefresh, toast }) {
   const [vista, setVista] = useState("asignaciones");
   const [modalUnidad, setModalUnidad] = useState(false);
   const [modalAsignacion, setModalAsignacion] = useState(false);
   const [editandoUnidad, setEditandoUnidad] = useState(null);
+  const [modalCalendario, setModalCalendario] = useState(null); // guarda la asignación seleccionada
 
+  // Si hay días registrados manualmente en el calendario, cuenta solo los
+  // marcados como "prestado". Si aún no se registró ninguno, usa el rango
+  // completo de fechas como respaldo (comportamiento anterior).
   const calcularDias = (a) => {
+    const registrados = diasServicio.filter(d=>d.asignacion_id===a.id);
+    if (registrados.length > 0) {
+      return registrados.filter(d=>d.prestado).length;
+    }
     const inicio = new Date(a.fecha_inicio+"T00:00:00");
     const fin = a.fecha_fin ? new Date(a.fecha_fin+"T00:00:00") : new Date();
     return Math.max(1, Math.round((fin-inicio)/86400000)+1);
@@ -1926,6 +1934,7 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
                 const servicio = tiposServicio.find(t=>t.id===a.tipo_servicio_id);
                 const dias = calcularDias(a);
                 const monto = calcularMonto(a);
+                const tieneRegistro = diasServicio.some(d=>d.asignacion_id===a.id);
                 return (
                   <tr key={a.id} style={{ borderTop:`1px solid ${B.border}`, background:i%2===0?B.white:"#F8FAFC" }}>
                     <td style={{ padding:"10px 12px", fontSize:12, fontWeight:700, color:B.navy }}>{unidad?.placa||"—"}</td>
@@ -1933,7 +1942,12 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
                     <td style={{ padding:"10px 12px", fontSize:11, color:B.textSec }}>{servicio?.codigo||"—"}</td>
                     <td style={{ padding:"10px 12px", fontSize:11, color:B.textMut }}>{fmt.fecha(a.fecha_inicio)}</td>
                     <td style={{ padding:"10px 12px", fontSize:11, color:B.textMut }}>{a.fecha_fin?fmt.fecha(a.fecha_fin):"En curso"}</td>
-                    <td style={{ padding:"10px 12px", fontSize:12, fontWeight:700, color:B.navy }}>{dias}</td>
+                    <td style={{ padding:"10px 12px" }}>
+                      <span style={{ fontSize:12, fontWeight:700, color:B.navy }}>{dias}</span>
+                      <span style={{ fontSize:9, color: tieneRegistro?B.green:B.textMut, marginLeft:4 }}>
+                        {tieneRegistro?"✓ real":"est."}
+                      </span>
+                    </td>
                     <td style={{ padding:"10px 12px", fontSize:12, color:B.textSec }}>{fmt.sol(a.tarifa_dia)}</td>
                     <td style={{ padding:"10px 12px", fontSize:13, fontWeight:800, color:B.gold }}>{fmt.sol(monto)}</td>
                     <td style={{ padding:"10px 12px" }}>
@@ -1944,7 +1958,8 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
                       </span>
                     </td>
                     <td style={{ padding:"10px 12px" }}>
-                      <div style={{ display:"flex", gap:6 }}>
+                      <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                        <button onClick={()=>setModalCalendario(a)} style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer" }}>📅 Calendario</button>
                         {a.estado==="activa" && (
                           <button onClick={()=>finalizarAsignacion(a)} style={{ fontSize:11, color:B.red, background:"none", border:"none", cursor:"pointer" }}>Finalizar</button>
                         )}
@@ -1970,6 +1985,115 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
         <ModalAsignacionUnidad unidades={unidades} empresas={empresas} tiposServicio={tiposServicio} repartidores={repartidores}
           onClose={()=>setModalAsignacion(false)} onSaved={()=>{setModalAsignacion(false); onRefresh();}} toast={toast}/>
       )}
+      {modalCalendario && (
+        <ModalCalendarioServicio asignacion={modalCalendario}
+          diasServicio={diasServicio.filter(d=>d.asignacion_id===modalCalendario.id)}
+          unidad={unidades.find(u=>u.id===modalCalendario.unidad_id)}
+          empresa={empresas.find(e=>e.id===modalCalendario.empresa_id)}
+          onClose={()=>setModalCalendario(null)} onCambio={onRefresh} toast={toast}/>
+      )}
+    </div>
+  );
+}
+
+function ModalCalendarioServicio({ asignacion, diasServicio, unidad, empresa, onClose, onCambio, toast }) {
+  const [inicializando, setInicializando] = useState(true);
+
+  const fechas = useMemo(() => {
+    const arr = [];
+    const inicio = new Date(asignacion.fecha_inicio+"T00:00:00");
+    const fin = asignacion.fecha_fin ? new Date(asignacion.fecha_fin+"T00:00:00") : new Date();
+    let cur = new Date(inicio);
+    while (cur <= fin) {
+      arr.push(cur.toISOString().split("T")[0]);
+      cur.setDate(cur.getDate()+1);
+    }
+    return arr;
+  }, [asignacion.fecha_inicio, asignacion.fecha_fin]);
+
+  useEffect(() => {
+    (async () => {
+      const existentes = new Set(diasServicio.map(d=>d.fecha));
+      const faltantes = fechas.filter(f=>!existentes.has(f));
+      if (faltantes.length > 0) {
+        const { error } = await sb.from("dias_servicio_unidad").upsert(
+          faltantes.map(f=>({ asignacion_id: asignacion.id, fecha: f, prestado: true })),
+          { onConflict: "asignacion_id,fecha" }
+        );
+        if (error) toast("Error preparando calendario: "+error.message, "error");
+        onCambio();
+      }
+      setInicializando(false);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const toggle = async (fecha, actual) => {
+    const { error } = await sb.from("dias_servicio_unidad").upsert(
+      { asignacion_id: asignacion.id, fecha, prestado: !actual },
+      { onConflict: "asignacion_id,fecha" }
+    );
+    if (error) { toast("Error: "+error.message, "error"); return; }
+    onCambio();
+  };
+
+  const mapa = {};
+  diasServicio.forEach(d=>{ mapa[d.fecha] = d.prestado; });
+  const totalPrestados = fechas.filter(f => mapa[f] !== false).length;
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000,
+      display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+      <div style={{ background:B.white, borderRadius:16, padding:28, width:540,
+        maxHeight:"85vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
+          <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>📅 Calendario de servicio</div>
+          <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20,
+            color:B.textSec, cursor:"pointer" }}>✕</button>
+        </div>
+        <div style={{ fontSize:12, color:B.textSec, marginBottom:16 }}>
+          {unidad?.placa||"—"} — {empresa?.nombre||"—"}
+        </div>
+        <div style={{ background:B.bg, borderRadius:10, padding:"12px 16px", marginBottom:16,
+          display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div style={{ fontSize:12, color:B.textSec, maxWidth:260 }}>
+            Toca un día para marcar/desmarcar si hubo servicio real ese día
+          </div>
+          <div style={{ fontSize:22, fontWeight:900, color:B.gold, textAlign:"right" }}>
+            {totalPrestados}<div style={{ fontSize:10, color:B.textMut, fontWeight:400 }}>días prestados</div>
+          </div>
+        </div>
+
+        {inicializando ? (
+          <div style={{ textAlign:"center", padding:30, color:B.textMut, fontSize:13 }}>Preparando calendario...</div>
+        ) : (
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(74px, 1fr))", gap:8 }}>
+            {fechas.map(f => {
+              const prestado = mapa[f] !== false;
+              const fechaObj = new Date(f+"T12:00:00");
+              return (
+                <button key={f} onClick={()=>toggle(f, prestado)}
+                  style={{ padding:"10px 4px", borderRadius:8, border:`2px solid ${prestado?B.green:B.red}`,
+                    background: prestado?"#ECFDF5":"#FEF2F2", cursor:"pointer", textAlign:"center" }}>
+                  <div style={{ fontSize:9, color:B.textMut, textTransform:"uppercase" }}>
+                    {fechaObj.toLocaleDateString("es-PE",{weekday:"short"})}
+                  </div>
+                  <div style={{ fontSize:14, fontWeight:800, color: prestado?B.green:B.red }}>
+                    {fechaObj.getDate()}
+                  </div>
+                  <div style={{ fontSize:9, color:B.textMut }}>
+                    {fechaObj.toLocaleDateString("es-PE",{month:"short"})}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        <div style={{ display:"flex", justifyContent:"flex-end", marginTop:20 }}>
+          <BtnPri onClick={onClose}>Listo</BtnPri>
+        </div>
+      </div>
     </div>
   );
 }
@@ -3313,6 +3437,7 @@ export default function BoazERP() {
   const [unidades, setUnidades] = useState([]);
   const [asignacionesUnidad, setAsignacionesUnidad] = useState([]);
   const [tarifariosCliente, setTarifariosCliente] = useState([]);
+  const [diasServicio, setDiasServicio] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [toast, setToast] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -3322,7 +3447,7 @@ export default function BoazERP() {
   const cargar = useCallback(async (opts={}) => {
     if (!opts.silencioso) setCargando(true);
     try {
-      const [p,r,e,l,ln,ts,u,au,tc] = await Promise.all([
+      const [p,r,e,l,ln,ts,u,au,tc,ds] = await Promise.all([
         sb.from("pedidos").select("*").order("created_at",{ascending:false}),
         sb.from("repartidores").select("*").order("nombres"),
         sb.from("empresas").select("*").order("nombre"),
@@ -3332,6 +3457,7 @@ export default function BoazERP() {
         sb.from("unidades_transporte").select("*").order("placa"),
         sb.from("asignaciones_unidad").select("*").order("fecha_inicio",{ascending:false}),
         sb.from("tarifarios_cliente").select("*"),
+        sb.from("dias_servicio_unidad").select("*"),
       ]);
       if(p.data) setPedidos(p.data);
       if(r.data) setRepartidores(r.data);
@@ -3342,6 +3468,7 @@ export default function BoazERP() {
       if(u.data) setUnidades(u.data);
       if(au.data) setAsignacionesUnidad(au.data);
       if(tc.data) setTarifariosCliente(tc.data);
+      if(ds.data) setDiasServicio(ds.data);
     } catch(err) { console.error(err); }
     if (!opts.silencioso) setCargando(false);
   }, []);
@@ -3528,7 +3655,7 @@ if (verificando) {
               {seccion==="pedidos"       && <Pedidos pedidos={pedidos} repartidores={repartidores} empresas={empresas} tarifariosCliente={tarifariosCliente} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="repartidores"  && <Repartidores repartidores={repartidores} pedidos={pedidos} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="clientes"      && <Clientes empresas={empresas} pedidos={pedidos} lineasNegocio={lineasNegocio} tarifariosCliente={tarifariosCliente} onRefresh={cargarSilencioso} toast={showToast}/>}
-              {seccion==="unidades"      && <Unidades unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} repartidores={repartidores} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccion==="unidades"      && <Unidades unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} repartidores={repartidores} diasServicio={diasServicio} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="liquidaciones" && <Liquidaciones repartidores={repartidores} pedidos={pedidos} liquidaciones={liquidaciones} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="facturacion"   && <Facturacion empresas={empresas} pedidos={pedidos} tiposServicio={tiposServicio} toast={showToast}/>}
               {seccion==="reportes"      && <Reportes pedidos={pedidos} repartidores={repartidores} empresas={empresas} toast={showToast}/>}
