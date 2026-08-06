@@ -84,9 +84,9 @@ async function geocodificarDireccion(direccion, distrito) {
 const esperar = (ms) => new Promise(r => setTimeout(r, ms));
 
 const ROLES_ACCESO = {
-  admin: ["dashboard","pedidos","repartidores","clientes","unidades","liquidaciones","facturacion","reportes","configuracion"],
-  operaciones: ["dashboard","pedidos","repartidores","clientes","unidades"],
-  finanzas: ["dashboard","liquidaciones","facturacion","reportes","unidades"],
+  admin: ["dashboard","pedidos","repartidores","clientes","unidades","catalogo","liquidaciones","liquidacion-transporte","facturacion","reportes","configuracion"],
+  operaciones: ["dashboard","pedidos","repartidores","clientes","unidades","catalogo"],
+  finanzas: ["dashboard","clientes","catalogo","liquidaciones","liquidacion-transporte","facturacion","reportes"],
 };
 const Chip = ({ estado, size="sm" }) => {
   const s = ESTADOS_PEDIDO[estado] || { bg:"#F3F4F6", color:"#374151", label: estado };
@@ -1573,7 +1573,6 @@ function Repartidores({ repartidores, pedidos, onRefresh, toast }) {
 function Clientes({ empresas, pedidos, lineasNegocio, tarifariosCliente, onRefresh, toast }) {
   const [modal, setModal] = useState(false);
   const [editando, setEditando] = useState(null);
-  const [modalTarifario, setModalTarifario] = useState(null); // guarda la empresa seleccionada
   const empty = { nombre:"", ruc:"", contacto:"", telefono:"", email:"", direccion:"", puede_generar_etiquetas:false, linea_negocio_id:"" };
   const [f, setF] = useState(empty);
 
@@ -1622,12 +1621,8 @@ function Clientes({ empresas, pedidos, lineasNegocio, tarifariosCliente, onRefre
                     </div>
                   )}
                 </div>
-                <div style={{ display:"flex", flexDirection:"column", gap:4, alignItems:"flex-end" }}>
-                  <button onClick={()=>{setEditando(e);setF({...e});setModal(true);}}
-                    style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer" }}>✏️ Editar</button>
-                  <button onClick={()=>setModalTarifario(e)}
-                    style={{ fontSize:11, color:B.gold, background:"none", border:"none", cursor:"pointer", fontWeight:700 }}>💰 Tarifario</button>
-                </div>
+                <button onClick={()=>{setEditando(e);setF({...e});setModal(true);}}
+                  style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer" }}>✏️ Editar</button>
               </div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:14 }}>
                 {[["👤",e.contacto||"—"],["📱",e.telefono||"—"],
@@ -1713,10 +1708,6 @@ function Clientes({ empresas, pedidos, lineasNegocio, tarifariosCliente, onRefre
             </div>
           </div>
         </div>
-      )}
-      {modalTarifario && (
-        <ModalTarifarioCliente empresa={modalTarifario} tarifariosCliente={tarifariosCliente}
-          onClose={()=>setModalTarifario(null)} onSaved={()=>{onRefresh();}} toast={toast}/>
       )}
     </div>
   );
@@ -1828,29 +1819,27 @@ function ModalTarifarioCliente({ empresa, tarifariosCliente, onClose, onSaved, t
 // ══════════════════════════════════════════════════════════════
 // MÓDULO: UNIDADES DE TRANSPORTE (clientes de Transporte y Carga)
 // ══════════════════════════════════════════════════════════════
-function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidores, diasServicio, onRefresh, toast }) {
+// Cálculos financieros de asignaciones de unidades — compartidos entre
+// el módulo Unidades (operación) y Liquidación Transporte (finanzas).
+function calcularDiasAsignacion(a, diasServicio) {
+  const registrados = diasServicio.filter(d=>d.asignacion_id===a.id);
+  if (registrados.length > 0) {
+    return registrados.filter(d=>d.prestado).length;
+  }
+  const inicio = new Date(a.fecha_inicio+"T00:00:00");
+  const fin = a.fecha_fin ? new Date(a.fecha_fin+"T00:00:00") : new Date();
+  return Math.max(1, Math.round((fin-inicio)/86400000)+1);
+}
+const calcularMontoAsignacion = (a, diasServicio) => calcularDiasAsignacion(a, diasServicio) * (parseFloat(a.tarifa_dia)||0);
+const calcularIGVAsignacion = (a, diasServicio) => calcularMontoAsignacion(a, diasServicio) * 0.18;
+const calcularTotalConIGVAsignacion = (a, diasServicio) => calcularMontoAsignacion(a, diasServicio) * 1.18;
+
+function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidores, onRefresh, toast }) {
   const [vista, setVista] = useState("asignaciones");
   const [modalUnidad, setModalUnidad] = useState(false);
   const [modalAsignacion, setModalAsignacion] = useState(false);
   const [editandoUnidad, setEditandoUnidad] = useState(null);
-  const [modalCalendario, setModalCalendario] = useState(null); // guarda la asignación seleccionada
   const [editandoAsignacion, setEditandoAsignacion] = useState(null);
-
-  // Si hay días registrados manualmente en el calendario, cuenta solo los
-  // marcados como "prestado". Si aún no se registró ninguno, usa el rango
-  // completo de fechas como respaldo (comportamiento anterior).
-  const calcularDias = (a) => {
-    const registrados = diasServicio.filter(d=>d.asignacion_id===a.id);
-    if (registrados.length > 0) {
-      return registrados.filter(d=>d.prestado).length;
-    }
-    const inicio = new Date(a.fecha_inicio+"T00:00:00");
-    const fin = a.fecha_fin ? new Date(a.fecha_fin+"T00:00:00") : new Date();
-    return Math.max(1, Math.round((fin-inicio)/86400000)+1);
-  };
-  const calcularMonto = (a) => calcularDias(a) * (parseFloat(a.tarifa_dia)||0);
-  const calcularIGV = (a) => calcularMonto(a) * 0.18;
-  const calcularTotalConIGV = (a) => calcularMonto(a) * 1.18;
 
   const finalizarAsignacion = async (a) => {
     const hoy = new Date().toISOString().split("T")[0];
@@ -1860,18 +1849,11 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
     onRefresh();
   };
 
-  const marcarLiquidado = async (a) => {
-    const { error } = await sb.from("asignaciones_unidad").update({ liquidado:true }).eq("id", a.id);
-    if (error) { toast("Error: "+error.message, "error"); return; }
-    toast("Marcado como liquidado ✓");
-    onRefresh();
-  };
-
   return (
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
         <div style={{ display:"flex", gap:6 }}>
-          {[["asignaciones","📋 Asignaciones"],["unidades","🚛 Unidades"]].map(([id,label])=>(
+          {[["asignaciones","📋 Asignaciones"],["unidades","🚛 Flota"]].map(([id,label])=>(
             <button key={id} onClick={()=>setVista(id)}
               style={{ padding:"8px 16px", borderRadius:8, fontSize:12, cursor:"pointer",
                 border:`1px solid ${vista===id?B.gold:B.border}`,
@@ -1886,6 +1868,12 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
         ) : (
           <BtnPri onClick={()=>{setEditandoAsignacion(null); setModalAsignacion(true);}}>+ Nueva asignación</BtnPri>
         )}
+      </div>
+
+      <div style={{ fontSize:12, color:B.textMut, marginBottom:14 }}>
+        {vista==="unidades"
+          ? "Tu flota disponible para clientes de Transporte y Carga."
+          : "A qué cliente está asignada cada unidad y por cuánto tiempo. Para ver el cálculo de días, IGV y monto a facturar, ve a Finanzas → Liq. Transporte."}
       </div>
 
       {vista==="unidades" ? (
@@ -1926,7 +1914,7 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
         <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden", boxShadow:"0 2px 8px #0D1E3D0A" }}>
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead><tr style={{ background:B.bg }}>
-              {["Unidad","Cliente","Servicio","Desde","Hasta","Días","Tarifa/día","Subtotal","IGV (18%)","Total a facturar","Estado","Acciones"].map(h=>(
+              {["Unidad","Cliente","Servicio","Desde","Hasta","Estado","Acciones"].map(h=>(
                 <th key={h} style={{ padding:"10px 12px", textAlign:"left", fontSize:10, color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
               ))}
             </tr></thead>
@@ -1935,11 +1923,6 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
                 const unidad = unidades.find(u=>u.id===a.unidad_id);
                 const empresa = empresas.find(e=>e.id===a.empresa_id);
                 const servicio = tiposServicio.find(t=>t.id===a.tipo_servicio_id);
-                const dias = calcularDias(a);
-                const monto = calcularMonto(a);
-                const igv = calcularIGV(a);
-                const totalConIGV = calcularTotalConIGV(a);
-                const tieneRegistro = diasServicio.some(d=>d.asignacion_id===a.id);
                 return (
                   <tr key={a.id} style={{ borderTop:`1px solid ${B.border}`, background:i%2===0?B.white:"#F8FAFC" }}>
                     <td style={{ padding:"10px 12px", fontSize:12, fontWeight:700, color:B.navy }}>{unidad?.placa||"—"}</td>
@@ -1947,16 +1930,6 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
                     <td style={{ padding:"10px 12px", fontSize:11, color:B.textSec }}>{servicio?.codigo||"—"}</td>
                     <td style={{ padding:"10px 12px", fontSize:11, color:B.textMut }}>{fmt.fecha(a.fecha_inicio)}</td>
                     <td style={{ padding:"10px 12px", fontSize:11, color:B.textMut }}>{a.fecha_fin?fmt.fecha(a.fecha_fin):"En curso"}</td>
-                    <td style={{ padding:"10px 12px" }}>
-                      <span style={{ fontSize:12, fontWeight:700, color:B.navy }}>{dias}</span>
-                      <span style={{ fontSize:9, color: tieneRegistro?B.green:B.textMut, marginLeft:4 }}>
-                        {tieneRegistro?"✓ real":"est."}
-                      </span>
-                    </td>
-                    <td style={{ padding:"10px 12px", fontSize:12, color:B.textSec }}>{fmt.sol(a.tarifa_dia)}</td>
-                    <td style={{ padding:"10px 12px", fontSize:12, color:B.textSec }}>{fmt.sol(monto)}</td>
-                    <td style={{ padding:"10px 12px", fontSize:12, color:B.textMut }}>{fmt.sol(igv)}</td>
-                    <td style={{ padding:"10px 12px", fontSize:13, fontWeight:800, color:B.gold }}>{fmt.sol(totalConIGV)}</td>
                     <td style={{ padding:"10px 12px" }}>
                       <span style={{ fontSize:10, padding:"3px 8px", borderRadius:10, fontWeight:700,
                         background: a.liquidado?"#ECFDF5":a.estado==="activa"?"#FFFBEB":"#F3F4F6",
@@ -1966,20 +1939,16 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
                     </td>
                     <td style={{ padding:"10px 12px" }}>
                       <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                        <button onClick={()=>setModalCalendario(a)} style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer" }}>📅 Calendario</button>
                         <button onClick={()=>{setEditandoAsignacion(a); setModalAsignacion(true);}} style={{ fontSize:11, color:B.gold, background:"none", border:"none", cursor:"pointer" }}>✏️ Editar</button>
                         {a.estado==="activa" && (
                           <button onClick={()=>finalizarAsignacion(a)} style={{ fontSize:11, color:B.red, background:"none", border:"none", cursor:"pointer" }}>Finalizar</button>
-                        )}
-                        {!a.liquidado && a.estado==="finalizada" && (
-                          <button onClick={()=>marcarLiquidado(a)} style={{ fontSize:11, color:B.green, background:"none", border:"none", cursor:"pointer" }}>Liquidar</button>
                         )}
                       </div>
                     </td>
                   </tr>
                 );
               })}
-              {asignaciones.length===0 && <tr><td colSpan={12} style={{ padding:32, textAlign:"center", color:B.textMut, fontSize:13 }}>No hay asignaciones registradas</td></tr>}
+              {asignaciones.length===0 && <tr><td colSpan={7} style={{ padding:32, textAlign:"center", color:B.textMut, fontSize:13 }}>No hay asignaciones registradas</td></tr>}
             </tbody>
           </table>
         </div>
@@ -1995,6 +1964,102 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
           onClose={()=>{setModalAsignacion(false); setEditandoAsignacion(null);}}
           onSaved={()=>{setModalAsignacion(false); setEditandoAsignacion(null); onRefresh();}} toast={toast}/>
       )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// MÓDULO: LIQUIDACIÓN TRANSPORTE (Finanzas — cálculo de IGV/total
+// y calendario de días de servicio para clientes de Transporte y Carga)
+// ══════════════════════════════════════════════════════════════
+function LiquidacionTransporte({ unidades, asignaciones, empresas, tiposServicio, diasServicio, onRefresh, toast }) {
+  const [modalCalendario, setModalCalendario] = useState(null);
+
+  const marcarLiquidado = async (a) => {
+    const { error } = await sb.from("asignaciones_unidad").update({ liquidado:true }).eq("id", a.id);
+    if (error) { toast("Error: "+error.message, "error"); return; }
+    toast("Marcado como liquidado ✓");
+    onRefresh();
+  };
+
+  const totalPendiente = asignaciones
+    .filter(a=>!a.liquidado)
+    .reduce((sum,a)=>sum+calcularTotalConIGVAsignacion(a, diasServicio), 0);
+
+  return (
+    <div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14, marginBottom:20 }}>
+        {[
+          { label:"Asignaciones activas", value: asignaciones.filter(a=>a.estado==="activa").length, icon:"🚛", color:B.gold },
+          { label:"Pendientes de liquidar", value: asignaciones.filter(a=>!a.liquidado).length, icon:"⏳", color:B.red },
+          { label:"Total pendiente (con IGV)", value: fmt.sol(totalPendiente), icon:"💰", color:B.green },
+        ].map((k,i)=>(
+          <div key={i} style={{ background:B.white, border:`1px solid ${B.border}`,
+            borderRadius:12, padding:18, borderTop:`3px solid ${k.color}`, boxShadow:"0 2px 8px #0D1E3D0A" }}>
+            <div style={{ fontSize:20, marginBottom:6 }}>{k.icon}</div>
+            <div style={{ fontSize:20, fontWeight:800, color:B.textPri }}>{k.value}</div>
+            <div style={{ fontSize:10, color:B.textMut, textTransform:"uppercase" }}>{k.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden", boxShadow:"0 2px 8px #0D1E3D0A" }}>
+        <table style={{ width:"100%", borderCollapse:"collapse" }}>
+          <thead><tr style={{ background:B.bg }}>
+            {["Unidad","Cliente","Servicio","Desde","Hasta","Días","Tarifa/día","Subtotal","IGV (18%)","Total a facturar","Estado","Acciones"].map(h=>(
+              <th key={h} style={{ padding:"10px 12px", textAlign:"left", fontSize:10, color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
+            ))}
+          </tr></thead>
+          <tbody>
+            {asignaciones.map((a,i)=>{
+              const unidad = unidades.find(u=>u.id===a.unidad_id);
+              const empresa = empresas.find(e=>e.id===a.empresa_id);
+              const servicio = tiposServicio.find(t=>t.id===a.tipo_servicio_id);
+              const dias = calcularDiasAsignacion(a, diasServicio);
+              const monto = calcularMontoAsignacion(a, diasServicio);
+              const igv = calcularIGVAsignacion(a, diasServicio);
+              const totalConIGV = calcularTotalConIGVAsignacion(a, diasServicio);
+              const tieneRegistro = diasServicio.some(d=>d.asignacion_id===a.id);
+              return (
+                <tr key={a.id} style={{ borderTop:`1px solid ${B.border}`, background:i%2===0?B.white:"#F8FAFC" }}>
+                  <td style={{ padding:"10px 12px", fontSize:12, fontWeight:700, color:B.navy }}>{unidad?.placa||"—"}</td>
+                  <td style={{ padding:"10px 12px", fontSize:12, color:B.textPri }}>{empresa?.nombre||"—"}</td>
+                  <td style={{ padding:"10px 12px", fontSize:11, color:B.textSec }}>{servicio?.codigo||"—"}</td>
+                  <td style={{ padding:"10px 12px", fontSize:11, color:B.textMut }}>{fmt.fecha(a.fecha_inicio)}</td>
+                  <td style={{ padding:"10px 12px", fontSize:11, color:B.textMut }}>{a.fecha_fin?fmt.fecha(a.fecha_fin):"En curso"}</td>
+                  <td style={{ padding:"10px 12px" }}>
+                    <span style={{ fontSize:12, fontWeight:700, color:B.navy }}>{dias}</span>
+                    <span style={{ fontSize:9, color: tieneRegistro?B.green:B.textMut, marginLeft:4 }}>
+                      {tieneRegistro?"✓ real":"est."}
+                    </span>
+                  </td>
+                  <td style={{ padding:"10px 12px", fontSize:12, color:B.textSec }}>{fmt.sol(a.tarifa_dia)}</td>
+                  <td style={{ padding:"10px 12px", fontSize:12, color:B.textSec }}>{fmt.sol(monto)}</td>
+                  <td style={{ padding:"10px 12px", fontSize:12, color:B.textMut }}>{fmt.sol(igv)}</td>
+                  <td style={{ padding:"10px 12px", fontSize:13, fontWeight:800, color:B.gold }}>{fmt.sol(totalConIGV)}</td>
+                  <td style={{ padding:"10px 12px" }}>
+                    <span style={{ fontSize:10, padding:"3px 8px", borderRadius:10, fontWeight:700,
+                      background: a.liquidado?"#ECFDF5":a.estado==="activa"?"#FFFBEB":"#F3F4F6",
+                      color: a.liquidado?B.green:a.estado==="activa"?B.goldDk:B.textMut }}>
+                      {a.liquidado?"Liquidado":a.estado==="activa"?"Activa":"Finalizada"}
+                    </span>
+                  </td>
+                  <td style={{ padding:"10px 12px" }}>
+                    <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                      <button onClick={()=>setModalCalendario(a)} style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer" }}>📅 Calendario</button>
+                      {!a.liquidado && a.estado==="finalizada" && (
+                        <button onClick={()=>marcarLiquidado(a)} style={{ fontSize:11, color:B.green, background:"none", border:"none", cursor:"pointer" }}>Liquidar</button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+            {asignaciones.length===0 && <tr><td colSpan={12} style={{ padding:32, textAlign:"center", color:B.textMut, fontSize:13 }}>No hay asignaciones registradas</td></tr>}
+          </tbody>
+        </table>
+      </div>
+
       {modalCalendario && (
         <ModalCalendarioServicio asignacion={modalCalendario}
           diasServicio={diasServicio.filter(d=>d.asignacion_id===modalCalendario.id)}
@@ -3202,14 +3267,7 @@ function ModalTipoServicio({ lineaNegocioId, lineasNegocio, onClose, onSaved, to
   );
 }
 
-function Configuracion({ lineasNegocio, tiposServicio, onRefresh, toast }) {
-  const [modalLinea, setModalLinea] = useState(false);
-  const [modalTipo, setModalTipo] = useState(null); // guarda la linea_negocio_id, o "nueva-sin-linea"
-  const TARIFAS = {
-    urbano:      { XS:10, S:13, M:16 },
-    semi_urbano: { XS:12, S:15, M:18 },
-    periferico:  { XS:15, S:18, M:22 },
-  };
+function Configuracion({ onRefresh, toast }) {
   const ZONAS = {
     urbano: ["Lima","Barranco","Breña","Chorrillos","El Agustino","Jesús María","La Victoria","Lince","Magdalena del Mar","Miraflores","Pueblo Libre","Rímac","San Borja","San Isidro","San Luis","San Miguel","Santiago de Surco","Surquillo"],
     semi_urbano: ["Callao","Bellavista","Carmen de la Legua Reynoso","La Perla","La Punta","Ate","Independencia","La Molina","Los Olivos","San Juan de Lurigancho","San Juan de Miraflores","San Martín de Porres","Santa Anita","Villa El Salvador","Villa María del Triunfo"],
@@ -3243,11 +3301,86 @@ function Configuracion({ lineasNegocio, tiposServicio, onRefresh, toast }) {
         </div>
       </div>
 
-      {/* Tarifario */}
+      {/* Zonas */}
+      <div style={{ background:B.white, border:`1px solid ${B.border}`,
+        borderRadius:12, padding:20, boxShadow:"0 2px 8px #0D1E3D0A", gridColumn:"span 2" }}>
+        <div style={{ fontSize:14, fontWeight:800, color:B.navy, marginBottom:16,
+          paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>📍 Zonas de cobertura</div>
+        {Object.entries(ZONAS).map(([ambito,distritos])=>(
+          <div key={ambito} style={{ marginBottom:16 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:B.navy, textTransform:"capitalize",
+              marginBottom:6 }}>{ambito.replace("_"," ")}</div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
+              {distritos.map(d=>(
+                <span key={d} style={{ fontSize:10, background:`${B.navy}10`,
+                  color:B.navy, padding:"2px 8px", borderRadius:10,
+                  border:`1px solid ${B.navy}22` }}>{d}</span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ background:B.white, border:`1px solid ${B.border}`,
+        borderRadius:12, padding:20, boxShadow:"0 2px 8px #0D1E3D0A", gridColumn:"span 2" }}>
+        <div style={{ fontSize:14, fontWeight:800, color:B.navy, marginBottom:16,
+          paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>🔌 Integraciones API</div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
+          {[
+            { name:"VTEX", desc:"Ecommerce enterprise", color:"#F71963", ready:false },
+            { name:"Shopify", desc:"Ecommerce SMB", color:"#96BF48", ready:false },
+            { name:"MercadoLibre", desc:"Marketplace", color:"#FFE600", ready:false },
+            { name:"WhatsApp", desc:"Notificaciones", color:"#25D366", ready:false },
+            { name:"WooCommerce", desc:"WordPress shops", color:"#7F54B3", ready:false },
+            { name:"SUNAT", desc:"Facturación electrónica", color:"#E32027", ready:false },
+            { name:"Google Maps", desc:"GPS y rutas", color:"#4285F4", ready:false },
+            { name:"Webhook", desc:"Eventos en tiempo real", color:B.navy, ready:false },
+          ].map(it=>(
+            <div key={it.name} style={{ border:`1px solid ${B.border}`, borderRadius:10,
+              padding:14, display:"flex", alignItems:"center", gap:10 }}>
+              <div style={{ width:36, height:36, borderRadius:8, background:`${it.color}22`,
+                display:"flex", alignItems:"center", justifyContent:"center",
+                fontSize:11, fontWeight:800, color:it.color }}>
+                {it.name.slice(0,2)}
+              </div>
+              <div>
+                <div style={{ fontSize:12, fontWeight:700, color:B.navy }}>{it.name}</div>
+                <div style={{ fontSize:10, color:B.textMut }}>{it.desc}</div>
+              </div>
+              <span style={{ marginLeft:"auto", fontSize:9, padding:"2px 6px", borderRadius:6,
+                background:"#FFF7ED", color:B.orange, fontWeight:700, border:`1px solid ${B.orange}44` }}>
+                Pronto
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// MÓDULO: CATÁLOGO (Comercial) — tarifario Same Day genérico,
+// líneas de negocio + tipos de servicio, y tarifarios negociados
+// por cliente. Todo el tema de precios en un solo lugar.
+// ══════════════════════════════════════════════════════════════
+function Catalogo({ empresas, lineasNegocio, tiposServicio, tarifariosCliente, onRefresh, toast }) {
+  const [modalLinea, setModalLinea] = useState(false);
+  const [modalTipo, setModalTipo] = useState(null);
+  const [modalTarifario, setModalTarifario] = useState(null); // guarda la empresa seleccionada
+  const TARIFAS = {
+    urbano:      { XS:10, S:13, M:16 },
+    semi_urbano: { XS:12, S:15, M:18 },
+    periferico:  { XS:15, S:18, M:22 },
+  };
+
+  return (
+    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+      {/* Tarifario genérico Same Day */}
       <div style={{ background:B.white, border:`1px solid ${B.border}`,
         borderRadius:12, padding:20, boxShadow:"0 2px 8px #0D1E3D0A" }}>
         <div style={{ fontSize:14, fontWeight:800, color:B.navy, marginBottom:16,
-          paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>💰 Tarifario Same Day</div>
+          paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>💰 Tarifario Same Day (genérico)</div>
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
           <thead>
             <tr style={{ background:B.bg }}>
@@ -3272,28 +3405,37 @@ function Configuracion({ lineasNegocio, tiposServicio, onRefresh, toast }) {
           </tbody>
         </table>
         <div style={{ fontSize:11, color:B.textMut, marginTop:10 }}>
-          A partir de 7 kg se suma <strong style={{ color:B.gold }}>S/ 1.00 adicional por cada kg extra</strong> sobre la tarifa M.
+          A partir de 7 kg se suma <strong style={{ color:B.gold }}>S/ 1.00 adicional por cada kg extra</strong> sobre la tarifa M. Este es el tarifario por defecto — cada cliente puede tener el suyo propio negociado (ver más abajo).
         </div>
       </div>
 
-      {/* Zonas */}
+      {/* Tarifarios personalizados por cliente */}
       <div style={{ background:B.white, border:`1px solid ${B.border}`,
         borderRadius:12, padding:20, boxShadow:"0 2px 8px #0D1E3D0A" }}>
         <div style={{ fontSize:14, fontWeight:800, color:B.navy, marginBottom:16,
-          paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>📍 Zonas de cobertura</div>
-        {Object.entries(ZONAS).map(([ambito,distritos])=>(
-          <div key={ambito} style={{ marginBottom:16 }}>
-            <div style={{ fontSize:11, fontWeight:700, color:B.navy, textTransform:"capitalize",
-              marginBottom:6 }}>{ambito.replace("_"," ")}</div>
-            <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
-              {distritos.map(d=>(
-                <span key={d} style={{ fontSize:10, background:`${B.navy}10`,
-                  color:B.navy, padding:"2px 8px", borderRadius:10,
-                  border:`1px solid ${B.navy}22` }}>{d}</span>
-              ))}
-            </div>
-          </div>
-        ))}
+          paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>🤝 Tarifarios negociados por cliente</div>
+        <div style={{ display:"flex", flexDirection:"column", gap:8, maxHeight:280, overflowY:"auto" }}>
+          {empresas.map(e=>{
+            const tieneCustom = tarifariosCliente.some(t=>t.empresa_id===e.id);
+            return (
+              <div key={e.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
+                padding:"8px 12px", background:B.bg, borderRadius:8 }}>
+                <div style={{ fontSize:12, color:B.textPri }}>
+                  {e.codigo_interno && <span style={{ color:B.gold, fontWeight:700, marginRight:6 }}>{e.codigo_interno}</span>}
+                  {e.nombre}
+                  {tieneCustom && <span style={{ marginLeft:8, fontSize:10, color:B.green, fontWeight:700 }}>✓ personalizado</span>}
+                </div>
+                <button onClick={()=>setModalTarifario(e)}
+                  style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer", fontWeight:600 }}>
+                  {tieneCustom ? "Editar" : "Configurar"}
+                </button>
+              </div>
+            );
+          })}
+          {empresas.length===0 && (
+            <div style={{ padding:20, textAlign:"center", color:B.textMut, fontSize:12 }}>Sin clientes registrados</div>
+          )}
+        </div>
       </div>
 
       {/* Catálogo de servicios: líneas de negocio + tipos de servicio */}
@@ -3301,7 +3443,7 @@ function Configuracion({ lineasNegocio, tiposServicio, onRefresh, toast }) {
         borderRadius:12, padding:20, boxShadow:"0 2px 8px #0D1E3D0A", gridColumn:"span 2" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
           marginBottom:16, paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>
-          <div style={{ fontSize:14, fontWeight:800, color:B.navy }}>🗂️ Catálogo de Servicios</div>
+          <div style={{ fontSize:14, fontWeight:800, color:B.navy }}>🗂️ Líneas de negocio y tipos de servicio</div>
           <BtnPri onClick={()=>setModalLinea(true)} style={{ fontSize:12, padding:"7px 14px" }}>+ Nueva línea de negocio</BtnPri>
         </div>
         <div style={{ fontSize:12, color:B.textMut, marginBottom:16 }}>
@@ -3354,41 +3496,10 @@ function Configuracion({ lineasNegocio, tiposServicio, onRefresh, toast }) {
           onClose={()=>setModalTipo(null)}
           onSaved={()=>{setModalTipo(null); onRefresh();}} toast={toast}/>
       )}
-
-      <div style={{ background:B.white, border:`1px solid ${B.border}`,
-        borderRadius:12, padding:20, boxShadow:"0 2px 8px #0D1E3D0A", gridColumn:"span 2" }}>
-        <div style={{ fontSize:14, fontWeight:800, color:B.navy, marginBottom:16,
-          paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>🔌 Integraciones API</div>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
-          {[
-            { name:"VTEX", desc:"Ecommerce enterprise", color:"#F71963", ready:false },
-            { name:"Shopify", desc:"Ecommerce SMB", color:"#96BF48", ready:false },
-            { name:"MercadoLibre", desc:"Marketplace", color:"#FFE600", ready:false },
-            { name:"WhatsApp", desc:"Notificaciones", color:"#25D366", ready:false },
-            { name:"WooCommerce", desc:"WordPress shops", color:"#7F54B3", ready:false },
-            { name:"SUNAT", desc:"Facturación electrónica", color:"#E32027", ready:false },
-            { name:"Google Maps", desc:"GPS y rutas", color:"#4285F4", ready:false },
-            { name:"Webhook", desc:"Eventos en tiempo real", color:B.navy, ready:false },
-          ].map(it=>(
-            <div key={it.name} style={{ border:`1px solid ${B.border}`, borderRadius:10,
-              padding:14, display:"flex", alignItems:"center", gap:10 }}>
-              <div style={{ width:36, height:36, borderRadius:8, background:`${it.color}22`,
-                display:"flex", alignItems:"center", justifyContent:"center",
-                fontSize:11, fontWeight:800, color:it.color }}>
-                {it.name.slice(0,2)}
-              </div>
-              <div>
-                <div style={{ fontSize:12, fontWeight:700, color:B.navy }}>{it.name}</div>
-                <div style={{ fontSize:10, color:B.textMut }}>{it.desc}</div>
-              </div>
-              <span style={{ marginLeft:"auto", fontSize:9, padding:"2px 6px", borderRadius:6,
-                background:"#FFF7ED", color:B.orange, fontWeight:700, border:`1px solid ${B.orange}44` }}>
-                Pronto
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
+      {modalTarifario && (
+        <ModalTarifarioCliente empresa={modalTarifario} tarifariosCliente={tarifariosCliente}
+          onClose={()=>setModalTarifario(null)} onSaved={()=>{onRefresh();}} toast={toast}/>
+      )}
     </div>
   );
 }
@@ -3535,13 +3646,14 @@ export default function BoazERP() {
     { id:"pedidos",      icon:"📋", label:"Pedidos",
       badge: pedidos.filter(p=>p.estado==="sin_asignar").length || null },
     { id:"repartidores", icon:"🛵", label:"Repartidores" },
+    { id:"unidades",     icon:"🚛", label:"Unidades" },
     { section:"COMERCIAL" },
     { id:"clientes",     icon:"🏢", label:"Clientes" },
-    { section:"TRANSPORTE" },
-    { id:"unidades",     icon:"🚛", label:"Unidades" },
+    { id:"catalogo",     icon:"🗂️", label:"Catálogo" },
     { section:"FINANZAS" },
-    { id:"liquidaciones",icon:"💰", label:"Liquidaciones",
+    { id:"liquidaciones",icon:"💰", label:"Liq. Repartidores",
       badge: liquidaciones.filter(l=>l.estado==="pendiente").length || null },
+    { id:"liquidacion-transporte", icon:"📅", label:"Liq. Transporte" },
     { id:"facturacion",  icon:"🧾", label:"Facturación" },
     { section:"ANÁLISIS" },
     { id:"reportes",     icon:"📊", label:"Reportes" },
@@ -3698,12 +3810,14 @@ if (verificando) {
               {seccion==="dashboard"     && <Dashboard pedidos={pedidos} repartidores={repartidores} liquidaciones={liquidaciones}/>}
               {seccion==="pedidos"       && <Pedidos pedidos={pedidos} repartidores={repartidores} empresas={empresas} tarifariosCliente={tarifariosCliente} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="repartidores"  && <Repartidores repartidores={repartidores} pedidos={pedidos} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccion==="unidades"      && <Unidades unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} repartidores={repartidores} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="clientes"      && <Clientes empresas={empresas} pedidos={pedidos} lineasNegocio={lineasNegocio} tarifariosCliente={tarifariosCliente} onRefresh={cargarSilencioso} toast={showToast}/>}
-              {seccion==="unidades"      && <Unidades unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} repartidores={repartidores} diasServicio={diasServicio} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccion==="catalogo"      && <Catalogo empresas={empresas} lineasNegocio={lineasNegocio} tiposServicio={tiposServicio} tarifariosCliente={tarifariosCliente} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="liquidaciones" && <Liquidaciones repartidores={repartidores} pedidos={pedidos} liquidaciones={liquidaciones} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccion==="liquidacion-transporte" && <LiquidacionTransporte unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} diasServicio={diasServicio} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="facturacion"   && <Facturacion empresas={empresas} pedidos={pedidos} tiposServicio={tiposServicio} toast={showToast}/>}
               {seccion==="reportes"      && <Reportes pedidos={pedidos} repartidores={repartidores} empresas={empresas} toast={showToast}/>}
-              {seccion==="configuracion" && <Configuracion lineasNegocio={lineasNegocio} tiposServicio={tiposServicio} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccion==="configuracion" && <Configuracion onRefresh={cargarSilencioso} toast={showToast}/>}
             </>
           )}
         </div>
