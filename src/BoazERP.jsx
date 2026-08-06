@@ -480,15 +480,18 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, onRefresh
           value={busqueda} onChange={e=>setBusqueda(e.target.value)}
           style={{ ...inp, width:320 }} />
         <div style={{ display:"flex", gap:6 }}>
-          {["todos",...Object.keys(ESTADOS_PEDIDO)].map(e=>(
-            <button key={e} onClick={()=>setFiltroEstado(e)}
-              style={{ padding:"7px 12px", borderRadius:20, fontSize:11, fontWeight:600,
-                cursor:"pointer", border:`1px solid ${filtroEstado===e?B.gold:B.border}`,
-                background: filtroEstado===e?B.gold:"transparent",
-                color: filtroEstado===e?B.navy:B.textSec }}>
-              {e==="todos"?"Todos":ESTADOS_PEDIDO[e].label}
-            </button>
-          ))}
+          {["todos",...Object.keys(ESTADOS_PEDIDO)].map(e=>{
+            const cantidad = e==="todos" ? pedidos.length : pedidos.filter(p=>p.estado===e).length;
+            return (
+              <button key={e} onClick={()=>setFiltroEstado(e)}
+                style={{ padding:"7px 12px", borderRadius:20, fontSize:11, fontWeight:600,
+                  cursor:"pointer", border:`1px solid ${filtroEstado===e?B.gold:B.border}`,
+                  background: filtroEstado===e?B.gold:"transparent",
+                  color: filtroEstado===e?B.navy:B.textSec }}>
+                {e==="todos"?"Todos":ESTADOS_PEDIDO[e].label} ({cantidad})
+              </button>
+            );
+          })}
         </div>
         <span style={{ marginLeft:"auto", fontSize:12, color:B.textMut }}>{filtrados.length} pedidos</span>
         {pedidos.filter(p=>!p.dest_lat).length > 0 && (
@@ -506,7 +509,7 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, onRefresh
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
           <thead>
             <tr style={{ background:B.bg }}>
-              {["Tracking Boaz","Destinatario","Dirección","Peso","Tarifa","Ámbito","Repartidor","Estado","Fecha","Acciones"].map(h=>(
+              {["Tracking Boaz","Destinatario","Dirección","Peso","Servicio","Ámbito","Repartidor","Estado","Fecha","Acciones"].map(h=>(
                 <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:10,
                   color:B.textMut, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.7px" }}>{h}</th>
               ))}
@@ -530,7 +533,15 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, onRefresh
                     <div style={{ fontSize:10, color:B.textMut }}>{p.dest_distrito}</div>
                   </td>
                   <td style={{ padding:"11px 14px", fontSize:12, color:B.textSec }}>{p.peso_kg?p.peso_kg+" kg":"—"}</td>
-                  <td style={{ padding:"11px 14px", fontSize:12, fontWeight:700, color:B.navy }}>{fmt.sol(p.tarifa_s)}</td>
+                  <td style={{ padding:"11px 14px" }}>
+                    {p.tipo_servicio ? (
+                      <span style={{ fontSize:10, fontWeight:700, padding:"3px 8px", borderRadius:8,
+                        background: p.tipo_servicio==="same_day"?"#F5F3FF":"#EFF6FF",
+                        color: p.tipo_servicio==="same_day"?"#7C3AED":"#0369A1" }}>
+                        {p.tipo_servicio==="same_day"?"Same Day":"Next Day"}
+                      </span>
+                    ) : <span style={{ fontSize:11, color:B.textMut }}>—</span>}
+                  </td>
                   <td style={{ padding:"11px 14px", fontSize:11, color:B.textSec, textTransform:"capitalize" }}>{p.ambito?.replace("_"," ")||"—"}</td>
                   <td style={{ padding:"11px 14px" }} onClick={e=>e.stopPropagation()}>
                     {asignando===p.id ? (
