@@ -2476,7 +2476,7 @@ function Liquidaciones({ repartidores, pedidos, toast, onRefresh }) {
 // ══════════════════════════════════════════════════════════════
 // MÓDULO 6: FACTURACIÓN
 // ══════════════════════════════════════════════════════════════
-function Facturacion({ empresas, pedidos, tiposServicio, toast }) {
+function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }) {
   const [facturas, setFacturas] = useState([]);
   const [modal, setModal] = useState(false);
   const [modalPago, setModalPago] = useState(null); // factura seleccionada para marcar pagada
@@ -2532,7 +2532,7 @@ function Facturacion({ empresas, pedidos, tiposServicio, toast }) {
       unidad_medida:"ZZ",
     }]);
     if (error) { toast("Error: "+error.message,"error"); return; }
-    toast("Factura emitida ✓");
+    toast("Factura registrada ✓");
     setModal(false);
     cargarFacturas();
   };
@@ -2566,7 +2566,7 @@ function Facturacion({ empresas, pedidos, tiposServicio, toast }) {
             </button>
           ))}
         </div>
-        <BtnPri onClick={()=>setModal(true)}>+ Nueva factura</BtnPri>
+        <BtnPri onClick={()=>setModal(true)}>+ Registrar factura</BtnPri>
       </div>
 
       <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12,
@@ -2625,7 +2625,7 @@ function Facturacion({ empresas, pedidos, tiposServicio, toast }) {
           <div style={{ background:B.white, borderRadius:16, padding:28, width:560,
             boxShadow:"0 20px 60px #0003" }}>
             <div style={{ display:"flex", justifyContent:"space-between", marginBottom:20 }}>
-              <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>Emitir factura</div>
+              <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>Registrar factura</div>
               <button onClick={()=>setModal(false)} style={{ background:"none", border:"none",
                 fontSize:18, color:B.textSec, cursor:"pointer" }}>✕</button>
             </div>
@@ -2654,8 +2654,10 @@ function Facturacion({ empresas, pedidos, tiposServicio, toast }) {
               </div>
               <div><label style={lbl}>Valor unitario (S/ sin IGV)</label>
                 <input type="number" style={inp} value={f.valor_unit_s} onChange={e=>setF(p=>({...p,valor_unit_s:e.target.value}))}/></div>
-              <div><label style={lbl}>Fecha emisión</label>
-                <input type="date" style={inp} value={f.fecha_emision} onChange={e=>setF(p=>({...p,fecha_emision:e.target.value}))}/></div>
+              <div><label style={lbl}>Fecha emisión {usuario?.rol!=="admin" && <span style={{ color:B.textMut, fontWeight:400 }}>(automática — solo admin puede editarla)</span>}</label>
+                <input type="date" style={{ ...inp, ...(usuario?.rol!=="admin" ? { background:B.bg, color:B.textMut, cursor:"not-allowed" } : {}) }}
+                  value={f.fecha_emision} disabled={usuario?.rol!=="admin"}
+                  onChange={e=>setF(p=>({...p,fecha_emision:e.target.value}))}/></div>
             </div>
             {f.valor_unit_s && (
               <div style={{ background:B.bg, borderRadius:10, padding:14, marginTop:14,
@@ -2670,7 +2672,7 @@ function Facturacion({ empresas, pedidos, tiposServicio, toast }) {
             )}
             <div style={{ display:"flex", gap:10, marginTop:20, justifyContent:"flex-end" }}>
               <BtnSec onClick={()=>setModal(false)}>Cancelar</BtnSec>
-              <BtnPri onClick={guardar}>Emitir factura</BtnPri>
+              <BtnPri onClick={guardar}>Registrar factura</BtnPri>
             </div>
           </div>
         </div>
@@ -3887,7 +3889,7 @@ if (verificando) {
               {seccion==="catalogo"      && <Catalogo empresas={empresas} lineasNegocio={lineasNegocio} tiposServicio={tiposServicio} tarifariosCliente={tarifariosCliente} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="liquidaciones" && <Liquidaciones repartidores={repartidores} pedidos={pedidos} liquidaciones={liquidaciones} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="liquidacion-transporte" && <LiquidacionTransporte unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} diasServicio={diasServicio} onRefresh={cargarSilencioso} toast={showToast}/>}
-              {seccion==="facturacion"   && <Facturacion empresas={empresas} pedidos={pedidos} tiposServicio={tiposServicio} toast={showToast}/>}
+              {seccion==="facturacion"   && <Facturacion empresas={empresas} pedidos={pedidos} tiposServicio={tiposServicio} usuario={usuario} toast={showToast}/>}
               {seccion==="reportes"      && <Reportes pedidos={pedidos} repartidores={repartidores} empresas={empresas} toast={showToast}/>}
               {seccion==="configuracion" && <Configuracion onRefresh={cargarSilencioso} toast={showToast}/>}
             </>
