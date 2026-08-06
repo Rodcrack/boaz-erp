@@ -68,9 +68,16 @@ const getTarifaSameDay = (ambito, kg, tarifaPersonalizada) => {
   if (peso <= 7) return t.M;
   return t.M + Math.ceil(peso - 7) * extraKg; // cargo por cada kg por encima de 7kg
 };
-const obtenerTarifaEmpresa = (empresaId, ambito, tarifariosCliente) => {
+// Busca la tarifa personalizada del cliente para ese ámbito. Prioriza una
+// tarifa específica para el tipo de servicio (Same Day / Next Day); si no
+// existe, usa la que aplica "a ambos" (tipo_servicio en null).
+const obtenerTarifaEmpresa = (empresaId, ambito, tipoServicio, tarifariosCliente) => {
   if (!empresaId) return null;
-  return tarifariosCliente.find(t=>t.empresa_id===empresaId && t.ambito===ambito && t.activo) || null;
+  const especifica = tarifariosCliente.find(t=>
+    t.empresa_id===empresaId && t.ambito===ambito && t.activo && t.tipo_servicio===tipoServicio);
+  if (especifica) return especifica;
+  return tarifariosCliente.find(t=>
+    t.empresa_id===empresaId && t.ambito===ambito && t.activo && !t.tipo_servicio) || null;
 };
 
 // ── GEOCODIFICACIÓN GRATUITA (OpenStreetMap / Nominatim) ───────
@@ -459,10 +466,10 @@ function ModalNuevoPedido({ repartidores, empresas, tarifariosCliente, onClose, 
   const [f, setF] = useState({
     dest_nombre:"", dest_telefono:"", dest_direccion:"", dest_distrito:"",
     dest_referencia:"", peso_kg:"", ambito:"urbano", empresa_id:"",
-    repartidor_id:"", cobro_destino:false, monto_cobrar:"",
+    repartidor_id:"", cobro_destino:false, monto_cobrar:"", tipo_servicio:"same_day",
     descripcion:"", fecha_programada: new Date().toISOString().split("T")[0],
   });
-  const tarifaPersonalizada = obtenerTarifaEmpresa(f.empresa_id, f.ambito, tarifariosCliente);
+  const tarifaPersonalizada = obtenerTarifaEmpresa(f.empresa_id, f.ambito, f.tipo_servicio, tarifariosCliente);
   const tarifa = getTarifa(f.ambito, parseFloat(f.peso_kg), tarifaPersonalizada);
   const [guardando, setGuardando] = useState(false);
 
@@ -551,8 +558,16 @@ function ModalNuevoPedido({ repartidores, empresas, tarifariosCliente, onClose, 
           borderBottom:`2px solid ${B.gold}` }}>Datos del paquete</div>
         <Row>
           <Field label="Peso (kg)"><input type="number" style={inp} value={f.peso_kg} onChange={e=>setF(p=>({...p,peso_kg:e.target.value}))}/></Field>
-          <Field label="Descripción del contenido"><input style={inp} value={f.descripcion} onChange={e=>setF(p=>({...p,descripcion:e.target.value}))}/></Field>
+          <Field label="Tipo de servicio">
+            <select style={inp} value={f.tipo_servicio} onChange={e=>setF(p=>({...p,tipo_servicio:e.target.value}))}>
+              <option value="same_day">Same Day</option>
+              <option value="next_day">Next Day</option>
+            </select>
+          </Field>
         </Row>
+        <div style={{ marginBottom:12 }}>
+          <Field label="Descripción del contenido"><input style={inp} value={f.descripcion} onChange={e=>setF(p=>({...p,descripcion:e.target.value}))}/></Field>
+        </div>
 
         <div style={{ fontSize:11, fontWeight:700, color:B.navy, textTransform:"uppercase",
           letterSpacing:"1px", marginBottom:10, marginTop:16, paddingBottom:6,
@@ -1028,7 +1043,7 @@ function ModalCargaMasiva({ repartidores, empresas, tarifariosCliente, onClose, 
           const { data: codigo, error: errCodigo } = await sb.rpc("generar_codigo_boaz");
           if (errCodigo || !codigo) { generados.push({ ...fila, ok:false, error:"no se pudo generar código: "+(errCodigo?.message||"sin detalle") }); continue; }
           const coords = await geocodificarDireccion(fila.dest_direccion, fila.dest_distrito);
-          const tarifaPersonalizada = obtenerTarifaEmpresa(empresaId, fila.ambito, tarifariosCliente);
+          const tarifaPersonalizada = obtenerTarifaEmpresa(empresaId, fila.ambito, fila.tipo_servicio, tarifariosCliente);
           const tarifa = getTarifaSameDay(fila.ambito, fila.peso_kg, tarifaPersonalizada);
           const { error: errInsert } = await sb.from("pedidos").insert({
             omd: codigo,
@@ -1726,29 +1741,47 @@ function ModalTarifarioCliente({ empresa, tarifariosCliente, onClose, onSaved, t
     { id:"semi_urbano", label:"Semi Urbano" },
     { id:"periferico", label:"Periférico" },
   ];
-  const inicial = {};
-  AMBITOS.forEach(a=>{
-    const existente = tarifariosCliente.find(t=>t.empresa_id===empresa.id && t.ambito===a.id);
-    inicial[a.id] = existente
-      ? { xs:existente.tarifa_xs, s:existente.tarifa_s, m:existente.tarifa_m, extra:existente.extra_kg??1 }
-      : { xs:"", s:"", m:"", extra:1 };
-  });
-  const [valores, setValores] = useState(inicial);
+  const SERVICIOS = [
+    { id:"ambos", db:null, label:"Aplica a ambos" },
+    { id:"same_day", db:"same_day", label:"Same Day" },
+    { id:"next_day", db:"next_day", label:"Next Day" },
+  ];
+
+  const construirInicial = () => {
+    const base = {};
+    SERVICIOS.forEach(s=>{
+      base[s.id] = {};
+      AMBITOS.forEach(a=>{
+        const existente = tarifariosCliente.find(t=>t.empresa_id===empresa.id && t.ambito===a.id && t.tipo_servicio===s.db);
+        base[s.id][a.id] = existente
+          ? { xs:existente.tarifa_xs, s:existente.tarifa_s, m:existente.tarifa_m, extra:existente.extra_kg??1, activo:existente.activo }
+          : { xs:"", s:"", m:"", extra:1, activo:true };
+      });
+    });
+    return base;
+  };
+
+  const [servicioTab, setServicioTab] = useState("ambos");
+  const [valores, setValores] = useState(construirInicial());
   const [guardando, setGuardando] = useState(false);
 
-  const set = (ambito, campo, valor) => setValores(p=>({ ...p, [ambito]: { ...p[ambito], [campo]:valor } }));
+  const set = (ambito, campo, valor) => setValores(p=>({
+    ...p, [servicioTab]: { ...p[servicioTab], [ambito]: { ...p[servicioTab][ambito], [campo]:valor } },
+  }));
 
   const guardar = async () => {
     setGuardando(true);
-    for (const a of AMBITOS) {
-      const v = valores[a.id];
-      const completo = v.xs!=="" && v.s!=="" && v.m!=="";
-      if (!completo) continue; // ámbito sin personalizar, no se guarda (usa el genérico)
-      await sb.from("tarifarios_cliente").upsert({
-        empresa_id: empresa.id, ambito: a.id,
-        tarifa_xs: parseFloat(v.xs), tarifa_s: parseFloat(v.s), tarifa_m: parseFloat(v.m),
-        extra_kg: parseFloat(v.extra)||1, activo:true,
-      }, { onConflict: "empresa_id,ambito" });
+    for (const s of SERVICIOS) {
+      for (const a of AMBITOS) {
+        const v = valores[s.id][a.id];
+        const completo = v.xs!=="" && v.s!=="" && v.m!=="";
+        if (!completo) continue; // sin personalizar, no se guarda (usa el genérico)
+        await sb.from("tarifarios_cliente").upsert({
+          empresa_id: empresa.id, ambito: a.id, tipo_servicio: s.db,
+          tarifa_xs: parseFloat(v.xs), tarifa_s: parseFloat(v.s), tarifa_m: parseFloat(v.m),
+          extra_kg: parseFloat(v.extra)||1, activo: v.activo,
+        }, { onConflict: "empresa_id,ambito,tipo_servicio" });
+      }
     }
     setGuardando(false);
     toast("Tarifario guardado ✓");
@@ -1756,40 +1789,48 @@ function ModalTarifarioCliente({ empresa, tarifariosCliente, onClose, onSaved, t
     onClose();
   };
 
-  const quitarAmbito = async (ambitoId) => {
-    await sb.from("tarifarios_cliente").delete().eq("empresa_id", empresa.id).eq("ambito", ambitoId);
-    set(ambitoId, "xs", ""); set(ambitoId, "s", ""); set(ambitoId, "m", "");
-    toast(`Tarifario personalizado de ${ambitoId.replace("_"," ")} eliminado — vuelve a usar el genérico`);
-    onSaved();
-  };
-
   return (
     <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000,
       display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
-      <div style={{ background:B.white, borderRadius:16, padding:28, width:560,
+      <div style={{ background:B.white, borderRadius:16, padding:28, width:600,
         maxHeight:"85vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
         <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
-          <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>💰 Tarifario de {empresa.nombre}</div>
+          <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>💰 Tarifario por pedido — {empresa.nombre}</div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20,
             color:B.textSec, cursor:"pointer" }}>✕</button>
         </div>
-        <div style={{ fontSize:12, color:B.textMut, marginBottom:20 }}>
-          Deja un ámbito en blanco para que ese cliente siga usando el tarifario genérico. Completa los tres valores (XS/S/M) de un ámbito para activar su tarifa negociada ahí.
+        <div style={{ fontSize:12, color:B.textMut, marginBottom:16 }}>
+          Deja un ámbito en blanco para que ese cliente siga usando el tarifario genérico ahí. Si el cliente tiene tarifas distintas para Same Day y Next Day, configúralas en su propia pestaña — si no, usa "Aplica a ambos".
+        </div>
+
+        <div style={{ display:"flex", gap:6, marginBottom:16 }}>
+          {SERVICIOS.map(s=>(
+            <button key={s.id} onClick={()=>setServicioTab(s.id)}
+              style={{ flex:1, padding:"8px 10px", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer",
+                border: servicioTab===s.id ? `2px solid ${B.gold}` : `1px solid ${B.border}`,
+                background: servicioTab===s.id ? "#FFF7ED" : B.white,
+                color: servicioTab===s.id ? B.goldDk : B.textSec }}>
+              {s.label}
+            </button>
+          ))}
         </div>
 
         {AMBITOS.map(a=>{
-          const v = valores[a.id];
-          const activo = v.xs!=="" && v.s!=="" && v.m!=="";
+          const v = valores[servicioTab][a.id];
+          const completo = v.xs!=="" && v.s!=="" && v.m!=="";
           return (
             <div key={a.id} style={{ border:`1px solid ${B.border}`, borderRadius:10, padding:14, marginBottom:12,
-              background: activo ? "#FFF8EF" : B.bg }}>
+              background: completo && v.activo ? "#FFF8EF" : B.bg,
+              opacity: completo && !v.activo ? 0.6 : 1 }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
                 <div style={{ fontSize:13, fontWeight:700, color:B.navy }}>
-                  {a.label} {activo && <span style={{ color:B.green, fontSize:11 }}>· personalizado ✓</span>}
+                  {a.label} {completo && <span style={{ color: v.activo?B.green:B.textMut, fontSize:11 }}>· {v.activo?"activo":"inactivo"}</span>}
                 </div>
-                {activo && (
-                  <button onClick={()=>quitarAmbito(a.id)}
-                    style={{ fontSize:11, color:B.red, background:"none", border:"none", cursor:"pointer" }}>Quitar</button>
+                {completo && (
+                  <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, color:B.textSec, cursor:"pointer" }}>
+                    <input type="checkbox" checked={v.activo} onChange={e=>set(a.id,"activo",e.target.checked)}/>
+                    Activo
+                  </label>
                 )}
               </div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:8 }}>
@@ -1815,6 +1856,99 @@ function ModalTarifarioCliente({ empresa, tarifariosCliente, onClose, onSaved, t
         })}
 
         <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:8 }}>
+          <BtnSec onClick={onClose}>Cerrar</BtnSec>
+          <BtnPri onClick={guardar} disabled={guardando}>{guardando?"Guardando...":"Guardar tarifario"}</BtnPri>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModalTarifarioVehiculo({ empresa, tarifarioVehiculoCliente, onClose, onSaved, toast }) {
+  const TIPOS_VEHICULO = ["moto","bicicleta","auto","furgoneta","minivan","van","porter"];
+
+  const construirInicial = () => {
+    const base = {};
+    TIPOS_VEHICULO.forEach(tv=>{
+      const existente = tarifarioVehiculoCliente.find(t=>t.empresa_id===empresa.id && t.tipo_vehiculo===tv);
+      base[tv] = existente
+        ? { base:existente.tarifa_base, recargo:existente.recargo_periferico??0, activo:existente.activo }
+        : { base:"", recargo:"", activo:true };
+    });
+    return base;
+  };
+
+  const [valores, setValores] = useState(construirInicial());
+  const [guardando, setGuardando] = useState(false);
+
+  const set = (tv, campo, valor) => setValores(p=>({ ...p, [tv]: { ...p[tv], [campo]:valor } }));
+
+  const guardar = async () => {
+    setGuardando(true);
+    for (const tv of TIPOS_VEHICULO) {
+      const v = valores[tv];
+      if (v.base === "") continue; // sin tarifa definida, se omite
+      await sb.from("tarifarios_vehiculo_cliente").upsert({
+        empresa_id: empresa.id, tipo_vehiculo: tv,
+        tarifa_base: parseFloat(v.base), recargo_periferico: parseFloat(v.recargo)||0,
+        activo: v.activo,
+      }, { onConflict: "empresa_id,tipo_vehiculo" });
+    }
+    setGuardando(false);
+    toast("Tarifario por vehículo guardado ✓");
+    onSaved();
+    onClose();
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000,
+      display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+      <div style={{ background:B.white, borderRadius:16, padding:28, width:560,
+        maxHeight:"85vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+          <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>🚛 Tarifario por vehículo — {empresa.nombre}</div>
+          <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20,
+            color:B.textSec, cursor:"pointer" }}>✕</button>
+        </div>
+        <div style={{ fontSize:12, color:B.textMut, marginBottom:16 }}>
+          Tarifa por día según tipo de vehículo. La "tarifa base" aplica en zona urbana y semi urbana; el "recargo periférico" se suma solo cuando el servicio es en zona periférica. Deja vacía la tarifa base de un vehículo si este cliente no lo usa.
+        </div>
+
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {TIPOS_VEHICULO.map(tv=>{
+            const v = valores[tv];
+            const completo = v.base !== "";
+            return (
+              <div key={tv} style={{ border:`1px solid ${B.border}`, borderRadius:10, padding:14,
+                background: completo && v.activo ? "#FFF8EF" : B.bg,
+                opacity: completo && !v.activo ? 0.6 : 1 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:B.navy, textTransform:"capitalize" }}>
+                    {tv} {completo && <span style={{ color: v.activo?B.green:B.textMut, fontSize:11 }}>· {v.activo?"activo":"inactivo"}</span>}
+                  </div>
+                  {completo && (
+                    <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, color:B.textSec, cursor:"pointer" }}>
+                      <input type="checkbox" checked={v.activo} onChange={e=>set(tv,"activo",e.target.checked)}/>
+                      Activo
+                    </label>
+                  )}
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                  <div>
+                    <label style={{ ...lbl, marginBottom:4 }}>Tarifa base (S/ — urbano/semi urbano)</label>
+                    <input type="number" style={inp} value={v.base} onChange={e=>set(tv,"base",e.target.value)}/>
+                  </div>
+                  <div>
+                    <label style={{ ...lbl, marginBottom:4 }}>Recargo periférico (S/ adicional)</label>
+                    <input type="number" style={inp} value={v.recargo} onChange={e=>set(tv,"recargo",e.target.value)}/>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:16 }}>
           <BtnSec onClick={onClose}>Cerrar</BtnSec>
           <BtnPri onClick={guardar} disabled={guardando}>{guardando?"Guardando...":"Guardar tarifario"}</BtnPri>
         </div>
@@ -3517,10 +3651,11 @@ function Configuracion({ onRefresh, toast }) {
 // líneas de negocio + tipos de servicio, y tarifarios negociados
 // por cliente. Todo el tema de precios en un solo lugar.
 // ══════════════════════════════════════════════════════════════
-function Catalogo({ empresas, lineasNegocio, tiposServicio, tarifariosCliente, onRefresh, toast }) {
+function Catalogo({ empresas, lineasNegocio, tiposServicio, tarifariosCliente, tarifarioVehiculoCliente, onRefresh, toast }) {
   const [modalLinea, setModalLinea] = useState(false);
   const [modalTipo, setModalTipo] = useState(null);
   const [modalTarifario, setModalTarifario] = useState(null); // guarda la empresa seleccionada
+  const [modalTarifarioVehiculo, setModalTarifarioVehiculo] = useState(null);
   const TARIFAS = {
     urbano:      { XS:10, S:13, M:16 },
     semi_urbano: { XS:12, S:15, M:18 },
@@ -3566,7 +3701,7 @@ function Catalogo({ empresas, lineasNegocio, tiposServicio, tarifariosCliente, o
       <div style={{ background:B.white, border:`1px solid ${B.border}`,
         borderRadius:12, padding:20, boxShadow:"0 2px 8px #0D1E3D0A" }}>
         <div style={{ fontSize:14, fontWeight:800, color:B.navy, marginBottom:16,
-          paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>🤝 Tarifarios negociados por cliente</div>
+          paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>🤝 Tarifarios por pedido (Última Milla — Same Day / Next Day)</div>
         <div style={{ display:"flex", flexDirection:"column", gap:8, maxHeight:280, overflowY:"auto" }}>
           {empresas.map(e=>{
             const tieneCustom = tarifariosCliente.some(t=>t.empresa_id===e.id);
@@ -3581,6 +3716,42 @@ function Catalogo({ empresas, lineasNegocio, tiposServicio, tarifariosCliente, o
                 <button onClick={()=>setModalTarifario(e)}
                   style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer", fontWeight:600 }}>
                   {tieneCustom ? "Editar" : "Configurar"}
+                </button>
+              </div>
+            );
+          })}
+          {empresas.length===0 && (
+            <div style={{ padding:20, textAlign:"center", color:B.textMut, fontSize:12 }}>Sin clientes registrados</div>
+          )}
+        </div>
+      </div>
+
+      {/* Tarifario por tipo de vehículo — Transporte y Carga */}
+      <div style={{ background:B.white, border:`1px solid ${B.border}`,
+        borderRadius:12, padding:20, boxShadow:"0 2px 8px #0D1E3D0A", gridColumn:"span 2" }}>
+        <div style={{ fontSize:14, fontWeight:800, color:B.navy, marginBottom:16,
+          paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>🚛 Tarifario por tipo de vehículo (Transporte y Carga)</div>
+        <div style={{ fontSize:12, color:B.textMut, marginBottom:14 }}>
+          Tarifa diaria por tipo de vehículo — válida para Urbano y Semi Urbano. Para Periférico se suma el recargo aparte. Cada línea tiene su casilla de "activo".
+        </div>
+        <div style={{ display:"flex", flexDirection:"column", gap:8, maxHeight:280, overflowY:"auto" }}>
+          {empresas.map(e=>{
+            const tarifasEmpresa = tarifarioVehiculoCliente.filter(t=>t.empresa_id===e.id);
+            return (
+              <div key={e.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
+                padding:"8px 12px", background:B.bg, borderRadius:8 }}>
+                <div style={{ fontSize:12, color:B.textPri }}>
+                  {e.codigo_interno && <span style={{ color:B.gold, fontWeight:700, marginRight:6 }}>{e.codigo_interno}</span>}
+                  {e.nombre}
+                  {tarifasEmpresa.length>0 && (
+                    <span style={{ marginLeft:8, fontSize:10, color:B.green, fontWeight:700 }}>
+                      ✓ {tarifasEmpresa.filter(t=>t.activo).length} vehículo{tarifasEmpresa.filter(t=>t.activo).length===1?"":"s"} activo{tarifasEmpresa.filter(t=>t.activo).length===1?"":"s"}
+                    </span>
+                  )}
+                </div>
+                <button onClick={()=>setModalTarifarioVehiculo(e)}
+                  style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer", fontWeight:600 }}>
+                  {tarifasEmpresa.length>0 ? "Editar" : "Configurar"}
                 </button>
               </div>
             );
@@ -3652,6 +3823,10 @@ function Catalogo({ empresas, lineasNegocio, tiposServicio, tarifariosCliente, o
       {modalTarifario && (
         <ModalTarifarioCliente empresa={modalTarifario} tarifariosCliente={tarifariosCliente}
           onClose={()=>setModalTarifario(null)} onSaved={()=>{onRefresh();}} toast={toast}/>
+      )}
+      {modalTarifarioVehiculo && (
+        <ModalTarifarioVehiculo empresa={modalTarifarioVehiculo} tarifarioVehiculoCliente={tarifarioVehiculoCliente}
+          onClose={()=>setModalTarifarioVehiculo(null)} onSaved={()=>{onRefresh();}} toast={toast}/>
       )}
     </div>
   );
@@ -3745,6 +3920,7 @@ export default function BoazERP() {
   const [unidades, setUnidades] = useState([]);
   const [asignacionesUnidad, setAsignacionesUnidad] = useState([]);
   const [tarifariosCliente, setTarifariosCliente] = useState([]);
+  const [tarifarioVehiculoCliente, setTarifarioVehiculoCliente] = useState([]);
   const [diasServicio, setDiasServicio] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [toast, setToast] = useState(null);
@@ -3755,7 +3931,7 @@ export default function BoazERP() {
   const cargar = useCallback(async (opts={}) => {
     if (!opts.silencioso) setCargando(true);
     try {
-      const [p,r,e,l,ln,ts,u,au,tc,ds] = await Promise.all([
+      const [p,r,e,l,ln,ts,u,au,tc,ds,tv] = await Promise.all([
         sb.from("pedidos").select("*").order("created_at",{ascending:false}),
         sb.from("repartidores").select("*").order("nombres"),
         sb.from("empresas").select("*").order("nombre"),
@@ -3766,6 +3942,7 @@ export default function BoazERP() {
         sb.from("asignaciones_unidad").select("*").order("fecha_inicio",{ascending:false}),
         sb.from("tarifarios_cliente").select("*"),
         sb.from("dias_servicio_unidad").select("*"),
+        sb.from("tarifario_vehiculo_cliente").select("*"),
       ]);
       if(p.data) setPedidos(p.data);
       if(r.data) setRepartidores(r.data);
@@ -3777,6 +3954,7 @@ export default function BoazERP() {
       if(au.data) setAsignacionesUnidad(au.data);
       if(tc.data) setTarifariosCliente(tc.data);
       if(ds.data) setDiasServicio(ds.data);
+      if(tv.data) setTarifarioVehiculoCliente(tv.data);
     } catch(err) { console.error(err); }
     if (!opts.silencioso) setCargando(false);
   }, []);
@@ -3963,9 +4141,9 @@ if (verificando) {
               {seccion==="dashboard"     && <Dashboard pedidos={pedidos} repartidores={repartidores} liquidaciones={liquidaciones}/>}
               {seccion==="pedidos"       && <Pedidos pedidos={pedidos} repartidores={repartidores} empresas={empresas} tarifariosCliente={tarifariosCliente} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="repartidores"  && <Repartidores repartidores={repartidores} pedidos={pedidos} onRefresh={cargarSilencioso} toast={showToast}/>}
-              {seccion==="unidades"      && <Unidades unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} repartidores={repartidores} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccion==="unidades"      && <Unidades unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} repartidores={repartidores} tarifarioVehiculoCliente={tarifarioVehiculoCliente} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="clientes"      && <Clientes empresas={empresas} pedidos={pedidos} lineasNegocio={lineasNegocio} tarifariosCliente={tarifariosCliente} onRefresh={cargarSilencioso} toast={showToast}/>}
-              {seccion==="catalogo"      && <Catalogo empresas={empresas} lineasNegocio={lineasNegocio} tiposServicio={tiposServicio} tarifariosCliente={tarifariosCliente} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccion==="catalogo"      && <Catalogo empresas={empresas} lineasNegocio={lineasNegocio} tiposServicio={tiposServicio} tarifariosCliente={tarifariosCliente} tarifarioVehiculoCliente={tarifarioVehiculoCliente} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="liquidaciones" && <Liquidaciones repartidores={repartidores} pedidos={pedidos} liquidaciones={liquidaciones} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="liquidacion-transporte" && <LiquidacionTransporte unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} diasServicio={diasServicio} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="facturacion"   && <Facturacion empresas={empresas} pedidos={pedidos} tiposServicio={tiposServicio} usuario={usuario} toast={showToast}/>}
