@@ -2479,6 +2479,8 @@ function Liquidaciones({ repartidores, pedidos, toast, onRefresh }) {
 function Facturacion({ empresas, pedidos, tiposServicio, toast }) {
   const [facturas, setFacturas] = useState([]);
   const [modal, setModal] = useState(false);
+  const [modalPago, setModalPago] = useState(null); // factura seleccionada para marcar pagada
+  const [filtroPago, setFiltroPago] = useState("todas");
   const [f, setF] = useState({
     empresa_id:"", serie:"F001", numero:"", descripcion:
     "Servicio de transporte y distribución multipunto - Same Day",
@@ -2486,10 +2488,27 @@ function Facturacion({ empresas, pedidos, tiposServicio, toast }) {
     tipo_servicio_id:"",
   });
 
-  useEffect(()=>{
+  const cargarFacturas = () => {
     sb.from("facturas").select("*,empresas(nombre)").order("created_at",{ascending:false})
       .then(({data})=>{ if(data) setFacturas(data); });
-  },[]);
+  };
+  useEffect(()=>{ cargarFacturas(); },[]);
+
+  const marcarPagado = async (fecha) => {
+    const { error } = await sb.from("facturas").update({ estado_pago:"pagado", fecha_pago: fecha }).eq("id", modalPago.id);
+    if (error) { toast("Error: "+error.message,"error"); return; }
+    toast("Factura marcada como pagada ✓");
+    setModalPago(null);
+    cargarFacturas();
+  };
+
+  const facturasFiltradas = facturas.filter(fa =>
+    filtroPago==="todas" || (fa.estado_pago||"pendiente")===filtroPago
+  );
+
+  const totalFacturado = facturas.reduce((a,fa)=>a+(parseFloat(fa.total_s)||0),0);
+  const totalCobrado = facturas.filter(fa=>fa.estado_pago==="pagado").reduce((a,fa)=>a+(parseFloat(fa.total_s)||0),0);
+  const totalPorCobrar = totalFacturado - totalCobrado;
 
   const seleccionarTipoServicio = (id) => {
     const t = tiposServicio.find(ts=>ts.id===id);
@@ -2509,23 +2528,43 @@ function Facturacion({ empresas, pedidos, tiposServicio, toast }) {
     }
     const { error } = await sb.from("facturas").insert([{
       ...f, tipo_servicio_id: f.tipo_servicio_id||null,
-      igv_s: igv, total_s: total, estado:"emitida",
+      igv_s: igv, total_s: total, estado:"emitida", estado_pago:"pendiente",
       unidad_medida:"ZZ",
     }]);
     if (error) { toast("Error: "+error.message,"error"); return; }
     toast("Factura emitida ✓");
     setModal(false);
-    const { data } = await sb.from("facturas").select("*,empresas(nombre)").order("created_at",{ascending:false});
-    if (data) setFacturas(data);
+    cargarFacturas();
   };
 
   return (
     <div>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-        <div>
-          <div style={{ fontSize:13, color:B.textSec }}>
-            Descripción estándar SUNAT · Unidad ZZ · Serie F001
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14, marginBottom:20 }}>
+        {[
+          { label:"Total facturado", value: fmt.sol(totalFacturado), icon:"🧾", color:B.navy },
+          { label:"Cobrado", value: fmt.sol(totalCobrado), icon:"✅", color:B.green },
+          { label:"Por cobrar", value: fmt.sol(totalPorCobrar), icon:"⏳", color:B.red },
+        ].map((k,i)=>(
+          <div key={i} style={{ background:B.white, border:`1px solid ${B.border}`,
+            borderRadius:12, padding:18, borderTop:`3px solid ${k.color}`, boxShadow:"0 2px 8px #0D1E3D0A" }}>
+            <div style={{ fontSize:20, marginBottom:6 }}>{k.icon}</div>
+            <div style={{ fontSize:20, fontWeight:800, color:B.textPri }}>{k.value}</div>
+            <div style={{ fontSize:10, color:B.textMut, textTransform:"uppercase" }}>{k.label}</div>
           </div>
+        ))}
+      </div>
+
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+        <div style={{ display:"flex", gap:6 }}>
+          {[["todas","Todas"],["pendiente","Por cobrar"],["pagado","Cobradas"]].map(([id,label])=>(
+            <button key={id} onClick={()=>setFiltroPago(id)}
+              style={{ padding:"8px 16px", borderRadius:8, fontSize:12, cursor:"pointer",
+                border:`1px solid ${filtroPago===id?B.gold:B.border}`,
+                background:filtroPago===id?B.gold:"transparent",
+                color:filtroPago===id?B.navy:B.textSec, fontWeight:filtroPago===id?700:400 }}>
+              {label}
+            </button>
+          ))}
         </div>
         <BtnPri onClick={()=>setModal(true)}>+ Nueva factura</BtnPri>
       </div>
@@ -2535,41 +2574,50 @@ function Facturacion({ empresas, pedidos, tiposServicio, toast }) {
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
           <thead>
             <tr style={{ background:B.bg }}>
-              {["Serie-Número","Cliente","Descripción","Valor","IGV","Total","Fecha","Estado"].map(h=>(
+              {["Serie-Número","Cliente","Total","Fecha emisión","Estado de pago","Fecha de pago","Acciones"].map(h=>(
                 <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:10,
                   color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {facturas.map((fa,i)=>(
+            {facturasFiltradas.map((fa,i)=>(
               <tr key={fa.id} style={{ borderTop:`1px solid ${B.border}`,
                 background:i%2===0?B.white:"#F8FAFC" }}>
                 <td style={{ padding:"11px 14px", fontSize:12, fontWeight:700, color:B.navy }}>
                   {fa.serie}-{fa.numero}
                 </td>
                 <td style={{ padding:"11px 14px", fontSize:12, color:B.textPri }}>{fa.empresas?.nombre||"—"}</td>
-                <td style={{ padding:"11px 14px", fontSize:11, color:B.textSec, maxWidth:200 }}>
-                  {fa.descripcion?.slice(0,50)}...
-                </td>
-                <td style={{ padding:"11px 14px", fontSize:12, color:B.textPri }}>{fmt.sol(fa.valor_unit_s)}</td>
-                <td style={{ padding:"11px 14px", fontSize:12, color:B.textSec }}>{fmt.sol(fa.igv_s)}</td>
                 <td style={{ padding:"11px 14px", fontSize:13, fontWeight:800, color:B.navy }}>{fmt.sol(fa.total_s)}</td>
                 <td style={{ padding:"11px 14px", fontSize:11, color:B.textMut }}>{fmt.fecha(fa.fecha_emision)}</td>
                 <td style={{ padding:"11px 14px" }}>
                   <span style={{ fontSize:11, padding:"3px 8px", borderRadius:10, fontWeight:700,
-                    background:fa.estado==="emitida"?"#ECFDF5":"#FEF2F2",
-                    color:fa.estado==="emitida"?B.green:B.red }}>
-                    {fa.estado}
+                    background:fa.estado_pago==="pagado"?"#ECFDF5":"#FEF2F2",
+                    color:fa.estado_pago==="pagado"?B.green:B.red }}>
+                    {fa.estado_pago==="pagado"?"Pagado":"Pendiente"}
                   </span>
+                </td>
+                <td style={{ padding:"11px 14px", fontSize:11, color:B.textMut }}>
+                  {fa.fecha_pago ? fmt.fecha(fa.fecha_pago) : "—"}
+                </td>
+                <td style={{ padding:"11px 14px" }}>
+                  {fa.estado_pago!=="pagado" && (
+                    <button onClick={()=>setModalPago(fa)}
+                      style={{ fontSize:11, color:B.green, background:"none", border:"none",
+                        cursor:"pointer", fontWeight:700 }}>💰 Marcar pagada</button>
+                  )}
                 </td>
               </tr>
             ))}
-            {facturas.length===0&&<tr><td colSpan={8} style={{ padding:32, textAlign:"center",
-              color:B.textMut, fontSize:13 }}>No hay facturas emitidas</td></tr>}
+            {facturasFiltradas.length===0&&<tr><td colSpan={7} style={{ padding:32, textAlign:"center",
+              color:B.textMut, fontSize:13 }}>No hay facturas en esta vista</td></tr>}
           </tbody>
         </table>
       </div>
+
+      {modalPago && (
+        <ModalMarcarPagada factura={modalPago} onClose={()=>setModalPago(null)} onConfirmar={marcarPagado}/>
+      )}
 
       {modal && (
         <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000,
@@ -2638,6 +2686,30 @@ const TIPOS_SERVICIO = {
   same_day: { label:"Same Day", color:"#7C3AED", bg:"#F5F3FF" },
   next_day: { label:"Next Day", color:"#0369A1", bg:"#EFF6FF" },
 };
+
+function ModalMarcarPagada({ factura, onClose, onConfirmar }) {
+  const [fecha, setFecha] = useState(new Date().toISOString().split("T")[0]);
+  return (
+    <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000,
+      display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+      <div style={{ background:B.white, borderRadius:16, padding:28, width:400, boxShadow:"0 20px 60px #0003" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:16 }}>
+          <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>💰 Marcar factura como pagada</div>
+          <button onClick={onClose} style={{ background:"none", border:"none", fontSize:18, color:B.textSec, cursor:"pointer" }}>✕</button>
+        </div>
+        <div style={{ fontSize:13, color:B.textSec, marginBottom:16 }}>
+          {factura.serie}-{factura.numero} — {factura.empresas?.nombre} — <strong style={{color:B.navy}}>{fmt.sol(factura.total_s)}</strong>
+        </div>
+        <label style={lbl}>Fecha de pago</label>
+        <input type="date" style={{ ...inp, marginBottom:20 }} value={fecha} onChange={e=>setFecha(e.target.value)}/>
+        <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+          <BtnSec onClick={onClose}>Cancelar</BtnSec>
+          <BtnPri onClick={()=>onConfirmar(fecha)}>Confirmar pago</BtnPri>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function rangoPeriodo(periodo, fechaInicio, fechaFin) {
   const hoy = new Date(); hoy.setHours(0,0,0,0);
