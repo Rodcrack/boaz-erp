@@ -172,21 +172,87 @@ const BtnSec = ({ children, onClick, style={} }) => (
 // ══════════════════════════════════════════════════════════════
 // MÓDULO 1: DASHBOARD
 // ══════════════════════════════════════════════════════════════
+function generarInsights(pedidos, hoyP, ayerP, entregados, efectividad, ingresoHoy, ingresoAyer, sinAsignar, repartidores) {
+  const frases = [];
+
+  // Comparación de volumen vs ayer
+  if (ayerP.length > 0) {
+    const delta = Math.round(((hoyP.length - ayerP.length) / ayerP.length) * 100);
+    if (Math.abs(delta) >= 5) {
+      frases.push(delta > 0
+        ? `📈 Hoy llevas ${delta}% más pedidos que ayer a esta hora (${hoyP.length} vs ${ayerP.length}).`
+        : `📉 Hoy llevas ${Math.abs(delta)}% menos pedidos que ayer a esta hora (${hoyP.length} vs ${ayerP.length}).`);
+    }
+  } else if (hoyP.length > 0) {
+    frases.push(`📦 Ya registraste ${hoyP.length} pedido${hoyP.length===1?"":"s"} hoy.`);
+  }
+
+  // Efectividad
+  if (pedidos.length >= 10) {
+    if (efectividad >= 90) frases.push(`✅ Tu efectividad general está en ${efectividad}% — excelente nivel.`);
+    else if (efectividad < 70) frases.push(`⚠️ Tu efectividad general bajó a ${efectividad}% — vale la pena revisar los pedidos no entregados.`);
+  }
+
+  // Ingresos vs ayer
+  if (ingresoAyer > 0 && ingresoHoy > 0) {
+    const deltaIngreso = Math.round(((ingresoHoy - ingresoAyer) / ingresoAyer) * 100);
+    if (Math.abs(deltaIngreso) >= 10) {
+      frases.push(deltaIngreso > 0
+        ? `💰 Los ingresos de hoy van ${deltaIngreso}% por encima de ayer a esta hora.`
+        : `💰 Los ingresos de hoy van ${Math.abs(deltaIngreso)}% por debajo de ayer a esta hora.`);
+    }
+  }
+
+  // Pedidos sin asignar
+  if (sinAsignar.length > 0) {
+    frases.push(`🔔 Tienes ${sinAsignar.length} pedido${sinAsignar.length===1?"":"s"} sin asignar esperando repartidor.`);
+  }
+
+  // Repartidor destacado del día
+  const conteoHoy = {};
+  hoyP.forEach(p=>{ if(p.repartidor_id) conteoHoy[p.repartidor_id]=(conteoHoy[p.repartidor_id]||0)+1; });
+  const topId = Object.keys(conteoHoy).sort((a,b)=>conteoHoy[b]-conteoHoy[a])[0];
+  if (topId && conteoHoy[topId] >= 3) {
+    const rep = repartidores.find(r=>r.id===topId);
+    if (rep) frases.push(`🏆 ${rep.nombres} ${rep.apellidos} lleva la delantera hoy, con ${conteoHoy[topId]} pedidos.`);
+  }
+
+  if (frases.length === 0) frases.push("👋 Sin novedades destacadas hoy todavía — vuelve más tarde para ver el resumen.");
+  return frases.slice(0, 4);
+}
+
 function Dashboard({ pedidos, repartidores, liquidaciones }) {
   const hoy = new Date().toISOString().split("T")[0];
+  const ayer = new Date(Date.now()-86400000).toISOString().split("T")[0];
+  const horaActual = new Date().getHours()*60 + new Date().getMinutes();
+
   const hoyP = pedidos.filter(p => p.created_at?.startsWith(hoy));
+  // "Ayer a esta hora" — comparación justa, no todo el día de ayer completo
+  const ayerP = pedidos.filter(p => {
+    if (!p.created_at?.startsWith(ayer)) return false;
+    const d = new Date(p.created_at);
+    return (d.getHours()*60+d.getMinutes()) <= horaActual;
+  });
   const entregados = pedidos.filter(p => p.estado==="entregado");
   const enRuta = pedidos.filter(p => p.estado==="en_ruta");
   const sinAsignar = pedidos.filter(p => p.estado==="sin_asignar");
   const ingresoHoy = hoyP.reduce((a,p)=>a+(parseFloat(p.tarifa_s)||0),0);
+  const ingresoAyer = ayerP.reduce((a,p)=>a+(parseFloat(p.tarifa_s)||0),0);
   const efectividad = pedidos.length ? Math.round(entregados.length/pedidos.length*100) : 0;
 
+  const deltaPct = (hoyVal, ayerVal) => {
+    if (!ayerVal) return null;
+    return Math.round(((hoyVal-ayerVal)/ayerVal)*100);
+  };
+  const deltaPedidos = deltaPct(hoyP.length, ayerP.length);
+  const deltaIngreso = deltaPct(ingresoHoy, ingresoAyer);
+
   const kpis = [
-    { icon:"📦", label:"Pedidos hoy", value: hoyP.length, sub:`${pedidos.length} total`, color: B.navy },
+    { icon:"📦", label:"Pedidos hoy", value: hoyP.length, sub:`${pedidos.length} total`, color: B.navy, delta: deltaPedidos },
     { icon:"✅", label:"Entregados", value: entregados.length, sub:`${efectividad}% efectividad`, color: B.green },
     { icon:"🛵", label:"En ruta", value: enRuta.length, sub:"activos ahora", color: B.gold },
     { icon:"⚠️", label:"Sin asignar", value: sinAsignar.length, sub: sinAsignar.length>0?"requieren atención":"todo OK", color: sinAsignar.length>0?B.red:B.green },
-    { icon:"💰", label:"Ingresos hoy", value: fmt.sol(ingresoHoy), sub:"antes de IGV", color: B.goldDk, big:true },
+    { icon:"💰", label:"Ingresos hoy", value: fmt.sol(ingresoHoy), sub:"antes de IGV", color: B.goldDk, big:true, delta: deltaIngreso },
     { icon:"🏍️", label:"Repartidores", value: repartidores.filter(r=>r.activo).length, sub:"activos", color: B.navy },
   ];
 
@@ -195,23 +261,88 @@ function Dashboard({ pedidos, repartidores, liquidaciones }) {
     count: pedidos.filter(p=>p.estado===k).length
   }));
 
+  // Tendencia de los últimos 7 días
+  const serie7dias = [];
+  for (let i=6; i>=0; i--) {
+    const fecha = new Date(Date.now() - i*86400000);
+    const key = fecha.toISOString().split("T")[0];
+    const delDia = pedidos.filter(p=>p.created_at?.startsWith(key));
+    serie7dias.push({
+      label: fecha.toLocaleDateString("es-PE",{day:"2-digit",month:"2-digit"}),
+      total: delDia.length,
+      entregados: delDia.filter(p=>p.estado==="entregado").length,
+    });
+  }
+
+  const insights = generarInsights(pedidos, hoyP, ayerP, entregados, efectividad, ingresoHoy, ingresoAyer, sinAsignar, repartidores);
+
   const recientes = [...pedidos].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)).slice(0,8);
 
   return (
     <div>
+      {/* Resumen automático */}
+      <div style={{ background:`linear-gradient(135deg,${B.navy},${B.navyLt||"#1E3A6E"})`, borderRadius:14,
+        padding:"16px 20px", marginBottom:20, boxShadow:"0 4px 16px #0D1E3D22" }}>
+        <div style={{ fontSize:11, fontWeight:700, color:B.gold, textTransform:"uppercase",
+          letterSpacing:"0.8px", marginBottom:10 }}>🔎 Resumen del día</div>
+        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+          {insights.map((frase,i)=>(
+            <div key={i} style={{ fontSize:13, color:"#E8EAF0" }}>{frase}</div>
+          ))}
+        </div>
+      </div>
+
       {/* KPIs */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(6,1fr)", gap:14, marginBottom:24 }}>
         {kpis.map((k,i) => (
           <div key={i} style={{ background:B.white, border:`1px solid ${B.border}`,
             borderRadius:12, padding:18, borderTop:`3px solid ${k.color}`,
             boxShadow:"0 2px 8px #0D1E3D0A" }}>
-            <div style={{ fontSize:22, marginBottom:8 }}>{k.icon}</div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+              <div style={{ fontSize:22, marginBottom:8 }}>{k.icon}</div>
+              {k.delta != null && (
+                <span style={{ fontSize:10, fontWeight:700, padding:"2px 6px", borderRadius:8,
+                  background: k.delta>=0?"#ECFDF5":"#FEF2F2", color: k.delta>=0?B.green:B.red }}>
+                  {k.delta>=0?"▲":"▼"} {Math.abs(k.delta)}%
+                </span>
+              )}
+            </div>
             <div style={{ fontSize:10, color:B.textMut, textTransform:"uppercase",
               letterSpacing:"0.8px", marginBottom:4 }}>{k.label}</div>
             <div style={{ fontSize: k.big?18:28, fontWeight:800, color:B.textPri, lineHeight:1 }}>{k.value}</div>
             <div style={{ fontSize:11, color:B.textSec, marginTop:5 }}>{k.sub}</div>
           </div>
         ))}
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 340px", gap:14, marginBottom:14 }}>
+        {/* Tendencia 7 días */}
+        <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12,
+          padding:18, boxShadow:"0 2px 8px #0D1E3D0A", gridColumn:"span 2" }}>
+          <div style={{ fontSize:13, fontWeight:700, color:B.textPri, marginBottom:4 }}>Tendencia — últimos 7 días</div>
+          <div style={{ fontSize:11, color:B.textMut, marginBottom:10 }}>
+            <span style={{ color:B.green, fontWeight:700 }}>■</span> Entregados · Barra completa = total del día
+          </div>
+          <SerieDiaria datos={serie7dias}/>
+        </div>
+
+        {/* Dona de estados */}
+        <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12,
+          padding:16, boxShadow:"0 2px 8px #0D1E3D0A" }}>
+          <div style={{ fontSize:12, fontWeight:700, color:B.textPri, marginBottom:12 }}>Estado de pedidos</div>
+          <div style={{ display:"flex", alignItems:"center", gap:16 }}>
+            <DonutChart segments={porEstado.map(e=>({ value:e.count, color:e.color }))} size={110}/>
+            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+              {porEstado.map(e=>(
+                <div key={e.estado} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11 }}>
+                  <span style={{ width:8, height:8, borderRadius:2, background:e.color, display:"inline-block" }}/>
+                  <span style={{ color:B.textSec }}>{e.label}</span>
+                  <span style={{ fontWeight:700, color:B.navy, marginLeft:"auto" }}>{e.count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 340px", gap:14 }}>
@@ -254,52 +385,38 @@ function Dashboard({ pedidos, repartidores, liquidaciones }) {
           </table>
         </div>
 
-        {/* Panel derecho */}
-        <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-          {/* Distribución por estado */}
-          <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12,
-            padding:16, boxShadow:"0 2px 8px #0D1E3D0A" }}>
-            <div style={{ fontSize:12, fontWeight:700, color:B.textPri, marginBottom:12 }}>Estado de pedidos</div>
-            {porEstado.map(e => (
-              <div key={e.estado} style={{ marginBottom:10 }}>
-                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-                  <span style={{ fontSize:11, color:B.textSec }}>{e.label}</span>
-                  <span style={{ fontSize:11, fontWeight:700, color:e.color }}>{e.count}</span>
+        {/* Top repartidores */}
+        <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12,
+          padding:16, boxShadow:"0 2px 8px #0D1E3D0A" }}>
+          <div style={{ fontSize:12, fontWeight:700, color:B.textPri, marginBottom:12 }}>Top repartidores</div>
+          {[...repartidores].map(r=>{
+            const count = pedidos.filter(p=>p.repartidor_id===r.id).length;
+            const ent = pedidos.filter(p=>p.repartidor_id===r.id&&p.estado==="entregado").length;
+            return { ...r, count, ent, ef: count?Math.round(ent/count*100):0 };
+          }).sort((a,b)=>b.count-a.count).slice(0,5).map(r => (
+            <div key={r.id} style={{ padding:"8px 0", borderBottom:`1px solid ${B.border}` }}>
+              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
+                <div style={{ width:32, height:32, borderRadius:"50%",
+                  background:`linear-gradient(135deg,${B.navy},${B.navyLt||"#1E3A6E"})`,
+                  display:"flex", alignItems:"center", justifyContent:"center",
+                  fontSize:12, fontWeight:700, color:B.gold, flexShrink:0 }}>
+                  {r.nombres?.[0]}{r.apellidos?.[0]}
                 </div>
-                <div style={{ height:5, background:B.bg, borderRadius:4, overflow:"hidden" }}>
-                  <div style={{ height:"100%", background:e.color, borderRadius:4,
-                    width: pedidos.length ? `${(e.count/pedidos.length)*100}%` : "0%" }} />
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, color:B.textPri, fontWeight:600 }}>{r.nombres} {r.apellidos}</div>
+                  <div style={{ fontSize:10, color:B.textMut }}>{r.ent}/{r.count} entregados</div>
                 </div>
+                <div style={{ fontSize:16, fontWeight:800, color:B.gold }}>{r.count}</div>
               </div>
-            ))}
-          </div>
-
-          {/* Top repartidores */}
-          <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12,
-            padding:16, boxShadow:"0 2px 8px #0D1E3D0A", flex:1 }}>
-            <div style={{ fontSize:12, fontWeight:700, color:B.textPri, marginBottom:12 }}>Top repartidores</div>
-            {repartidores.slice(0,5).map(r => {
-              const count = pedidos.filter(p=>p.repartidor_id===r.id).length;
-              const ent = pedidos.filter(p=>p.repartidor_id===r.id&&p.estado==="entregado").length;
-              return (
-                <div key={r.id} style={{ display:"flex", alignItems:"center", gap:10,
-                  padding:"8px 0", borderBottom:`1px solid ${B.border}` }}>
-                  <div style={{ width:32, height:32, borderRadius:"50%",
-                    background:`linear-gradient(135deg,${B.navy},${B.navyLt})`,
-                    display:"flex", alignItems:"center", justifyContent:"center",
-                    fontSize:12, fontWeight:700, color:B.gold, flexShrink:0 }}>
-                    {r.nombres?.[0]}{r.apellidos?.[0]}
-                  </div>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:12, color:B.textPri, fontWeight:600 }}>{r.nombres} {r.apellidos}</div>
-                    <div style={{ fontSize:10, color:B.textMut }}>{ent}/{count} entregados</div>
-                  </div>
-                  <div style={{ fontSize:16, fontWeight:800, color:B.gold }}>{count}</div>
-                </div>
-              );
-            })}
-            {repartidores.length===0&&<div style={{ fontSize:12, color:B.textMut, textAlign:"center", padding:16 }}>Sin repartidores</div>}
-          </div>
+              <div style={{ height:4, background:B.bg, borderRadius:3, overflow:"hidden" }}>
+                <div style={{ height:"100%", width:`${r.ef}%`, borderRadius:3,
+                  background: r.ef>=80?B.green:r.ef>=60?B.gold:B.red }}/>
+              </div>
+            </div>
+          ))}
+          {repartidores.length===0 && (
+            <div style={{ padding:20, textAlign:"center", color:B.textMut, fontSize:12 }}>Sin repartidores</div>
+          )}
         </div>
       </div>
     </div>
