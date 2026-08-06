@@ -2023,7 +2023,7 @@ function ModalCalendarioServicio({ asignacion, diasServicio, unidad, empresa, on
       const faltantes = fechas.filter(f=>!existentes.has(f));
       if (faltantes.length > 0) {
         const { error } = await sb.from("dias_servicio_unidad").upsert(
-          faltantes.map(f=>({ asignacion_id: asignacion.id, fecha: f, prestado: true })),
+          faltantes.map(f=>({ asignacion_id: asignacion.id, fecha: f, prestado: false })),
           { onConflict: "asignacion_id,fecha" }
         );
         if (error) toast("Error preparando calendario: "+error.message, "error");
@@ -2045,7 +2045,7 @@ function ModalCalendarioServicio({ asignacion, diasServicio, unidad, empresa, on
 
   const mapa = {};
   diasServicio.forEach(d=>{ mapa[d.fecha] = d.prestado; });
-  const totalPrestados = fechas.filter(f => mapa[f] !== false).length;
+  const totalPrestados = fechas.filter(f => mapa[f] === true).length;
   const subtotal = totalPrestados * (parseFloat(asignacion.tarifa_dia)||0);
   const igv = subtotal * 0.18;
   const totalConIGV = subtotal * 1.18;
@@ -2065,7 +2065,7 @@ function ModalCalendarioServicio({ asignacion, diasServicio, unidad, empresa, on
         </div>
         <div style={{ background:B.bg, borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
           <div style={{ fontSize:12, color:B.textSec, marginBottom:10 }}>
-            Toca un día para marcar/desmarcar si hubo servicio real ese día
+            Todos los días empiezan sin marcar. Toca cada día que sí tuvo servicio para activarlo.
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:10, textAlign:"center" }}>
             <div>
@@ -2092,16 +2092,16 @@ function ModalCalendarioServicio({ asignacion, diasServicio, unidad, empresa, on
         ) : (
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(74px, 1fr))", gap:8 }}>
             {fechas.map(f => {
-              const prestado = mapa[f] !== false;
+              const prestado = mapa[f] === true;
               const fechaObj = new Date(f+"T12:00:00");
               return (
                 <button key={f} onClick={()=>toggle(f, prestado)}
-                  style={{ padding:"10px 4px", borderRadius:8, border:`2px solid ${prestado?B.green:B.red}`,
-                    background: prestado?"#ECFDF5":"#FEF2F2", cursor:"pointer", textAlign:"center" }}>
+                  style={{ padding:"10px 4px", borderRadius:8, border:`2px solid ${prestado?B.green:B.border}`,
+                    background: prestado?"#ECFDF5":B.bg, cursor:"pointer", textAlign:"center" }}>
                   <div style={{ fontSize:9, color:B.textMut, textTransform:"uppercase" }}>
                     {fechaObj.toLocaleDateString("es-PE",{weekday:"short"})}
                   </div>
-                  <div style={{ fontSize:14, fontWeight:800, color: prestado?B.green:B.red }}>
+                  <div style={{ fontSize:14, fontWeight:800, color: prestado?B.green:B.textMut }}>
                     {fechaObj.getDate()}
                   </div>
                   <div style={{ fontSize:9, color:B.textMut }}>
