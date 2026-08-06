@@ -2481,12 +2481,15 @@ function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }) {
   const [modal, setModal] = useState(false);
   const [modalPago, setModalPago] = useState(null); // factura seleccionada para marcar pagada
   const [filtroPago, setFiltroPago] = useState("todas");
-  const [f, setF] = useState({
-    empresa_id:"", serie:"F001", numero:"", descripcion:
+  const facturaVacia = () => ({
+    empresa_id:"", serie:"E001", numero:"", descripcion:
     "Servicio de transporte y distribución multipunto - Same Day",
     cantidad:1, valor_unit_s:"", fecha_emision: new Date().toISOString().split("T")[0],
-    tipo_servicio_id:"",
+    tipo_servicio_id:"", aplica_detraccion:false, porcentaje_detraccion:"",
   });
+  const [f, setF] = useState(facturaVacia());
+
+  const abrirNuevaFactura = () => { setF(facturaVacia()); setModal(true); };
 
   const cargarFacturas = () => {
     sb.from("facturas").select("*,empresas(nombre)").order("created_at",{ascending:false})
@@ -2521,6 +2524,8 @@ function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }) {
 
   const igv = parseFloat(f.valor_unit_s||0) * 0.18;
   const total = parseFloat(f.valor_unit_s||0) * 1.18;
+  const montoDetraccion = f.aplica_detraccion ? total * (parseFloat(f.porcentaje_detraccion||0)/100) : 0;
+  const netoACobrar = total - montoDetraccion;
 
   const guardar = async () => {
     if (!f.empresa_id || !f.valor_unit_s || !f.numero) {
@@ -2529,6 +2534,8 @@ function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }) {
     const { error } = await sb.from("facturas").insert([{
       ...f, tipo_servicio_id: f.tipo_servicio_id||null,
       igv_s: igv, total_s: total, estado:"emitida", estado_pago:"pendiente",
+      porcentaje_detraccion: f.aplica_detraccion ? (parseFloat(f.porcentaje_detraccion)||0) : 0,
+      monto_detraccion: montoDetraccion,
       unidad_medida:"ZZ",
     }]);
     if (error) { toast("Error: "+error.message,"error"); return; }
@@ -2566,7 +2573,7 @@ function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }) {
             </button>
           ))}
         </div>
-        <BtnPri onClick={()=>setModal(true)}>+ Registrar factura</BtnPri>
+        <BtnPri onClick={abrirNuevaFactura}>+ Registrar factura</BtnPri>
       </div>
 
       <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12,
@@ -2574,7 +2581,7 @@ function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }) {
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
           <thead>
             <tr style={{ background:B.bg }}>
-              {["Serie-Número","Cliente","Total","Fecha emisión","Estado de pago","Fecha de pago","Acciones"].map(h=>(
+              {["Serie-Número","Cliente","IGV","Total","Detracción","Neto a cobrar","Fecha emisión","Estado de pago","Fecha de pago","Acciones"].map(h=>(
                 <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:10,
                   color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
               ))}
@@ -2588,7 +2595,14 @@ function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }) {
                   {fa.serie}-{fa.numero}
                 </td>
                 <td style={{ padding:"11px 14px", fontSize:12, color:B.textPri }}>{fa.empresas?.nombre||"—"}</td>
+                <td style={{ padding:"11px 14px", fontSize:12, color:B.textSec }}>{fmt.sol(fa.igv_s)}</td>
                 <td style={{ padding:"11px 14px", fontSize:13, fontWeight:800, color:B.navy }}>{fmt.sol(fa.total_s)}</td>
+                <td style={{ padding:"11px 14px", fontSize:12, color: fa.monto_detraccion>0?B.red:B.textMut }}>
+                  {fa.monto_detraccion>0 ? `- ${fmt.sol(fa.monto_detraccion)} (${fa.porcentaje_detraccion}%)` : "—"}
+                </td>
+                <td style={{ padding:"11px 14px", fontSize:13, fontWeight:800, color:B.gold }}>
+                  {fmt.sol((parseFloat(fa.total_s)||0) - (parseFloat(fa.monto_detraccion)||0))}
+                </td>
                 <td style={{ padding:"11px 14px", fontSize:11, color:B.textMut }}>{fmt.fecha(fa.fecha_emision)}</td>
                 <td style={{ padding:"11px 14px" }}>
                   <span style={{ fontSize:11, padding:"3px 8px", borderRadius:10, fontWeight:700,
@@ -2609,7 +2623,7 @@ function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }) {
                 </td>
               </tr>
             ))}
-            {facturasFiltradas.length===0&&<tr><td colSpan={7} style={{ padding:32, textAlign:"center",
+            {facturasFiltradas.length===0&&<tr><td colSpan={10} style={{ padding:32, textAlign:"center",
               color:B.textMut, fontSize:13 }}>No hay facturas en esta vista</td></tr>}
           </tbody>
         </table>
@@ -2654,20 +2668,46 @@ function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }) {
               </div>
               <div><label style={lbl}>Valor unitario (S/ sin IGV)</label>
                 <input type="number" style={inp} value={f.valor_unit_s} onChange={e=>setF(p=>({...p,valor_unit_s:e.target.value}))}/></div>
-              <div><label style={lbl}>Fecha emisión {usuario?.rol!=="admin" && <span style={{ color:B.textMut, fontWeight:400 }}>(automática — solo admin puede editarla)</span>}</label>
-                <input type="date" style={{ ...inp, ...(usuario?.rol!=="admin" ? { background:B.bg, color:B.textMut, cursor:"not-allowed" } : {}) }}
-                  value={f.fecha_emision} disabled={usuario?.rol!=="admin"}
+              <div><label style={lbl}>Fecha emisión</label>
+                <input type="date" style={inp} value={f.fecha_emision}
                   onChange={e=>setF(p=>({...p,fecha_emision:e.target.value}))}/></div>
             </div>
+
+            <div style={{ marginTop:14, padding:"12px 14px", background:B.bg, borderRadius:10 }}>
+              <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", marginBottom: f.aplica_detraccion?10:0 }}>
+                <input type="checkbox" checked={f.aplica_detraccion}
+                  onChange={e=>setF(p=>({...p,aplica_detraccion:e.target.checked, porcentaje_detraccion: e.target.checked?(p.porcentaje_detraccion||"10"):""}))}/>
+                <span style={{ fontSize:12, fontWeight:600, color:B.textPri }}>Este cliente aplica detracción</span>
+              </label>
+              {f.aplica_detraccion && (
+                <div>
+                  <label style={lbl}>Porcentaje de detracción</label>
+                  <select style={inp} value={f.porcentaje_detraccion} onChange={e=>setF(p=>({...p,porcentaje_detraccion:e.target.value}))}>
+                    <option value="4">4% — servicios en general (más común en transporte/logística)</option>
+                    <option value="10">10%</option>
+                    <option value="12">12%</option>
+                  </select>
+                </div>
+              )}
+            </div>
+
             {f.valor_unit_s && (
               <div style={{ background:B.bg, borderRadius:10, padding:14, marginTop:14,
-                display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
+                display:"grid", gridTemplateColumns: f.aplica_detraccion ? "1fr 1fr 1fr 1fr 1fr" : "1fr 1fr 1fr", gap:12 }}>
                 <div><div style={{ fontSize:10, color:B.textMut }}>VALOR VENTA</div>
                   <div style={{ fontSize:16, fontWeight:700, color:B.navy }}>{fmt.sol(f.valor_unit_s)}</div></div>
                 <div><div style={{ fontSize:10, color:B.textMut }}>IGV 18%</div>
                   <div style={{ fontSize:16, fontWeight:700, color:B.orange }}>{fmt.sol(igv)}</div></div>
                 <div><div style={{ fontSize:10, color:B.textMut }}>TOTAL</div>
                   <div style={{ fontSize:18, fontWeight:800, color:B.gold }}>{fmt.sol(total)}</div></div>
+                {f.aplica_detraccion && (
+                  <>
+                    <div><div style={{ fontSize:10, color:B.textMut }}>DETRACCIÓN</div>
+                      <div style={{ fontSize:16, fontWeight:700, color:B.red }}>- {fmt.sol(montoDetraccion)}</div></div>
+                    <div><div style={{ fontSize:10, color:B.textMut }}>NETO A COBRAR</div>
+                      <div style={{ fontSize:18, fontWeight:800, color:B.green }}>{fmt.sol(netoACobrar)}</div></div>
+                  </>
+                )}
               </div>
             )}
             <div style={{ display:"flex", gap:10, marginTop:20, justifyContent:"flex-end" }}>
