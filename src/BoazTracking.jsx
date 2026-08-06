@@ -2,7 +2,7 @@
 // BOAZ TRACKING PORTAL — Portal público de seguimiento
 // Portal donde el destinatario busca su pedido por código BZ
 // ══════════════════════════════════════════════════════════════
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL  = "https://jeftkwjdqzkpswvaqspi.supabase.co";
@@ -20,7 +20,11 @@ const ESTADOS = {
 const TIMELINE = ["sin_asignar","asignado","en_ruta","entregado"];
 
 const fmt = {
-  fecha: (d) => d ? new Date(d).toLocaleDateString("es-PE",{day:"numeric",month:"long",year:"numeric"}) : "—",
+  fecha: (d) => {
+    if (!d) return "—";
+    const str = typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d+"T00:00:00" : d;
+    return new Date(str).toLocaleDateString("es-PE",{day:"numeric",month:"long",year:"numeric"});
+  },
   hora:  (d) => d ? new Date(d).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"}) : "",
   fechaHora: (d) => d ? new Date(d).toLocaleString("es-PE",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}) : "",
 };
@@ -55,12 +59,13 @@ export default function BoazTracking() {
   const [buscando, setBuscando] = useState(false);
   const [error, setError] = useState("");
 
-  const buscar = async () => {
-    if (!codigo.trim()) return;
+  const buscar = async (valorDirecto) => {
+    const valorEntrada = (valorDirecto ?? codigo).trim();
+    if (!valorEntrada) return;
     setBuscando(true); setError(""); setPedido(null);
 
     // Normaliza lo que pegue o escriba el usuario: mayúsculas, sin espacios.
-    const limpio = codigo.trim().toUpperCase().replace(/\s+/g,"");
+    const limpio = valorEntrada.toUpperCase().replace(/\s+/g,"");
     const soloDigitos = limpio.replace(/^BZ-?/,"");
 
     const candidatos = [
@@ -88,6 +93,18 @@ export default function BoazTracking() {
   const estadoActual = pedido ? (ESTADOS[pedido.estado] || ESTADOS.sin_asignar) : null;
   const idxActual = pedido ? TIMELINE.indexOf(pedido.estado) : -1;
   const esFinal = pedido?.estado === "no_entregado";
+
+  // Si la página se abre con ?codigo=BZ... (por ejemplo, enlazada desde la web
+  // comercial), precarga el código y busca automáticamente.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const desdeUrl = params.get("codigo") || params.get("omd") || params.get("tracking");
+    if (desdeUrl) {
+      setCodigo(desdeUrl);
+      buscar(desdeUrl);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div style={{ minHeight:"100vh", background:"#0D1E3D",

@@ -30,7 +30,14 @@ const B = {
 
 // ── UTILIDADES ────────────────────────────────────────────────
 const fmt = {
-  fecha: (d) => d ? new Date(d).toLocaleDateString("es-PE") : "—",
+  fecha: (d) => {
+    if (!d) return "—";
+    // Si es una fecha "sola" (YYYY-MM-DD, sin hora), forzamos que se interprete
+    // en hora local en vez de UTC — si no, JS la corre un día hacia atrás en
+    // zonas horarias negativas como Perú (UTC-5).
+    const str = typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d+"T00:00:00" : d;
+    return new Date(str).toLocaleDateString("es-PE");
+  },
   hora:  (d) => d ? new Date(d).toLocaleTimeString("es-PE", {hour:"2-digit",minute:"2-digit"}) : "—",
   sol:   (n) => n != null ? `S/ ${parseFloat(n).toFixed(2)}` : "—",
 };

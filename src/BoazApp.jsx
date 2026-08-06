@@ -40,7 +40,11 @@ const MOTIVOS_NO_ENTREGA = [
 ];
 
 const fmt = {
-  fecha: (d) => d ? new Date(d).toLocaleDateString("es-PE",{day:"numeric",month:"short"}) : "—",
+  fecha: (d) => {
+    if (!d) return "—";
+    const str = typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d+"T00:00:00" : d;
+    return new Date(str).toLocaleDateString("es-PE",{day:"numeric",month:"short"});
+  },
   hora:  (d) => d ? new Date(d).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"}) : "",
   fechaHora: (d) => d ? new Date(d).toLocaleString("es-PE",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}) : "",
 };
