@@ -1834,6 +1834,7 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
   const [modalAsignacion, setModalAsignacion] = useState(false);
   const [editandoUnidad, setEditandoUnidad] = useState(null);
   const [modalCalendario, setModalCalendario] = useState(null); // guarda la asignación seleccionada
+  const [editandoAsignacion, setEditandoAsignacion] = useState(null);
 
   // Si hay días registrados manualmente en el calendario, cuenta solo los
   // marcados como "prestado". Si aún no se registró ninguno, usa el rango
@@ -1883,7 +1884,7 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
         {vista==="unidades" ? (
           <BtnPri onClick={()=>{setEditandoUnidad(null); setModalUnidad(true);}}>+ Nueva unidad</BtnPri>
         ) : (
-          <BtnPri onClick={()=>setModalAsignacion(true)}>+ Nueva asignación</BtnPri>
+          <BtnPri onClick={()=>{setEditandoAsignacion(null); setModalAsignacion(true);}}>+ Nueva asignación</BtnPri>
         )}
       </div>
 
@@ -1966,6 +1967,7 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
                     <td style={{ padding:"10px 12px" }}>
                       <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
                         <button onClick={()=>setModalCalendario(a)} style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer" }}>📅 Calendario</button>
+                        <button onClick={()=>{setEditandoAsignacion(a); setModalAsignacion(true);}} style={{ fontSize:11, color:B.gold, background:"none", border:"none", cursor:"pointer" }}>✏️ Editar</button>
                         {a.estado==="activa" && (
                           <button onClick={()=>finalizarAsignacion(a)} style={{ fontSize:11, color:B.red, background:"none", border:"none", cursor:"pointer" }}>Finalizar</button>
                         )}
@@ -1989,7 +1991,9 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
       )}
       {modalAsignacion && (
         <ModalAsignacionUnidad unidades={unidades} empresas={empresas} tiposServicio={tiposServicio} repartidores={repartidores}
-          onClose={()=>setModalAsignacion(false)} onSaved={()=>{setModalAsignacion(false); onRefresh();}} toast={toast}/>
+          asignacion={editandoAsignacion}
+          onClose={()=>{setModalAsignacion(false); setEditandoAsignacion(null);}}
+          onSaved={()=>{setModalAsignacion(false); setEditandoAsignacion(null); onRefresh();}} toast={toast}/>
       )}
       {modalCalendario && (
         <ModalCalendarioServicio asignacion={modalCalendario}
@@ -2182,26 +2186,35 @@ function ModalUnidad({ unidad, repartidores, onClose, onSaved, toast }) {
   );
 }
 
-function ModalAsignacionUnidad({ unidades, empresas, tiposServicio, repartidores, onClose, onSaved, toast }) {
-  const [f, setF] = useState({
+function ModalAsignacionUnidad({ unidades, empresas, tiposServicio, repartidores, asignacion, onClose, onSaved, toast }) {
+  const [f, setF] = useState(asignacion || {
     unidad_id:"", empresa_id:"", tipo_servicio_id:"",
     fecha_inicio: new Date().toISOString().split("T")[0],
     tarifa_dia:"", notas:"",
   });
   const guardar = async () => {
     if (!f.unidad_id || !f.empresa_id || !f.fecha_inicio) { toast("Selecciona unidad, cliente y fecha de inicio","error"); return; }
-    const { error } = await sb.from("asignaciones_unidad").insert([{
-      ...f, tarifa_dia: parseFloat(f.tarifa_dia)||null, estado:"activa",
-    }]);
+    let error;
+    if (asignacion) {
+      ({ error } = await sb.from("asignaciones_unidad").update({
+        unidad_id:f.unidad_id, empresa_id:f.empresa_id, tipo_servicio_id:f.tipo_servicio_id||null,
+        fecha_inicio:f.fecha_inicio, fecha_fin:f.fecha_fin||null,
+        tarifa_dia: parseFloat(f.tarifa_dia)||null, notas:f.notas||null,
+      }).eq("id", asignacion.id));
+    } else {
+      ({ error } = await sb.from("asignaciones_unidad").insert([{
+        ...f, tarifa_dia: parseFloat(f.tarifa_dia)||null, estado:"activa",
+      }]));
+    }
     if (error) { toast("Error: "+error.message,"error"); return; }
-    toast("Asignación creada ✓");
+    toast(asignacion ? "Asignación actualizada ✓" : "Asignación creada ✓");
     onSaved();
   };
   return (
     <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center" }}>
       <div style={{ background:B.white, borderRadius:16, padding:28, width:480, boxShadow:"0 20px 60px #0003" }}>
         <div style={{ display:"flex", justifyContent:"space-between", marginBottom:20 }}>
-          <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>Nueva asignación de unidad</div>
+          <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>{asignacion ? "Editar asignación" : "Nueva asignación de unidad"}</div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:18, color:B.textSec, cursor:"pointer" }}>✕</button>
         </div>
         <label style={lbl}>Unidad</label>
@@ -2228,11 +2241,17 @@ function ModalAsignacionUnidad({ unidades, empresas, tiposServicio, repartidores
           <div><label style={lbl}>Tarifa por día (S/)</label>
             <input type="number" style={inp} value={f.tarifa_dia} onChange={e=>setF(p=>({...p,tarifa_dia:e.target.value}))}/></div>
         </div>
+        {asignacion && (
+          <div style={{ marginBottom:12 }}>
+            <label style={lbl}>Fecha de fin (déjalo vacío si sigue activa)</label>
+            <input type="date" style={inp} value={f.fecha_fin||""} onChange={e=>setF(p=>({...p,fecha_fin:e.target.value}))}/>
+          </div>
+        )}
         <label style={lbl}>Notas (opcional)</label>
-        <input style={{ ...inp, marginBottom:20 }} value={f.notas} onChange={e=>setF(p=>({...p,notas:e.target.value}))}/>
+        <input style={{ ...inp, marginBottom:20 }} value={f.notas||""} onChange={e=>setF(p=>({...p,notas:e.target.value}))}/>
         <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
           <BtnSec onClick={onClose}>Cancelar</BtnSec>
-          <BtnPri onClick={guardar}>Crear asignación</BtnPri>
+          <BtnPri onClick={guardar}>{asignacion ? "Guardar cambios" : "Crear asignación"}</BtnPri>
         </div>
       </div>
     </div>
