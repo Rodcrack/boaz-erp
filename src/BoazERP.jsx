@@ -442,6 +442,29 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, onRefresh
   const [modalGeocodificar, setModalGeocodificar] = useState(false);
   const [modalDetalle, setModalDetalle] = useState(null);
   const [asignando, setAsignando] = useState(null);
+  const [ordenCol, setOrdenCol] = useState(null);
+  const [ordenDir, setOrdenDir] = useState("asc");
+
+  const ordenarPor = (col) => {
+    if (ordenCol === col) {
+      setOrdenDir(d => d==="asc" ? "desc" : "asc");
+    } else {
+      setOrdenCol(col);
+      setOrdenDir("asc");
+    }
+  };
+
+  const VALOR_COL = {
+    tracking: p => p.omd || "",
+    destinatario: p => p.dest_nombre || "",
+    direccion: p => p.dest_direccion || "",
+    peso: p => parseFloat(p.peso_kg) || 0,
+    servicio: p => p.tipo_servicio || "",
+    ambito: p => p.ambito || "",
+    repartidor: p => { const r = repartidores.find(r=>r.id===p.repartidor_id); return r ? `${r.nombres} ${r.apellidos}` : ""; },
+    estado: p => p.estado || "",
+    fecha: p => p.created_at || "",
+  };
 
   const filtrados = pedidos.filter(p => {
     const okE = filtroEstado==="todos" || p.estado===filtroEstado;
@@ -451,6 +474,11 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, onRefresh
       p.dest_distrito?.toLowerCase().includes(busqueda.toLowerCase()) ||
       p.dest_telefono?.includes(busqueda);
     return okE && okB;
+  }).sort((a,b) => {
+    if (!ordenCol) return 0;
+    const va = VALOR_COL[ordenCol](a), vb = VALOR_COL[ordenCol](b);
+    const cmp = typeof va === "number" ? va-vb : String(va).localeCompare(String(vb));
+    return ordenDir==="asc" ? cmp : -cmp;
   });
 
   const cambiarEstado = async (id, nuevoEstado) => {
@@ -478,7 +506,7 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, onRefresh
       <div style={{ display:"flex", gap:10, marginBottom:16, flexWrap:"wrap", alignItems:"center" }}>
         <input placeholder="🔍 Buscar por OMD, nombre, teléfono, distrito..."
           value={busqueda} onChange={e=>setBusqueda(e.target.value)}
-          style={{ ...inp, width:320 }} />
+          style={{ ...inp, width:320, background:B.white, boxShadow:"0 1px 3px #0D1E3D14" }} />
         <div style={{ display:"flex", gap:6 }}>
           {["todos",...Object.keys(ESTADOS_PEDIDO)].map(e=>{
             const cantidad = e==="todos" ? pedidos.length : pedidos.filter(p=>p.estado===e).length;
@@ -509,9 +537,22 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, onRefresh
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
           <thead>
             <tr style={{ background:B.bg }}>
-              {["Tracking Boaz","Destinatario","Dirección","Peso","Servicio","Ámbito","Repartidor","Estado","Fecha","Acciones"].map(h=>(
-                <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:10,
-                  color:B.textMut, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.7px" }}>{h}</th>
+              {[
+                ["Tracking Boaz","tracking"],["Destinatario","destinatario"],["Dirección","direccion"],
+                ["Peso","peso"],["Servicio","servicio"],["Ámbito","ambito"],["Repartidor","repartidor"],
+                ["Estado","estado"],["Fecha","fecha"],["Acciones",null],
+              ].map(([h,col])=>(
+                <th key={h} onClick={()=>col && ordenarPor(col)}
+                  style={{ padding:"10px 14px", textAlign:"left", fontSize:10,
+                    color: ordenCol===col ? B.navy : B.textMut, fontWeight:700, textTransform:"uppercase",
+                    letterSpacing:"0.7px", cursor: col?"pointer":"default", userSelect:"none",
+                    whiteSpace:"nowrap" }}>
+                  {h}{col && (
+                    <span style={{ marginLeft:4, opacity: ordenCol===col?1:0.3 }}>
+                      {ordenCol===col ? (ordenDir==="asc"?"▲":"▼") : "▲"}
+                    </span>
+                  )}
+                </th>
               ))}
             </tr>
           </thead>
