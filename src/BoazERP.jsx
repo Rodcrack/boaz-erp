@@ -357,7 +357,7 @@ function Dashboard({ pedidos, repartidores, liquidaciones }) {
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead>
               <tr style={{ background:B.bg }}>
-                {["Tracking Boaz","Destinatario","Distrito","Tarifa","Repartidor","Estado","Fecha"].map(h=>(
+                {["Tracking Boaz","Destinatario","Distrito","Servicio","Repartidor","Estado","Fecha"].map(h=>(
                   <th key={h} style={{ padding:"8px 14px", textAlign:"left", fontSize:10,
                     color:B.textMut, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.7px" }}>{h}</th>
                 ))}
@@ -370,7 +370,15 @@ function Dashboard({ pedidos, repartidores, liquidaciones }) {
                   <td style={{ padding:"10px 14px", fontSize:12, fontWeight:700, color:B.navy }}>{p.omd}</td>
                   <td style={{ padding:"10px 14px", fontSize:12, color:B.textPri }}>{p.dest_nombre}</td>
                   <td style={{ padding:"10px 14px", fontSize:12, color:B.textSec }}>{p.dest_distrito||"—"}</td>
-                  <td style={{ padding:"10px 14px", fontSize:12, fontWeight:600, color:B.textPri }}>{fmt.sol(p.tarifa_s)}</td>
+                  <td style={{ padding:"10px 14px" }}>
+                    {p.tipo_servicio ? (
+                      <span style={{ fontSize:10, fontWeight:700, padding:"3px 8px", borderRadius:8,
+                        background: p.tipo_servicio==="same_day"?"#F5F3FF":"#EFF6FF",
+                        color: p.tipo_servicio==="same_day"?"#7C3AED":"#0369A1" }}>
+                        {p.tipo_servicio==="same_day"?"Same Day":"Next Day"}
+                      </span>
+                    ) : <span style={{ fontSize:11, color:B.textMut }}>—</span>}
+                  </td>
                   <td style={{ padding:"10px 14px", fontSize:12, color:B.textSec }}>
   {repartidores.find(r=>r.id===p.repartidor_id) ?
     `${repartidores.find(r=>r.id===p.repartidor_id).nombres} ${repartidores.find(r=>r.id===p.repartidor_id).apellidos}` : "—"}
