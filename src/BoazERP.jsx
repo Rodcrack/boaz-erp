@@ -2480,6 +2480,7 @@ function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }) {
   const [facturas, setFacturas] = useState([]);
   const [modal, setModal] = useState(false);
   const [modalPago, setModalPago] = useState(null); // factura seleccionada para marcar pagada
+  const [editandoFactura, setEditandoFactura] = useState(null);
   const [filtroPago, setFiltroPago] = useState("todas");
   const facturaVacia = () => ({
     empresa_id:"", serie:"E001", numero:"", descripcion:
@@ -2489,7 +2490,7 @@ function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }) {
   });
   const [f, setF] = useState(facturaVacia());
 
-  const abrirNuevaFactura = () => { setF(facturaVacia()); setModal(true); };
+  const abrirNuevaFactura = () => { setEditandoFactura(null); setF(facturaVacia()); setModal(true); };
 
   const cargarFacturas = () => {
     sb.from("facturas").select("*,empresas(nombre)").order("created_at",{ascending:false})
@@ -2497,8 +2498,11 @@ function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }) {
   };
   useEffect(()=>{ cargarFacturas(); },[]);
 
-  const marcarPagado = async (fecha) => {
-    const { error } = await sb.from("facturas").update({ estado_pago:"pagado", fecha_pago: fecha }).eq("id", modalPago.id);
+  const marcarPagado = async (fecha, banco, numeroOperacion) => {
+    const { error } = await sb.from("facturas").update({
+      estado_pago:"pagado", fecha_pago: fecha,
+      banco_pago: banco||null, numero_operacion: numeroOperacion||null,
+    }).eq("id", modalPago.id);
     if (error) { toast("Error: "+error.message,"error"); return; }
     toast("Factura marcada como pagada ✓");
     setModalPago(null);
@@ -2531,16 +2535,25 @@ function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }) {
     if (!f.empresa_id || !f.valor_unit_s || !f.numero) {
       toast("Completa empresa, número y valor","error"); return;
     }
-    const { error } = await sb.from("facturas").insert([{
-      ...f, tipo_servicio_id: f.tipo_servicio_id||null,
-      igv_s: igv, total_s: total, estado:"emitida", estado_pago:"pendiente",
+    const payload = {
+      empresa_id: f.empresa_id, serie: f.serie, numero: f.numero,
+      descripcion: f.descripcion, cantidad: f.cantidad, valor_unit_s: f.valor_unit_s,
+      fecha_emision: f.fecha_emision, tipo_servicio_id: f.tipo_servicio_id||null,
+      igv_s: igv, total_s: total,
       porcentaje_detraccion: f.aplica_detraccion ? (parseFloat(f.porcentaje_detraccion)||0) : 0,
       monto_detraccion: montoDetraccion,
       unidad_medida:"ZZ",
-    }]);
+    };
+    let error;
+    if (editandoFactura) {
+      ({ error } = await sb.from("facturas").update(payload).eq("id", editandoFactura.id));
+    } else {
+      ({ error } = await sb.from("facturas").insert([{ ...payload, estado:"emitida", estado_pago:"pendiente" }]));
+    }
     if (error) { toast("Error: "+error.message,"error"); return; }
-    toast("Factura registrada ✓");
+    toast(editandoFactura ? "Factura actualizada ✓" : "Factura registrada ✓");
     setModal(false);
+    setEditandoFactura(null);
     cargarFacturas();
   };
 
@@ -2613,13 +2626,18 @@ function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }) {
                 </td>
                 <td style={{ padding:"11px 14px", fontSize:11, color:B.textMut }}>
                   {fa.fecha_pago ? fmt.fecha(fa.fecha_pago) : "—"}
+                  {fa.banco_pago && <div style={{ fontSize:10, color:B.textMut }}>{fa.banco_pago}{fa.numero_operacion?` · Op. ${fa.numero_operacion}`:""}</div>}
                 </td>
                 <td style={{ padding:"11px 14px" }}>
-                  {fa.estado_pago!=="pagado" && (
-                    <button onClick={()=>setModalPago(fa)}
-                      style={{ fontSize:11, color:B.green, background:"none", border:"none",
-                        cursor:"pointer", fontWeight:700 }}>💰 Marcar pagada</button>
-                  )}
+                  <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                    <button onClick={()=>{setEditandoFactura(fa); setF({...fa, aplica_detraccion:(fa.porcentaje_detraccion||0)>0, porcentaje_detraccion: fa.porcentaje_detraccion?String(fa.porcentaje_detraccion):""}); setModal(true);}}
+                      style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer" }}>✏️ Editar</button>
+                    {fa.estado_pago!=="pagado" && (
+                      <button onClick={()=>setModalPago(fa)}
+                        style={{ fontSize:11, color:B.green, background:"none", border:"none",
+                          cursor:"pointer", fontWeight:700 }}>💰 Marcar pagada</button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -2639,7 +2657,7 @@ function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }) {
           <div style={{ background:B.white, borderRadius:16, padding:28, width:560,
             boxShadow:"0 20px 60px #0003" }}>
             <div style={{ display:"flex", justifyContent:"space-between", marginBottom:20 }}>
-              <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>Registrar factura</div>
+              <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>{editandoFactura ? "Editar factura" : "Registrar factura"}</div>
               <button onClick={()=>setModal(false)} style={{ background:"none", border:"none",
                 fontSize:18, color:B.textSec, cursor:"pointer" }}>✕</button>
             </div>
@@ -2711,8 +2729,8 @@ function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }) {
               </div>
             )}
             <div style={{ display:"flex", gap:10, marginTop:20, justifyContent:"flex-end" }}>
-              <BtnSec onClick={()=>setModal(false)}>Cancelar</BtnSec>
-              <BtnPri onClick={guardar}>Registrar factura</BtnPri>
+              <BtnSec onClick={()=>{setModal(false); setEditandoFactura(null);}}>Cancelar</BtnSec>
+              <BtnPri onClick={guardar}>{editandoFactura ? "Guardar cambios" : "Registrar factura"}</BtnPri>
             </div>
           </div>
         </div>
@@ -2731,10 +2749,12 @@ const TIPOS_SERVICIO = {
 
 function ModalMarcarPagada({ factura, onClose, onConfirmar }) {
   const [fecha, setFecha] = useState(new Date().toISOString().split("T")[0]);
+  const [banco, setBanco] = useState("");
+  const [numeroOperacion, setNumeroOperacion] = useState("");
   return (
     <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000,
       display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
-      <div style={{ background:B.white, borderRadius:16, padding:28, width:400, boxShadow:"0 20px 60px #0003" }}>
+      <div style={{ background:B.white, borderRadius:16, padding:28, width:420, boxShadow:"0 20px 60px #0003" }}>
         <div style={{ display:"flex", justifyContent:"space-between", marginBottom:16 }}>
           <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>💰 Marcar factura como pagada</div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:18, color:B.textSec, cursor:"pointer" }}>✕</button>
@@ -2743,10 +2763,22 @@ function ModalMarcarPagada({ factura, onClose, onConfirmar }) {
           {factura.serie}-{factura.numero} — {factura.empresas?.nombre} — <strong style={{color:B.navy}}>{fmt.sol(factura.total_s)}</strong>
         </div>
         <label style={lbl}>Fecha de pago</label>
-        <input type="date" style={{ ...inp, marginBottom:20 }} value={fecha} onChange={e=>setFecha(e.target.value)}/>
+        <input type="date" style={{ ...inp, marginBottom:12 }} value={fecha} onChange={e=>setFecha(e.target.value)}/>
+        <label style={lbl}>Banco</label>
+        <select style={{ ...inp, marginBottom:12 }} value={banco} onChange={e=>setBanco(e.target.value)}>
+          <option value="">— Selecciona —</option>
+          <option value="BCP">BCP</option>
+          <option value="BBVA">BBVA</option>
+          <option value="Interbank">Interbank</option>
+          <option value="Scotiabank">Scotiabank</option>
+          <option value="Banco de la Nación">Banco de la Nación</option>
+          <option value="Otro">Otro</option>
+        </select>
+        <label style={lbl}>N° de operación</label>
+        <input style={{ ...inp, marginBottom:20 }} value={numeroOperacion} onChange={e=>setNumeroOperacion(e.target.value)} placeholder="Ej. 001-4521789"/>
         <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
           <BtnSec onClick={onClose}>Cancelar</BtnSec>
-          <BtnPri onClick={()=>onConfirmar(fecha)}>Confirmar pago</BtnPri>
+          <BtnPri onClick={()=>onConfirmar(fecha, banco, numeroOperacion)}>Confirmar pago</BtnPri>
         </div>
       </div>
     </div>
