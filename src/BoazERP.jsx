@@ -490,13 +490,17 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, onRefresh
     onRefresh();
   };
 
-  const asignarRep = async (pedidoId, repId) => {
-    const { error } = await sb.from("pedidos").update({
-      repartidor_id: repId, estado:"asignado",
-      fecha_asignacion: new Date().toISOString()
-    }).eq("id", pedidoId);
+  const asignarRep = async (pedidoId, repId, estadoActual) => {
+    const payload = { repartidor_id: repId };
+    // Si el pedido todavía no tenía repartidor, pasa a "asignado" y registra la fecha.
+    // Si ya estaba en ruta/entregado/etc., solo se cambia el conductor sin tocar el estado.
+    if (estadoActual === "sin_asignar") {
+      payload.estado = "asignado";
+      payload.fecha_asignacion = new Date().toISOString();
+    }
+    const { error } = await sb.from("pedidos").update(payload).eq("id", pedidoId);
     if (error) { toast("Error: "+error.message,"error"); return; }
-    toast("Repartidor asignado ✓");
+    toast(estadoActual==="sin_asignar" ? "Repartidor asignado ✓" : "Repartidor cambiado ✓");
     setAsignando(null); onRefresh();
   };
 
@@ -586,15 +590,23 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, onRefresh
                   <td style={{ padding:"11px 14px", fontSize:11, color:B.textSec, textTransform:"capitalize" }}>{p.ambito?.replace("_"," ")||"—"}</td>
                   <td style={{ padding:"11px 14px" }} onClick={e=>e.stopPropagation()}>
                     {asignando===p.id ? (
-                      <select autoFocus onChange={e=>{if(e.target.value)asignarRep(p.id,e.target.value);}}
+                      <select autoFocus defaultValue={p.repartidor_id||""}
+                        onChange={e=>{if(e.target.value)asignarRep(p.id,e.target.value,p.estado); else setAsignando(null);}}
+                        onBlur={()=>setAsignando(null)}
                         style={{ ...inp, padding:"4px 8px", fontSize:11, width:"auto" }}>
-                        <option value="">Selecciona...</option>
+                        <option value="">Sin asignar</option>
                         {repartidores.filter(r=>r.activo).map(r=>(
                           <option key={r.id} value={r.id}>{r.nombres} {r.apellidos}</option>
                         ))}
                       </select>
                     ) : rep ? (
-                      <span style={{ fontSize:12, color:B.textPri }}>{rep.nombres} {rep.apellidos}</span>
+                      <button onClick={()=>setAsignando(p.id)}
+                        title="Clic para cambiar de repartidor"
+                        style={{ fontSize:12, color:B.textPri, background:"none", border:"none",
+                          cursor:"pointer", padding:0, textDecoration:"underline",
+                          textDecorationStyle:"dotted", textDecorationColor:B.textMut }}>
+                        {rep.nombres} {rep.apellidos}
+                      </button>
                     ) : (
                       <button onClick={()=>setAsignando(p.id)}
                         style={{ fontSize:11, color:B.blue, background:"none", border:"none",

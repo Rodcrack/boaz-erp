@@ -1542,14 +1542,15 @@ export default function BoazApp() {
   const [sincronizando, setSincronizando] = useState(false);
   const sincronizar = useCallback(async (manual=false) => {
     if (leerCola().length === 0) {
-      if (manual) showToast("Todo está sincronizado ✓");
+      if (manual) { setSincronizando(true); await cargar(); setSincronizando(false); showToast("Actualizado ✓"); }
       return;
     }
     if (manual) setSincronizando(true);
     const { ok, fail } = await procesarCola();
     setPendientesSync(leerCola().length);
+    await cargar();
     if (manual) setSincronizando(false);
-    if (ok > 0) { showToast(`${ok} cambio${ok===1?"":"s"} sincronizado${ok===1?"":"s"} ✓`); cargar(); }
+    if (ok > 0) showToast(`${ok} cambio${ok===1?"":"s"} sincronizado${ok===1?"":"s"} ✓`);
     if (fail > 0) showToast(`${fail} pendiente${fail===1?"":"s"} de sincronizar`,"error");
   },[cargar, showToast]);
 
