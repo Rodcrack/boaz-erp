@@ -841,15 +841,54 @@ function PantallaFinalRuta({ resumen, repartidor, onCerrar }) {
   );
 }
 
-function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, iniciando, onOrdenarRuta, onVerMapa, rutaActiva, onFinalizarRuta }) {
-  const [filtroLista, setFiltroLista] = useState("ruta");
-  const hoy = new Date().toISOString().split("T")[0];
-  const misAsignados = pedidos.filter(p=>p.repartidor_id===repartidor.id && p.estado==="asignado");
-  const misEnRuta = pedidos.filter(p=>p.repartidor_id===repartidor.id && p.estado==="en_ruta");
-  const misP = [...misEnRuta, ...misAsignados].sort((a,b) => {
+// Agrupa los pedidos "asignado" de un repartidor por lote (cada carga masiva
+// es un lote). Devuelve qué se puede iniciar/mostrar ahora y qué queda en espera
+// hasta que termine la ruta activa. Se usa igual en Inicio, Ordenar ruta y Mapa,
+// para que los tres muestren siempre el mismo conjunto de pedidos.
+function calcularPedidosActivos(pedidos, repartidorId, rutaActiva) {
+  const misAsignados = pedidos.filter(p=>p.repartidor_id===repartidorId && p.estado==="asignado");
+  const misEnRuta = pedidos.filter(p=>p.repartidor_id===repartidorId && p.estado==="en_ruta");
+
+  const asignadosPorLote = {};
+  misAsignados.forEach(p => {
+    const key = p.lote_id || "_manual";
+    (asignadosPorLote[key] = asignadosPorLote[key] || []).push(p);
+  });
+  const manuales = asignadosPorLote["_manual"] || [];
+  const lotesReales = Object.keys(asignadosPorLote).filter(k=>k!=="_manual");
+
+  let pedidosIniciables = [];
+  let pedidosEnEspera = [];
+  let loteAIniciar = null;
+  if (!rutaActiva) {
+    if (lotesReales.length > 0) {
+      loteAIniciar = lotesReales.sort((a,b) => {
+        const minA = Math.min(...asignadosPorLote[a].map(p=>new Date(p.created_at).getTime()));
+        const minB = Math.min(...asignadosPorLote[b].map(p=>new Date(p.created_at).getTime()));
+        return minA - minB;
+      })[0];
+      pedidosIniciables = [...manuales, ...asignadosPorLote[loteAIniciar]];
+    } else {
+      pedidosIniciables = manuales;
+    }
+  } else {
+    pedidosIniciables = manuales;
+    pedidosEnEspera = lotesReales.flatMap(k=>asignadosPorLote[k]);
+  }
+
+  const misP = [...misEnRuta, ...pedidosIniciables].sort((a,b) => {
     const oa = a.orden_ruta ?? 999999, ob = b.orden_ruta ?? 999999;
     return oa - ob;
   });
+
+  return { misEnRuta, pedidosIniciables, pedidosEnEspera, loteAIniciar, misP };
+}
+
+function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, iniciando, onOrdenarRuta, onVerMapa, rutaActiva, onFinalizarRuta }) {
+  const [filtroLista, setFiltroLista] = useState("ruta");
+  const hoy = new Date().toISOString().split("T")[0];
+  const { misEnRuta, pedidosIniciables, pedidosEnEspera, loteAIniciar, misP } =
+    calcularPedidosActivos(pedidos, repartidor.id, rutaActiva);
   const entregadosHoy = pedidos.filter(p=>
     p.repartidor_id===repartidor.id && p.estado==="entregado" && p.fecha_entrega?.startsWith(hoy)
   );
@@ -883,17 +922,25 @@ function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, ini
             fontSize:11, cursor:"pointer" }}>Salir</button>
       </div>
 
-      {misAsignados.length > 0 && (
-        <button onClick={onIniciarRuta} disabled={iniciando}
+      {pedidosIniciables.length > 0 && (
+        <button onClick={()=>onIniciarRuta(pedidosIniciables, loteAIniciar)}
+          disabled={iniciando}
           style={{ width:"100%", background:`linear-gradient(135deg,#7C3AED,#6D28D9)`,
             color:C.white, border:"none", padding:16, borderRadius:14,
             fontSize:15, fontWeight:800, cursor: iniciando?"default":"pointer",
             marginBottom:16, boxShadow:"0 6px 16px #6D28D944" }}>
-          {iniciando ? "Iniciando..." : `🚀 Iniciar Ruta (${misAsignados.length} pedido${misAsignados.length===1?"":"s"})`}
+          {iniciando ? "Iniciando..." : `🚀 Iniciar Ruta (${pedidosIniciables.length} pedido${pedidosIniciables.length===1?"":"s"})`}
         </button>
       )}
 
-      {misP.length===0 && rutaActiva && (
+      {pedidosEnEspera.length > 0 && (
+        <div style={{ background:"#FFFBEB", border:"1px solid #FDE68A", borderRadius:12,
+          padding:"10px 14px", marginBottom:16, fontSize:12, color:"#92400E", fontWeight:600 }}>
+          📦 Tienes {pedidosEnEspera.length} pedido{pedidosEnEspera.length===1?"":"s"} de una nueva carga esperando — se habilitará{pedidosEnEspera.length===1?"":"n"} cuando termines tu ruta actual.
+        </div>
+      )}
+
+      {misEnRuta.length===0 && rutaActiva && (
         <button onClick={onFinalizarRuta}
           style={{ width:"100%", background:`linear-gradient(135deg,${C.green},#059669)`,
             color:C.white, border:"none", padding:16, borderRadius:14,
@@ -1567,8 +1614,8 @@ export default function BoazApp() {
     setPedidos(prev => prev.map(p => p.id===pedidoId ? { ...p, ...cambios } : p));
   },[]);
 
-  const iniciarRuta = async () => {
-    const ids = pedidos.filter(p=>p.repartidor_id===repartidor.id && p.estado==="asignado").map(p=>p.id);
+  const iniciarRuta = async (pedidosASumar, loteId) => {
+    const ids = (pedidosASumar||[]).map(p=>p.id);
     if (!ids.length) return;
     setIniciandoRuta(true);
     const { offline } = await iniciarRutaMasivo(ids);
@@ -1580,7 +1627,7 @@ export default function BoazApp() {
     if (!rutaActiva) {
       const hoy = new Date().toISOString().split("T")[0];
       const { data } = await sb.from("rutas_repartidor").insert([{
-        repartidor_id: repartidor.id, fecha: hoy,
+        repartidor_id: repartidor.id, fecha: hoy, lote_id: loteId||null,
         hora_inicio: new Date().toISOString(), total_pedidos: ids.length,
       }]).select().single();
       if (data) setRutaActiva(data);
@@ -1589,16 +1636,23 @@ export default function BoazApp() {
 
   const finalizarRuta = async () => {
     if (!rutaActiva) return;
-    const hoy = new Date().toISOString().split("T")[0];
-    const entregadosHoy = pedidos.filter(p=>p.repartidor_id===repartidor.id && p.estado==="entregado" && p.fecha_entrega?.startsWith(hoy)).length;
-    const noEntregados = pedidos.filter(p=>p.repartidor_id===repartidor.id && p.estado==="no_entregado").length;
+    // Cuenta solo lo resuelto desde que se inició ESTA ruta (no todo el día),
+    // para no mezclar los números con otra ruta ya cerrada antes hoy mismo.
+    const entregadosRuta = pedidos.filter(p=>
+      p.repartidor_id===repartidor.id && p.estado==="entregado" &&
+      p.fecha_entrega && p.fecha_entrega >= rutaActiva.hora_inicio
+    ).length;
+    const noEntregadosRuta = pedidos.filter(p=>
+      p.repartidor_id===repartidor.id && p.estado==="no_entregado" &&
+      p.historial?.some(h=>h.tipo==="estado" && h.timestamp >= rutaActiva.hora_inicio)
+    ).length;
     const horaFin = new Date().toISOString();
     await sb.from("rutas_repartidor").update({
-      hora_fin: horaFin, entregados: entregadosHoy, no_entregados: noEntregados,
+      hora_fin: horaFin, entregados: entregadosRuta, no_entregados: noEntregadosRuta,
     }).eq("id", rutaActiva.id);
     setPantallaFinal({
       horaInicio: rutaActiva.hora_inicio, horaFin,
-      entregados: entregadosHoy, noEntregados,
+      entregados: entregadosRuta, noEntregados: noEntregadosRuta,
     });
     setRutaActiva(null);
   };
@@ -1669,10 +1723,7 @@ export default function BoazApp() {
           />
         ) : ordenandoRuta ? (
           <OrdenarRuta
-            pedidosIniciales={
-              [...pedidos.filter(p=>p.repartidor_id===repartidor.id && (p.estado==="asignado"||p.estado==="en_ruta"))]
-                .sort((a,b)=> (a.orden_ruta ?? 999999) - (b.orden_ruta ?? 999999))
-            }
+            pedidosIniciales={calcularPedidosActivos(pedidos, repartidor.id, rutaActiva).misP}
             onVolver={()=>setOrdenandoRuta(false)}
             onGuardado={(ordenGuardado)=>{
               setPedidos(prev => prev.map(p => {
@@ -1688,10 +1739,7 @@ export default function BoazApp() {
             onCerrar={()=>setPantallaFinal(null)}/>
         ) : viendoMapa ? (
           <MapaRuta
-            pedidos={
-              [...pedidos.filter(p=>p.repartidor_id===repartidor.id && (p.estado==="asignado"||p.estado==="en_ruta"))]
-                .sort((a,b)=> (a.orden_ruta ?? 999999) - (b.orden_ruta ?? 999999))
-            }
+            pedidos={calcularPedidosActivos(pedidos, repartidor.id, rutaActiva).misP}
             onVolver={()=>setViendoMapa(false)}
           />
         ) : (

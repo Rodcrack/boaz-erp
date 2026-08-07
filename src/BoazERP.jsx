@@ -1225,6 +1225,7 @@ function ModalCargaMasiva({ repartidores, empresas, tarifariosCliente, onClose, 
     if (validas.length===0) return;
     setProcesando(true);
     const generados = [];
+    const loteId = repartidorId ? crypto.randomUUID() : null;
     try {
       for (let i=0; i<validas.length; i++) {
         const fila = validas[i];
@@ -1239,6 +1240,7 @@ function ModalCargaMasiva({ repartidores, empresas, tarifariosCliente, onClose, 
             omd: codigo,
             empresa_id: empresaId,
             repartidor_id: repartidorId || null,
+            lote_id: loteId,
             cliente_referencia: fila.cliente_referencia || null,
             dest_nombre: fila.dest_nombre,
             dest_telefono: fila.dest_telefono || null,
