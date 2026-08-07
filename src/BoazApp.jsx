@@ -437,11 +437,15 @@ function Login({ onLogin }) {
 function CapturaFotos({ fotos, setFotos, minimo = 2, label = "Evidencias" }) {
   const inputCamara = useRef();
   const inputGaleria = useRef();
-  const agregarFoto = (e) => {
+  const [procesando, setProcesando] = useState(false);
+  const agregarFoto = async (e) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    setFotos(prev => [...prev, { file, preview: URL.createObjectURL(file), rota:false }]);
     e.target.value = "";
+    if (!file) return;
+    setProcesando(true);
+    const archivoFinal = await convertirSiEsHeic(file);
+    setProcesando(false);
+    setFotos(prev => [...prev, { file: archivoFinal, preview: URL.createObjectURL(archivoFinal), rota:false }]);
   };
   const marcarRota = (i) => setFotos(prev => prev.map((f,idx)=> idx===i ? { ...f, rota:true } : f));
   const quitar = (i) => setFotos(prev => prev.filter((_,idx)=>idx!==i));
@@ -475,6 +479,11 @@ function CapturaFotos({ fotos, setFotos, minimo = 2, label = "Evidencias" }) {
       {hayRotas && (
         <div style={{ fontSize:11, color:C.red, marginBottom:8, fontWeight:600 }}>
           ⚠️ Una o más fotos no cargaron bien. Quítalas (×) y vuelve a tomarlas antes de guardar.
+        </div>
+      )}
+      {procesando && (
+        <div style={{ fontSize:11, color:C.gold, marginBottom:8, fontWeight:600 }}>
+          ⏳ Procesando foto...
         </div>
       )}
       <div style={{ display:"flex", gap:8, marginBottom:6 }}>
@@ -639,6 +648,43 @@ function cargarLeaflet() {
     script.onerror = () => resolve(null);
     document.head.appendChild(script);
   });
+}
+
+// ── Conversión HEIC/HEIF → JPEG ─────────────────────────────────
+// Algunos celulares (sobre todo Samsung/Xiaomi con "formato eficiente"
+// activado) guardan las fotos de galería en formato HEIC/HEIF, que los
+// navegadores no pueden mostrar directamente. Lo convertimos a JPEG
+// automáticamente al seleccionarlas.
+function cargarHeic2Any() {
+  return new Promise((resolve) => {
+    if (window.heic2any) { resolve(window.heic2any); return; }
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js";
+    script.onload = () => resolve(window.heic2any);
+    script.onerror = () => resolve(null);
+    document.head.appendChild(script);
+  });
+}
+
+function esPosibleHeic(file) {
+  const tipo = (file.type || "").toLowerCase();
+  const nombre = (file.name || "").toLowerCase();
+  return tipo.includes("heic") || tipo.includes("heif") ||
+    nombre.endsWith(".heic") || nombre.endsWith(".heif");
+}
+
+// Si el archivo es HEIC/HEIF, lo convierte a JPEG. Si no, lo devuelve tal cual.
+async function convertirSiEsHeic(file) {
+  if (!esPosibleHeic(file)) return file;
+  const heic2any = await cargarHeic2Any();
+  if (!heic2any) return file; // si no cargó la librería, seguimos con el original (fallará más claro después)
+  try {
+    const resultado = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.85 });
+    const blob = Array.isArray(resultado) ? resultado[0] : resultado;
+    return new File([blob], (file.name||"foto").replace(/\.(heic|heif)$/i, ".jpg"), { type: "image/jpeg" });
+  } catch (e) {
+    return file; // si falla la conversión, seguimos con el original
+  }
 }
 
 function MapaRuta({ pedidos, onVolver }) {
