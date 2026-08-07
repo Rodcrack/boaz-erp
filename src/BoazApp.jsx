@@ -1234,14 +1234,15 @@ function DetallePedido({ pedido: p, onVolver, onActualizar, onActualizarLocal, t
         <div style={{ fontSize:13, color:C.textSec, marginBottom:4 }}>
           📍 {p.dest_direccion}
         </div>
+        <div style={{ fontSize:13, color:C.textSec, marginBottom:4 }}>
+          🏙️ {p.dest_distrito}
+        </div>
         {p.dest_referencia && (
-          <div style={{ fontSize:12, color:C.textMut, marginBottom:4 }}>
+          <div style={{ fontSize:12, color:C.textMut, marginBottom:12 }}>
             🏠 Ref: {p.dest_referencia}
           </div>
         )}
-        <div style={{ fontSize:13, color:C.textSec, marginBottom:12 }}>
-          🏙️ {p.dest_distrito}
-        </div>
+        {!p.dest_referencia && <div style={{ marginBottom:8 }}/>}
 
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
           <button onClick={abrirGoogleMaps}
