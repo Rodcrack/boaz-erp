@@ -165,6 +165,12 @@ function agruparHistorial(historial) {
 // Guarda un cambio de estado (entregado / no_entregado) con sus fotos y GPS.
 // Intenta online primero; si falla, encola en localStorage (con las fotos
 // ya comprimidas en base64) para sincronizar cuando vuelva la conexión.
+function pareceProblemaDeConexion(e) {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return true;
+  const msg = (e?.message || "").toLowerCase();
+  return /network|fetch|failed to fetch|conexi[oó]n|internet|timeout/.test(msg);
+}
+
 async function guardarEvidenciaYEstado({ pedidoId, nuevoEstado, fotosFiles, motivo, responsable, recibidoPor, comentario }) {
   const [gpsPos, comprimidas] = await Promise.all([
     obtenerGPS(),
@@ -202,6 +208,11 @@ async function guardarEvidenciaYEstado({ pedidoId, nuevoEstado, fotosFiles, moti
     if (error) throw error;
     return { ok: true, offline: false };
   } catch (e) {
+    if (!pareceProblemaDeConexion(e)) {
+      // No parece un problema de conexión real — no lo escondemos en la cola
+      // offline. Dejamos que el error real llegue a quien llamó esta función.
+      throw e;
+    }
     const fotosBase64 = [];
     for (const blob of comprimidas) fotosBase64.push(await blobToBase64(blob));
     encolar({
