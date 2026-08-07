@@ -1493,10 +1493,16 @@ export default function BoazApp() {
   },[repartidor,cargar]);
 
   // Sincronización de la cola offline
-  const sincronizar = useCallback(async () => {
-    if (leerCola().length === 0) return;
+  const [sincronizando, setSincronizando] = useState(false);
+  const sincronizar = useCallback(async (manual=false) => {
+    if (leerCola().length === 0) {
+      if (manual) showToast("Todo está sincronizado ✓");
+      return;
+    }
+    if (manual) setSincronizando(true);
     const { ok, fail } = await procesarCola();
     setPendientesSync(leerCola().length);
+    if (manual) setSincronizando(false);
     if (ok > 0) { showToast(`${ok} cambio${ok===1?"":"s"} sincronizado${ok===1?"":"s"} ✓`); cargar(); }
     if (fail > 0) showToast(`${fail} pendiente${fail===1?"":"s"} de sincronizar`,"error");
   },[cargar, showToast]);
@@ -1591,6 +1597,14 @@ export default function BoazApp() {
               ⏳ {pendientesSync}
             </span>
           )}
+          <button onClick={()=>sincronizar(true)} disabled={sincronizando}
+            title="Forzar sincronización"
+            style={{ background:"none", border:"none", cursor: sincronizando?"default":"pointer",
+              fontSize:16, padding:4, lineHeight:1,
+              animation: sincronizando ? "girar 1s linear infinite" : "none" }}>
+            🔄
+          </button>
+          <style>{`@keyframes girar { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }`}</style>
           <div style={{ fontSize:12, color:C.textMut }}>
             {repartidor.nombres} {repartidor.apellidos?.[0]}.
           </div>
