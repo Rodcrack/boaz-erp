@@ -687,7 +687,7 @@ async function convertirSiEsHeic(file) {
   }
 }
 
-function MapaRuta({ pedidos, onVolver }) {
+function MapaRuta({ pedidos, onVolver, onVerPedido }) {
   const mapaRef = useRef(null);
   const contenedorRef = useRef(null);
   const [cargando, setCargando] = useState(true);
@@ -731,7 +731,7 @@ function MapaRuta({ pedidos, onVolver }) {
           className: "", iconSize:[26,26], iconAnchor:[13,13],
         });
         L.marker([p.dest_lat, p.dest_lng], { icon: icono }).addTo(mapa)
-          .bindPopup(`<strong>#${p._num} — ${p.omd}</strong><br>${p.dest_nombre}<br>${p.dest_distrito||""}`);
+          .on("click", () => onVerPedido(p));
         bounds.push([p.dest_lat, p.dest_lng]);
       });
 
@@ -755,6 +755,11 @@ function MapaRuta({ pedidos, onVolver }) {
         <div style={{ background:"#FFFBEB", border:"1px solid #FDE68A", borderRadius:10,
           padding:"10px 14px", marginBottom:12, fontSize:12, color:"#92400E", fontWeight:600 }}>
           ⚠️ {sinCoords} pedido{sinCoords===1?"":"s"} sin coordenadas — no se muestra{sinCoords===1?"":"n"} en el mapa.
+        </div>
+      )}
+      {conCoords.length > 0 && (
+        <div style={{ fontSize:11, color:C.textMut, marginBottom:10 }}>
+          👆 Toca un punto en el mapa para ver el detalle de ese pedido.
         </div>
       )}
 
@@ -1325,7 +1330,7 @@ function DetallePedido({ pedido: p, onVolver, onActualizar, onActualizarLocal, t
           letterSpacing:"0.8px", marginBottom:14 }}>🔄 Actualizar estado</div>
 
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-          {(p.estado==="asignado"||p.estado==="en_ruta") && (
+          {p.estado==="en_ruta" && (
             <>
               <button onClick={()=>{ setFotos([]); setRecibidoPor(""); setComentario(""); setVista("entrega"); }}
                 style={{ background:`linear-gradient(135deg,${C.green},#059669)`,
@@ -1340,6 +1345,18 @@ function DetallePedido({ pedido: p, onVolver, onActualizar, onActualizarLocal, t
                 ⚠️ No entregado
               </button>
             </>
+          )}
+          {p.estado==="asignado" && (
+            <div style={{ background:"#FFFBEB", border:"1px solid #FDE68A", borderRadius:12,
+              padding:"14px 16px", textAlign:"center" }}>
+              <div style={{ fontSize:22, marginBottom:6 }}>🚦</div>
+              <div style={{ fontSize:13, fontWeight:700, color:"#92400E", marginBottom:4 }}>
+                Todavía no puedes gestionar este pedido
+              </div>
+              <div style={{ fontSize:12, color:"#92400E" }}>
+                Primero inicia tu ruta desde la pantalla de Inicio para poder marcarlo como entregado o no entregado.
+              </div>
+            </div>
           )}
         </div>
       </div>
@@ -1742,6 +1759,7 @@ export default function BoazApp() {
           <MapaRuta
             pedidos={calcularPedidosActivos(pedidos, repartidor.id, rutaActiva).misP}
             onVolver={()=>setViendoMapa(false)}
+            onVerPedido={setPedidoSel}
           />
         ) : (
           <>
