@@ -1599,12 +1599,15 @@ function Repartidores({ repartidores, pedidos, onRefresh, toast }) {
   const [editando, setEditando] = useState(null);
   const [vista, setVista] = useState("cards");
   const emptyForm = { nombres:"", apellidos:"", dni:"", telefono:"",
-    email:"", vehiculo:"moto", placa:"", zona_default:"urbano" };
+    email:"", vehiculo:"moto", placa:"", zona_default:"urbano", usuario:"", password_hash:"" };
   const [f, setF] = useState(emptyForm);
 
   const guardar = async () => {
     if (!f.nombres || !f.dni) { toast("Nombre y DNI son obligatorios","error"); return; }
-    const payload = { ...f, email: f.email?.trim() ? f.email.trim() : null, activo:true };
+    const payload = { ...f, email: f.email?.trim() ? f.email.trim() : null,
+      usuario: f.usuario?.trim() ? f.usuario.trim().toLowerCase() : null,
+      password_hash: f.password_hash?.trim() ? f.password_hash.trim() : null,
+      activo:true };
     let error;
     if (editando) {
       ({ error } = await sb.from("repartidores").update(payload).eq("id", editando.id));
@@ -1791,6 +1794,22 @@ function Repartidores({ repartidores, pedidos, onRefresh, toast }) {
                   <option value="semi_urbano">Semi Urbano</option>
                   <option value="periferico">Periférico</option>
                 </select>
+              </div>
+            </div>
+
+            <div style={{ marginTop:16, padding:"12px 14px", background:B.bg, borderRadius:10 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:B.navy, textTransform:"uppercase",
+                letterSpacing:"0.7px", marginBottom:10 }}>📱 Acceso a la app (/app)</div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                <div><label style={lbl}>Usuario</label>
+                  <input style={inp} value={f.usuario||""} placeholder="ej. lmamani"
+                    onChange={e=>setF(p=>({...p,usuario:e.target.value.trim().toLowerCase()}))}/></div>
+                <div><label style={lbl}>PIN de acceso</label>
+                  <input style={inp} value={f.password_hash||""} placeholder="ej. últimos 4 del DNI"
+                    onChange={e=>setF(p=>({...p,password_hash:e.target.value.trim()}))}/></div>
+              </div>
+              <div style={{ fontSize:10, color:B.textMut, marginTop:8 }}>
+                Con estos dos datos el repartidor inicia sesión en la app móvil. Déjalos vacíos si aún no debe tener acceso.
               </div>
             </div>
             <div style={{ display:"flex", gap:10, marginTop:20, justifyContent:"flex-end" }}>
