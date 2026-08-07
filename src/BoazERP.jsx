@@ -1420,8 +1420,7 @@ function ModalDetallePedido({ pedido: p, repartidores, onClose, onRefresh, toast
   const timeline = [
     { label:"Creado", fecha: p.created_at, ok: true },
     { label:"Asignado", fecha: p.fecha_asignacion, ok: !!p.fecha_asignacion },
-    { label:"En ruta", fecha: p.fecha_asignacion, ok: ["en_ruta","entregado"].includes(p.estado) },
-    { label:"Entregado", fecha: p.fecha_entrega, ok: p.estado==="entregado" },
+    { label:"En ruta", fecha: p.fecha_asignacion, ok: ["en_ruta","entregado","no_entregado"].includes(p.estado) },
   ];
 
   const reintentarUbicacion = async () => {
@@ -1466,7 +1465,7 @@ function ModalDetallePedido({ pedido: p, repartidores, onClose, onRefresh, toast
         </div>
 
         {/* Timeline */}
-        <div style={{ display:"flex", gap:0, marginBottom:24 }}>
+        <div style={{ display:"flex", gap:0, marginBottom:14 }}>
           {timeline.map((t,i) => (
             <div key={i} style={{ flex:1, textAlign:"center", position:"relative" }}>
               <div style={{ width:28, height:28, borderRadius:"50%", margin:"0 auto 6px",
@@ -1481,6 +1480,40 @@ function ModalDetallePedido({ pedido: p, repartidores, onClose, onRefresh, toast
               <div style={{ fontSize:9, color:B.textMut }}>{fmt.fecha(t.fecha)}</div>
             </div>
           ))}
+        </div>
+
+        {/* Subestados finales: siempre visibles los dos posibles desenlaces */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:24 }}>
+          <div style={{ borderRadius:10, padding:"10px 12px",
+            background: p.estado==="entregado" ? "#ECFDF5" : B.bg,
+            border: `1.5px solid ${p.estado==="entregado" ? B.green : B.border}` }}>
+            <div style={{ fontSize:11, fontWeight:700,
+              color: p.estado==="entregado" ? B.green : B.textMut }}>
+              {p.estado==="entregado" ? "✅ Entregado" : "○ Entregado"}
+            </div>
+            {p.estado==="entregado" ? (
+              <>
+                <div style={{ fontSize:9, color:B.textMut, marginTop:2 }}>{fmt.fecha(p.fecha_entrega)}</div>
+                {p.recibido_por && <div style={{ fontSize:10, color:"#065F46", marginTop:4 }}>Recibido por: {p.recibido_por}</div>}
+                {p.comentario_entrega && <div style={{ fontSize:10, color:"#065F46", marginTop:2, fontStyle:"italic" }}>{p.comentario_entrega}</div>}
+              </>
+            ) : <div style={{ fontSize:9, color:B.textMut, marginTop:2 }}>Aún no</div>}
+          </div>
+          <div style={{ borderRadius:10, padding:"10px 12px",
+            background: p.estado==="no_entregado" ? "#FEF2F2" : B.bg,
+            border: `1.5px solid ${p.estado==="no_entregado" ? B.red : B.border}` }}>
+            <div style={{ fontSize:11, fontWeight:700,
+              color: p.estado==="no_entregado" ? B.red : B.textMut }}>
+              {p.estado==="no_entregado" ? "⚠️ No entregado" : "○ No entregado"}
+            </div>
+            {p.estado==="no_entregado" ? (
+              <>
+                <div style={{ fontSize:9, color:B.textMut, marginTop:2 }}>{fmt.fecha(p.fecha_entrega)}</div>
+                {p.motivo_no_entrega && <div style={{ fontSize:10, color:"#991B1B", marginTop:4 }}>Motivo: {p.motivo_no_entrega}</div>}
+                {p.comentario_no_entrega && <div style={{ fontSize:10, color:"#991B1B", marginTop:2, fontStyle:"italic" }}>{p.comentario_no_entrega}</div>}
+              </>
+            ) : <div style={{ fontSize:9, color:B.textMut, marginTop:2 }}>Aún no</div>}
+          </div>
         </div>
 
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
