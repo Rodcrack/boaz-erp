@@ -717,6 +717,7 @@ function generarHtmlEtiquetasCliente(pedidosSel, empresa) {
           <div class="col">
             <div><strong>Cliente:</strong> ${escapeHtmlEtiquetaCliente(p.dest_nombre)}</div>
             <div><strong>Dirección:</strong> ${escapeHtmlEtiquetaCliente(p.dest_direccion)}</div>
+            ${p.dest_referencia ? `<div><strong>Referencia:</strong> ${escapeHtmlEtiquetaCliente(p.dest_referencia)}</div>` : ""}
             <div><strong>Departamento:</strong> Lima</div>
             <div><strong>Provincia:</strong> Lima</div>
             <div><strong>Distrito:</strong> ${escapeHtmlEtiquetaCliente(p.dest_distrito)}</div>
@@ -1235,6 +1236,7 @@ function CargaMasiva({ empresaId, empresa, onCargaCompleta }) {
             omd: r.codigo,
             dest_nombre: r.dest_nombre,
             dest_direccion: r.dest_direccion,
+            dest_referencia: r.dest_referencia,
             dest_distrito: r.dest_distrito,
             tipo_servicio: r.tipo_servicio,
             cobro_destino: r.cobro_destino,
