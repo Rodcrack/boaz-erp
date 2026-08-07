@@ -1482,39 +1482,30 @@ function ModalDetallePedido({ pedido: p, repartidores, onClose, onRefresh, toast
           ))}
         </div>
 
-        {/* Subestados finales: siempre visibles los dos posibles desenlaces */}
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:24 }}>
-          <div style={{ borderRadius:10, padding:"10px 12px",
-            background: p.estado==="entregado" ? "#ECFDF5" : B.bg,
-            border: `1.5px solid ${p.estado==="entregado" ? B.green : B.border}` }}>
-            <div style={{ fontSize:11, fontWeight:700,
-              color: p.estado==="entregado" ? B.green : B.textMut }}>
-              {p.estado==="entregado" ? "✅ Entregado" : "○ Entregado"}
-            </div>
+        {/* Subestado final: solo se muestra el que realmente ocurrió */}
+        {(p.estado==="entregado" || p.estado==="no_entregado") && (
+          <div style={{ marginBottom:24 }}>
             {p.estado==="entregado" ? (
-              <>
+              <div style={{ borderRadius:10, padding:"10px 14px", background:"#ECFDF5",
+                border:`1.5px solid ${B.green}` }}>
+                <div style={{ fontSize:11, fontWeight:700, color:B.green }}>
+                  ✅ Entregado {p.recibido_por && `— a ${p.recibido_por}`}
+                </div>
                 <div style={{ fontSize:9, color:B.textMut, marginTop:2 }}>{fmt.fecha(p.fecha_entrega)}</div>
-                {p.recibido_por && <div style={{ fontSize:10, color:"#065F46", marginTop:4 }}>Recibido por: {p.recibido_por}</div>}
-                {p.comentario_entrega && <div style={{ fontSize:10, color:"#065F46", marginTop:2, fontStyle:"italic" }}>{p.comentario_entrega}</div>}
-              </>
-            ) : <div style={{ fontSize:9, color:B.textMut, marginTop:2 }}>Aún no</div>}
-          </div>
-          <div style={{ borderRadius:10, padding:"10px 12px",
-            background: p.estado==="no_entregado" ? "#FEF2F2" : B.bg,
-            border: `1.5px solid ${p.estado==="no_entregado" ? B.red : B.border}` }}>
-            <div style={{ fontSize:11, fontWeight:700,
-              color: p.estado==="no_entregado" ? B.red : B.textMut }}>
-              {p.estado==="no_entregado" ? "⚠️ No entregado" : "○ No entregado"}
-            </div>
-            {p.estado==="no_entregado" ? (
-              <>
+                {p.comentario_entrega && <div style={{ fontSize:10, color:"#065F46", marginTop:4, fontStyle:"italic" }}>{p.comentario_entrega}</div>}
+              </div>
+            ) : (
+              <div style={{ borderRadius:10, padding:"10px 14px", background:"#FEF2F2",
+                border:`1.5px solid ${B.red}` }}>
+                <div style={{ fontSize:11, fontWeight:700, color:B.red }}>
+                  ⚠️ No entregado {p.motivo_no_entrega && `— ${p.motivo_no_entrega}`}
+                </div>
                 <div style={{ fontSize:9, color:B.textMut, marginTop:2 }}>{fmt.fecha(p.fecha_entrega)}</div>
-                {p.motivo_no_entrega && <div style={{ fontSize:10, color:"#991B1B", marginTop:4 }}>Motivo: {p.motivo_no_entrega}</div>}
-                {p.comentario_no_entrega && <div style={{ fontSize:10, color:"#991B1B", marginTop:2, fontStyle:"italic" }}>{p.comentario_no_entrega}</div>}
-              </>
-            ) : <div style={{ fontSize:9, color:B.textMut, marginTop:2 }}>Aún no</div>}
+                {p.comentario_no_entrega && <div style={{ fontSize:10, color:"#991B1B", marginTop:4, fontStyle:"italic" }}>{p.comentario_no_entrega}</div>}
+              </div>
+            )}
           </div>
-        </div>
+        )}
 
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
           <div>
