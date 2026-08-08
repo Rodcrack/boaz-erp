@@ -58,6 +58,7 @@ export default function BoazTracking() {
   const [pedido, setPedido] = useState(null);
   const [buscando, setBuscando] = useState(false);
   const [error, setError] = useState("");
+  const [fotoAbierta, setFotoAbierta] = useState(null);
 
   const buscar = async (valorDirecto) => {
     const valorEntrada = (valorDirecto ?? codigo).trim();
@@ -93,6 +94,7 @@ export default function BoazTracking() {
   const estadoActual = pedido ? (ESTADOS[pedido.estado] || ESTADOS.sin_asignar) : null;
   const idxActual = pedido ? TIMELINE.indexOf(pedido.estado) : -1;
   const esFinal = pedido?.estado === "no_entregado";
+  const todasLasFotos = pedido ? agruparHistorial(pedido.historial||[]).filter(h=>h.esFotoGrupo).flatMap(h=>h.urls) : [];
 
   // Si la página se abre con ?codigo=BZ... (por ejemplo, enlazada desde la web
   // comercial), precarga el código y busca automáticamente.
@@ -313,7 +315,7 @@ export default function BoazTracking() {
                             {h.esFotoGrupo && (
                               <div style={{ display:"flex", gap:8, marginTop:8, flexWrap:"wrap" }}>
                                 {h.urls.map((url,ui)=>(
-                                  <img key={ui} src={url} alt="" onClick={()=>window.open(url,"_blank")}
+                                  <img key={ui} src={url} alt="" onClick={()=>setFotoAbierta(todasLasFotos.indexOf(url))}
                                     style={{ width:80, height:80, objectFit:"cover", borderRadius:8,
                                       border:"1px solid #1E3560", cursor:"pointer" }}/>
                                 ))}
@@ -369,6 +371,38 @@ export default function BoazTracking() {
         <div style={{ marginBottom:4 }}>Grupo Boaz S.A.C. · RUC 20613172301 · El Agustino, Lima</div>
         <div>contacto@boaz.com.pe · +51 960 622 471 · www.boaz.com.pe</div>
       </div>
+
+      {fotoAbierta !== null && (
+        <div onClick={()=>setFotoAbierta(null)}
+          style={{ position:"fixed", inset:0, background:"#000000EE", zIndex:2000,
+            display:"flex", alignItems:"center", justifyContent:"center" }}>
+          <button onClick={()=>setFotoAbierta(null)}
+            style={{ position:"absolute", top:16, right:16, background:"none", border:"none",
+              color:"#fff", fontSize:28, cursor:"pointer", zIndex:1 }}>✕</button>
+
+          <div style={{ position:"absolute", top:16, left:0, right:0, textAlign:"center",
+            color:"#fff", fontSize:13, fontWeight:600 }}>
+            {fotoAbierta+1} / {todasLasFotos.length}
+          </div>
+
+          {fotoAbierta > 0 && (
+            <button onClick={(e)=>{ e.stopPropagation(); setFotoAbierta(f=>f-1); }}
+              style={{ position:"absolute", left:8, top:"50%", transform:"translateY(-50%)",
+                background:"#FFFFFF22", border:"none", color:"#fff", fontSize:26,
+                width:44, height:44, borderRadius:"50%", cursor:"pointer" }}>‹</button>
+          )}
+          {fotoAbierta < todasLasFotos.length-1 && (
+            <button onClick={(e)=>{ e.stopPropagation(); setFotoAbierta(f=>f+1); }}
+              style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)",
+                background:"#FFFFFF22", border:"none", color:"#fff", fontSize:26,
+                width:44, height:44, borderRadius:"50%", cursor:"pointer" }}>›</button>
+          )}
+
+          <img src={todasLasFotos[fotoAbierta]} alt=""
+            onClick={e=>e.stopPropagation()}
+            style={{ maxWidth:"90%", maxHeight:"80%", objectFit:"contain", borderRadius:8 }}/>
+        </div>
+      )}
     </div>
   );
 }
