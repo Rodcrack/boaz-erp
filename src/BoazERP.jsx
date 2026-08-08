@@ -39,8 +39,32 @@ const fmt = {
     return new Date(str).toLocaleDateString("es-PE");
   },
   hora:  (d) => d ? new Date(d).toLocaleTimeString("es-PE", {hour:"2-digit",minute:"2-digit"}) : "—",
+  fechaHora: (d) => d ? new Date(d).toLocaleString("es-PE",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}) : "—",
   sol:   (n) => n != null ? `S/ ${parseFloat(n).toFixed(2)}` : "—",
 };
+
+const ICONOS_HIST = {
+  llamada:"📞", whatsapp:"💬", estado:"🔄",
+  foto_entrega:"📸", foto_no_entrega:"📸",
+};
+
+// Agrupa las fotos de un mismo evento (mismo timestamp) para mostrarlas juntas.
+function agruparHistorial(historial) {
+  const grupos = [];
+  for (const h of historial) {
+    if ((h.tipo||"").startsWith("foto_")) {
+      const ultimo = grupos[grupos.length-1];
+      if (ultimo && ultimo.esFotoGrupo && ultimo.timestamp === h.timestamp) {
+        ultimo.urls.push(h.url);
+      } else {
+        grupos.push({ esFotoGrupo:true, tipo:h.tipo, timestamp:h.timestamp, urls:[h.url] });
+      }
+    } else {
+      grupos.push(h);
+    }
+  }
+  return grupos;
+}
 
 const ESTADOS_PEDIDO = {
   sin_asignar: { bg:"#EFF6FF", color:"#1D4ED8", label:"Sin asignar" },
@@ -1433,6 +1457,11 @@ function ModalDetallePedido({ pedido: p, repartidores, onClose, onRefresh, toast
   const [latManual, setLatManual] = useState(p.dest_lat||"");
   const [lngManual, setLngManual] = useState(p.dest_lng||"");
   const [ubicando, setUbicando] = useState(false);
+  const historial = agruparHistorial(
+    [...(p.historial||[])].sort((a,b)=> new Date(b.timestamp) - new Date(a.timestamp))
+  );
+  const todasLasFotos = historial.filter(h=>h.esFotoGrupo).flatMap(h=>h.urls);
+  const [fotoAbierta, setFotoAbierta] = useState(null);
   const timeline = [
     { label:"Creado", fecha: p.created_at, ok: true },
     { label:"Asignado", fecha: p.fecha_asignacion, ok: !!p.fecha_asignacion },
@@ -1549,10 +1578,41 @@ function ModalDetallePedido({ pedido: p, repartidores, onClose, onRefresh, toast
             ))}
           </div>
         </div>
-        {p.foto_evidencia && (
+        {historial.length > 0 && (
           <div style={{ marginTop:16 }}>
-            <div style={{ fontSize:11, color:B.textMut, marginBottom:6 }}>Foto de evidencia</div>
-            <img src={p.foto_evidencia} style={{ width:"100%", borderRadius:8, maxHeight:200, objectFit:"cover" }}/>
+            <div style={{ fontSize:11, fontWeight:700, color:B.navy, textTransform:"uppercase",
+              letterSpacing:"0.8px", marginBottom:10 }}>🕒 Historial del pedido</div>
+            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              {historial.map((h,i)=>(
+                <div key={i} style={{ display:"flex", gap:10, alignItems:"flex-start",
+                  borderBottom: i<historial.length-1 ? `1px solid ${B.border}` : "none",
+                  paddingBottom:10 }}>
+                  <span style={{ fontSize:15 }}>{ICONOS_HIST[h.tipo]||"•"}</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:12, fontWeight:600, color:B.textPri }}>
+                      {h.tipo==="llamada" && "Llamada al destinatario"}
+                      {h.tipo==="whatsapp" && "Mensaje de WhatsApp"}
+                      {h.tipo==="estado" && h.detalle}
+                      {h.esFotoGrupo && "Fotos de evidencia"}
+                    </div>
+                    <div style={{ fontSize:10, color:B.textMut }}>
+                      {fmt.fechaHora(h.timestamp)}
+                      {h.lat && ` · GPS ${h.lat.toFixed(4)}, ${h.lng.toFixed(4)}`}
+                    </div>
+                    {h.esFotoGrupo && (
+                      <div style={{ display:"flex", gap:8, marginTop:6, flexWrap:"wrap" }}>
+                        {h.urls.map((url,ui)=>(
+                          <img key={ui} src={url} alt=""
+                            onClick={()=>setFotoAbierta(todasLasFotos.indexOf(url))}
+                            style={{ width:70, height:70, objectFit:"cover",
+                            borderRadius:6, border:`1px solid ${B.border}`, cursor:"pointer" }}/>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -1589,6 +1649,38 @@ function ModalDetallePedido({ pedido: p, repartidores, onClose, onRefresh, toast
           <BtnSec onClick={onClose}>Cerrar</BtnSec>
         </div>
       </div>
+
+      {fotoAbierta !== null && (
+        <div onClick={()=>setFotoAbierta(null)}
+          style={{ position:"fixed", inset:0, background:"#000000EE", zIndex:2000,
+            display:"flex", alignItems:"center", justifyContent:"center" }}>
+          <button onClick={()=>setFotoAbierta(null)}
+            style={{ position:"absolute", top:16, right:16, background:"none", border:"none",
+              color:"#fff", fontSize:28, cursor:"pointer", zIndex:1 }}>✕</button>
+
+          <div style={{ position:"absolute", top:16, left:0, right:0, textAlign:"center",
+            color:"#fff", fontSize:13, fontWeight:600 }}>
+            {fotoAbierta+1} / {todasLasFotos.length}
+          </div>
+
+          {fotoAbierta > 0 && (
+            <button onClick={(e)=>{ e.stopPropagation(); setFotoAbierta(f=>f-1); }}
+              style={{ position:"absolute", left:8, top:"50%", transform:"translateY(-50%)",
+                background:"#FFFFFF22", border:"none", color:"#fff", fontSize:26,
+                width:44, height:44, borderRadius:"50%", cursor:"pointer" }}>‹</button>
+          )}
+          {fotoAbierta < todasLasFotos.length-1 && (
+            <button onClick={(e)=>{ e.stopPropagation(); setFotoAbierta(f=>f+1); }}
+              style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)",
+                background:"#FFFFFF22", border:"none", color:"#fff", fontSize:26,
+                width:44, height:44, borderRadius:"50%", cursor:"pointer" }}>›</button>
+          )}
+
+          <img src={todasLasFotos[fotoAbierta]} alt=""
+            onClick={e=>e.stopPropagation()}
+            style={{ maxWidth:"90%", maxHeight:"80%", objectFit:"contain", borderRadius:8 }}/>
+        </div>
+      )}
     </div>
   );
 }

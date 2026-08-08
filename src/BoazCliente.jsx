@@ -1274,6 +1274,8 @@ function DetalleModal({ pedido: p, onClose }) {
   const historial = agruparHistorial(
     [...(p.historial||[])].sort((a,b)=> new Date(b.timestamp) - new Date(a.timestamp))
   );
+  const todasLasFotos = historial.filter(h=>h.esFotoGrupo).flatMap(h=>h.urls);
+  const [fotoAbierta, setFotoAbierta] = useState(null);
   const colorHeader = p.estado==="entregado" ? C.green
     : p.estado==="no_entregado" ? C.red
     : C.navy;
@@ -1400,7 +1402,7 @@ function DetalleModal({ pedido: p, onClose }) {
                           {h.urls.map((url,ui)=>(
                             <img key={ui} src={url} alt="" style={{ width:90, height:90, objectFit:"cover",
                               borderRadius:6, border:"1px solid #E2E8F0", cursor:"pointer" }}
-                              onClick={()=>window.open(url,"_blank")}/>
+                              onClick={()=>setFotoAbierta(todasLasFotos.indexOf(url))}/>
                           ))}
                         </div>
                       )}
@@ -1412,6 +1414,38 @@ function DetalleModal({ pedido: p, onClose }) {
           </div>
         </div>
       </div>
+
+      {fotoAbierta !== null && (
+        <div onClick={e=>{ e.stopPropagation(); setFotoAbierta(null); }}
+          style={{ position:"fixed", inset:0, background:"#000000EE", zIndex:2000,
+            display:"flex", alignItems:"center", justifyContent:"center" }}>
+          <button onClick={e=>{ e.stopPropagation(); setFotoAbierta(null); }}
+            style={{ position:"absolute", top:16, right:16, background:"none", border:"none",
+              color:"#fff", fontSize:28, cursor:"pointer", zIndex:1 }}>✕</button>
+
+          <div style={{ position:"absolute", top:16, left:0, right:0, textAlign:"center",
+            color:"#fff", fontSize:13, fontWeight:600 }}>
+            {fotoAbierta+1} / {todasLasFotos.length}
+          </div>
+
+          {fotoAbierta > 0 && (
+            <button onClick={(e)=>{ e.stopPropagation(); setFotoAbierta(f=>f-1); }}
+              style={{ position:"absolute", left:8, top:"50%", transform:"translateY(-50%)",
+                background:"#FFFFFF22", border:"none", color:"#fff", fontSize:26,
+                width:44, height:44, borderRadius:"50%", cursor:"pointer" }}>‹</button>
+          )}
+          {fotoAbierta < todasLasFotos.length-1 && (
+            <button onClick={(e)=>{ e.stopPropagation(); setFotoAbierta(f=>f+1); }}
+              style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)",
+                background:"#FFFFFF22", border:"none", color:"#fff", fontSize:26,
+                width:44, height:44, borderRadius:"50%", cursor:"pointer" }}>›</button>
+          )}
+
+          <img src={todasLasFotos[fotoAbierta]} alt=""
+            onClick={e=>e.stopPropagation()}
+            style={{ maxWidth:"90%", maxHeight:"80%", objectFit:"contain", borderRadius:8 }}/>
+        </div>
+      )}
     </div>
   );
 }
