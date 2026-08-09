@@ -168,7 +168,7 @@ function Login({ onLogin }) {
     const contacto = data[0];
 
     const { data: empresa } = await sb.from("empresas")
-      .select("id,nombre,ruc,contacto,telefono,email,codigo_interno,puede_generar_etiquetas")
+      .select("id,nombre,ruc,contacto,telefono,email,codigo_interno,puede_generar_etiquetas,puede_ver_liquidacion")
       .eq("id", contacto.empresa_id)
       .maybeSingle();
 
@@ -856,10 +856,13 @@ function ModalEtiquetasCliente({ pedidos, empresa, onClose }) {
   );
 }
 
-function Dashboard({ pedidos, onVerPedido }) {
+function Dashboard({ pedidos, onVerPedido, empresa }) {
   const [busqueda, setBusqueda] = useState("");
   const [fechaInicio, setFechaInicio] = useState("");
   const [fechaFin, setFechaFin] = useState("");
+  const [generandoLiquidacion, setGenerandoLiquidacion] = useState(false);
+  const [avisoLiquidacion, setAvisoLiquidacion] = useState(null);
+  const avisar = (msg) => { setAvisoLiquidacion(msg); setTimeout(()=>setAvisoLiquidacion(null), 4000); };
   const [tipoServicio, setTipoServicio] = useState("");
   const [estado, setEstado] = useState("");
 
@@ -904,6 +907,19 @@ function Dashboard({ pedidos, onVerPedido }) {
     XLSX.writeFile(wb, `pedidos_boaz_${new Date().toISOString().slice(0,10)}.xlsx`);
   };
 
+  const generarLiquidacion = async () => {
+    if (!fechaInicio || !fechaFin) { avisar("Elige la fecha de inicio y fin para generar la liquidación"); return; }
+    if (filtrados.length===0) { avisar("No hay pedidos en este rango para generar la liquidación"); return; }
+    setGenerandoLiquidacion(true);
+    const numeroLiquidacion = `LIQ-BOAZ-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
+    await generarLiquidacionEntregasCliente({
+      pedidosOrdenados: [...filtrados].sort((a,b)=> new Date(a.created_at) - new Date(b.created_at)),
+      empresa, fechaInicio, fechaFin, numeroLiquidacion, toast: (msg)=>avisar(msg),
+    });
+    setGenerandoLiquidacion(false);
+    avisar("Liquidación de entregas generada ✓");
+  };
+
   return (
     <div style={{ padding:"20px 24px" }}>
       {/* Barra de búsqueda */}
@@ -931,7 +947,22 @@ function Dashboard({ pedidos, onVerPedido }) {
             display:"flex", alignItems:"center", gap:6, whiteSpace:"nowrap" }}>
           ⬇️ Descargar Excel
         </button>
+        {empresa?.puede_ver_liquidacion && (
+          <button onClick={generarLiquidacion} disabled={generandoLiquidacion}
+            style={{ background:`linear-gradient(135deg,${C.gold},${C.goldDk})`, border:"none",
+              color:C.navy, padding:"0 18px", borderRadius:10, fontSize:13, fontWeight:800,
+              cursor: generandoLiquidacion?"default":"pointer",
+              display:"flex", alignItems:"center", gap:6, whiteSpace:"nowrap" }}>
+            {generandoLiquidacion ? "Generando..." : "📄 Generar Liquidación"}
+          </button>
+        )}
       </div>
+      {avisoLiquidacion && (
+        <div style={{ background:"#FFFBEB", border:"1px solid #FDE68A", borderRadius:10,
+          padding:"10px 14px", marginBottom:14, fontSize:12, color:"#92400E", fontWeight:600 }}>
+          {avisoLiquidacion}
+        </div>
+      )}
 
       {/* Filtros */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:10, marginBottom:20 }}>
@@ -1258,6 +1289,184 @@ function CargaMasiva({ empresaId, empresa, onCargaCompleta }) {
 }
 
 // ── MODAL DE DETALLE (SOLO LECTURA) ────────────────────────────
+// ── Carga dinámica de ExcelJS (para la Liquidación de Entregas con estilo) ──
+function cargarExcelJS() {
+  return new Promise((resolve) => {
+    if (window.ExcelJS) { resolve(window.ExcelJS); return; }
+    const script = document.createElement("script");
+    script.src = "https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js";
+    script.onload = () => resolve(window.ExcelJS);
+    script.onerror = () => resolve(null);
+    document.head.appendChild(script);
+  });
+}
+
+const bandaDePeso = (kg) => {
+  const p = parseFloat(kg) || 0;
+  if (p <= 1) return "XS";
+  if (p <= 3) return "S";
+  return "M";
+};
+
+// Genera la Liquidación de Entregas en el formato Boaz establecido — misma
+// lógica que en el panel admin, adaptada para correr desde el portal cliente.
+async function generarLiquidacionEntregasCliente({ pedidosOrdenados, empresa, fechaInicio, fechaFin, numeroLiquidacion, toast }) {
+  const ExcelJS = await cargarExcelJS();
+  if (!ExcelJS) { toast("No se pudo cargar el generador de Excel — revisa tu conexión","error"); return; }
+
+  const NAVY = "FF1B2A4A", AMBER = "FFE8A33D", LIGHT_GRAY = "FFF2F2F2", WHITE = "FFFFFFFF", BLUE_EDIT = "FFEFF6FF";
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Liquidación", { views: [{ showGridLines: false }] });
+
+  const anchos = [5, 26, 20, 16, 14, 9, 9, 13, 11, 11, 12];
+  anchos.forEach((w,i)=>{ ws.getColumn(i+1).width = w; });
+
+  const bordeFino = { style:"thin", color:{ argb:"FFBFBFBF" } };
+  const borde = { top:bordeFino, left:bordeFino, right:bordeFino, bottom:bordeFino };
+
+  ws.mergeCells("A1:K1");
+  const titulo = ws.getCell("A1");
+  titulo.value = "GRUPO BOAZ S.A.C.";
+  titulo.font = { size:16, bold:true, color:{ argb:WHITE } };
+  titulo.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:NAVY } };
+  titulo.alignment = { horizontal:"center", vertical:"middle" };
+  ws.getRow(1).height = 28;
+
+  ws.mergeCells("A2:K2");
+  const sub = ws.getCell("A2");
+  sub.value = "RUC 20613172301  ·  Con Boaz, tu negocio no para  ·  contacto@boaz.com.pe  ·  +51 960 622 471";
+  sub.font = { size:9, color:{ argb:WHITE } };
+  sub.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:NAVY } };
+  sub.alignment = { horizontal:"center" };
+
+  ws.mergeCells("A4:K4");
+  const tituloDoc = ws.getCell("A4");
+  tituloDoc.value = "LIQUIDACIÓN DE ENTREGAS";
+  tituloDoc.font = { size:13, bold:true, color:{ argb:NAVY } };
+  tituloDoc.alignment = { horizontal:"center" };
+
+  const infoRows = [
+    ["N° de Liquidación:", numeroLiquidacion],
+    ["Cliente:", empresa.nombre],
+    ["RUC del cliente:", empresa.ruc||"—"],
+    ["Periodo:", `${fmt.fecha(fechaInicio+"T00:00:00")} al ${fmt.fecha(fechaFin+"T00:00:00")}`],
+    ["Tipo de servicio:", "Distribución / Same Day"],
+  ];
+  let filaInfo = 6;
+  infoRows.forEach(([label,val])=>{
+    ws.getCell(`A${filaInfo}`).value = label;
+    ws.getCell(`A${filaInfo}`).font = { bold:true, size:10, color:{ argb:NAVY } };
+    ws.mergeCells(`B${filaInfo}:D${filaInfo}`);
+    ws.getCell(`B${filaInfo}`).value = val;
+    ws.getCell(`B${filaInfo}`).font = { size:10 };
+    filaInfo++;
+  });
+
+  const filaTabla = filaInfo + 1;
+  const encabezados = ["N°","Punto / Destinatario","Distrito","Tracking Boaz","N° Orden","Peso (kg)","Banda","Ámbito","Tarifa","IGV","Total"];
+  encabezados.forEach((h,i)=>{
+    const celda = ws.getCell(filaTabla, i+1);
+    celda.value = h;
+    celda.font = { bold:true, size:10, color:{ argb:WHITE } };
+    celda.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:NAVY } };
+    celda.alignment = { horizontal:"center", vertical:"middle" };
+    celda.border = borde;
+  });
+  ws.getRow(filaTabla).height = 20;
+
+  let subtotal = 0;
+  pedidosOrdenados.forEach((p,i)=>{
+    const fila = filaTabla + 1 + i;
+    const tarifa = parseFloat(p.tarifa_s)||0;
+    const igv = tarifa*0.18;
+    const total = tarifa*1.18;
+    subtotal += tarifa;
+    const valores = [i+1, p.dest_nombre, p.dest_distrito||"—", p.omd, p.cliente_referencia||"—",
+      parseFloat(p.peso_kg)||0, bandaDePeso(p.peso_kg), (p.ambito||"—").replace("_"," "), tarifa, igv, total];
+    valores.forEach((v,j)=>{
+      const celda = ws.getCell(fila, j+1);
+      celda.value = v;
+      celda.border = borde;
+      celda.font = { size:10 };
+      if (i%2===1) celda.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:LIGHT_GRAY } };
+      if (j===8) celda.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:BLUE_EDIT } };
+      if (j>=8) celda.numFmt = '"S/" #,##0.00';
+      if (j===0 || j===5) celda.alignment = { horizontal:"center" };
+    });
+  });
+
+  const filaTotales = filaTabla + 1 + pedidosOrdenados.length;
+  ws.mergeCells(`A${filaTotales}:H${filaTotales}`);
+  ws.getCell(`A${filaTotales}`).value = `Total de puntos: ${pedidosOrdenados.length}`;
+  ws.getCell(`A${filaTotales}`).font = { bold:true, size:10, color:{ argb:NAVY } };
+  ws.getCell(`I${filaTotales}`).value = "Subtotal";
+  ws.getCell(`I${filaTotales}`).font = { bold:true, size:10 };
+  ws.getCell(`J${filaTotales}`).value = "IGV 18%";
+  ws.getCell(`J${filaTotales}`).font = { bold:true, size:10 };
+  ws.getCell(`K${filaTotales}`).value = "TOTAL";
+  ws.getCell(`K${filaTotales}`).font = { bold:true, size:11, color:{ argb:NAVY } };
+
+  const filaMontos = filaTotales + 1;
+  ws.getCell(`I${filaMontos}`).value = subtotal;
+  ws.getCell(`J${filaMontos}`).value = subtotal*0.18;
+  ws.getCell(`K${filaMontos}`).value = subtotal*1.18;
+  [`I${filaMontos}`,`J${filaMontos}`,`K${filaMontos}`].forEach(c=>{
+    ws.getCell(c).numFmt = '"S/" #,##0.00';
+    ws.getCell(c).font = { bold:true, size:11, color:{ argb:NAVY } };
+    ws.getCell(c).fill = { type:"pattern", pattern:"solid", fgColor:{ argb:AMBER } };
+  });
+
+  let filaResumen = filaMontos + 3;
+  ws.getCell(`A${filaResumen}`).value = "RESUMEN OPERATIVO";
+  ws.getCell(`A${filaResumen}`).font = { bold:true, size:11, color:{ argb:NAVY } };
+  filaResumen++;
+  const pesoTotal = pedidosOrdenados.reduce((a,p)=>a+(parseFloat(p.peso_kg)||0),0);
+  [["Puntos de entrega:", pedidosOrdenados.length],
+   ["Peso total:", `${pesoTotal.toFixed(1)} kg`],
+   ["Entregados:", pedidosOrdenados.filter(p=>p.estado==="entregado").length],
+   ["No entregados:", pedidosOrdenados.filter(p=>p.estado==="no_entregado").length],
+  ].forEach(([label,val])=>{
+    ws.getCell(`A${filaResumen}`).value = label;
+    ws.getCell(`A${filaResumen}`).font = { size:10 };
+    ws.getCell(`C${filaResumen}`).value = val;
+    ws.getCell(`C${filaResumen}`).font = { bold:true, size:10 };
+    filaResumen++;
+  });
+
+  filaResumen++;
+  ws.getCell(`A${filaResumen}`).value = "TARIFARIO SAME DAY DE REFERENCIA (sin IGV)";
+  ws.getCell(`A${filaResumen}`).font = { bold:true, size:11, color:{ argb:NAVY } };
+  filaResumen++;
+  const filaTarifHead = filaResumen;
+  ["Ámbito","XS (0-1kg)","S (1-3kg)","M (3-7kg)"].forEach((h,i)=>{
+    const c = ws.getCell(filaTarifHead, i+1);
+    c.value = h; c.font = { bold:true, size:9, color:{ argb:WHITE } };
+    c.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:NAVY } };
+    c.border = borde;
+  });
+  [["Urbano",10,13,16],["Semi Urbano",12,15,18],["Periférico",15,18,22]].forEach((fila,i)=>{
+    const f = filaTarifHead + 1 + i;
+    fila.forEach((v,j)=>{
+      const c = ws.getCell(f, j+1);
+      c.value = j===0 ? v : `S/ ${v}`;
+      c.font = { size:9 };
+      c.border = borde;
+      if (i%2===1) c.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:LIGHT_GRAY } };
+    });
+  });
+
+  ws.views = [{ state:"frozen", ySplit: filaTabla, showGridLines:false }];
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type:"application/octet-stream" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${numeroLiquidacion}-${empresa.nombre.replace(/\s+/g,"-")}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function agruparHistorial(historial) {
   const grupos = [];
   for (const h of historial) {
@@ -1549,7 +1758,7 @@ export default function BoazCliente() {
       ) : vista==="reportes" ? (
         <Reportes pedidos={pedidos} contacto={contacto}/>
       ) : (
-        <Dashboard pedidos={pedidos} onVerPedido={setPedidoSel}/>
+        <Dashboard pedidos={pedidos} onVerPedido={setPedidoSel} empresa={contacto.empresa}/>
       )}
 
       {pedidoSel && (
