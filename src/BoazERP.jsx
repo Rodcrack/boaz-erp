@@ -3288,6 +3288,7 @@ function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }) {
   const [modal, setModal] = useState(false);
   const [modalPago, setModalPago] = useState(null); // factura seleccionada para marcar pagada
   const [editandoFactura, setEditandoFactura] = useState(null);
+  const [modalReporte, setModalReporte] = useState(false);
   const [filtroPago, setFiltroPago] = useState("todas");
   const facturaVacia = () => ({
     empresa_id:"", serie:"E001", numero:"", descripcion:
@@ -3393,7 +3394,10 @@ function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }) {
             </button>
           ))}
         </div>
-        <BtnPri onClick={abrirNuevaFactura}>+ Registrar factura</BtnPri>
+        <div style={{ display:"flex", gap:8 }}>
+          <BtnSec onClick={()=>setModalReporte(true)}>📊 Reporte de facturación</BtnSec>
+          <BtnPri onClick={abrirNuevaFactura}>+ Registrar factura</BtnPri>
+        </div>
       </div>
 
       <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12,
@@ -3456,6 +3460,10 @@ function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }) {
 
       {modalPago && (
         <ModalMarcarPagada factura={modalPago} onClose={()=>setModalPago(null)} onConfirmar={marcarPagado}/>
+      )}
+      {modalReporte && (
+        <ModalReporteFacturacion pedidos={pedidos} empresas={empresas}
+          onClose={()=>setModalReporte(false)} toast={toast}/>
       )}
 
       {modal && (
@@ -3553,6 +3561,205 @@ const TIPOS_SERVICIO = {
   same_day: { label:"Same Day", color:"#7C3AED", bg:"#F5F3FF" },
   next_day: { label:"Next Day", color:"#0369A1", bg:"#EFF6FF" },
 };
+
+function ModalReporteFacturacion({ pedidos, empresas, onClose, toast }) {
+  const hoy = new Date().toISOString().split("T")[0];
+  const primerDiaMes = hoy.slice(0,8)+"01";
+  const [empresaId, setEmpresaId] = useState("todas");
+  const [fechaInicio, setFechaInicio] = useState(primerDiaMes);
+  const [fechaFin, setFechaFin] = useState(hoy);
+  const [generado, setGenerado] = useState(false);
+
+  const dentroDelRango = (p) => {
+    if (!p.created_at) return false;
+    const fecha = new Date(p.created_at);
+    const desde = new Date(fechaInicio+"T00:00:00");
+    const hasta = new Date(fechaFin+"T23:59:59");
+    return fecha >= desde && fecha <= hasta;
+  };
+
+  const filtrados = pedidos
+    .filter(p => (empresaId==="todas" || p.empresa_id===empresaId) && dentroDelRango(p))
+    .sort((a,b)=> new Date(a.created_at) - new Date(b.created_at));
+
+  const nombreEmpresa = (id) => empresas.find(e=>e.id===id)?.nombre || "—";
+
+  const subtotal = filtrados.reduce((a,p)=>a+(parseFloat(p.tarifa_s)||0),0);
+  const igv = subtotal * 0.18;
+  const total = subtotal * 1.18;
+
+  // Agrupado por cliente, solo relevante cuando se ve "Todos los clientes"
+  const porCliente = {};
+  filtrados.forEach(p=>{
+    const key = p.empresa_id || "sin_empresa";
+    if (!porCliente[key]) porCliente[key] = { nombre: nombreEmpresa(p.empresa_id), pedidos:[], subtotal:0 };
+    porCliente[key].pedidos.push(p);
+    porCliente[key].subtotal += parseFloat(p.tarifa_s)||0;
+  });
+
+  const exportarExcel = () => {
+    if (filtrados.length===0) { toast("No hay pedidos en este rango para exportar","error"); return; }
+    const filas = filtrados.map(p=>{
+      const sub = parseFloat(p.tarifa_s)||0;
+      return [
+        p.omd, p.cliente_referencia||"", empresaId==="todas"?nombreEmpresa(p.empresa_id):undefined,
+        p.dest_nombre, p.tipo_servicio||"", fmt.fecha(p.created_at),
+        sub.toFixed(2), (sub*0.18).toFixed(2), (sub*1.18).toFixed(2),
+      ].filter(v=>v!==undefined);
+    });
+    const encabezados = ["Tracking Boaz","N° Orden","Cliente","Destinatario","Servicio","Fecha","Subtotal","IGV","Total"]
+      .filter((h,i)=> empresaId==="todas" || i!==2);
+    const ws = XLSX.utils.aoa_to_sheet([encabezados, ...filas,
+      [], ["","","","","","Subtotal", subtotal.toFixed(2)],
+      ["","","","","","IGV 18%", igv.toFixed(2)],
+      ["","","","","","TOTAL", total.toFixed(2)],
+    ]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Reporte");
+    const nombreCliente = empresaId==="todas" ? "todos-los-clientes" : nombreEmpresa(empresaId).replace(/\s+/g,"-").toLowerCase();
+    XLSX.writeFile(wb, `reporte-facturacion-${nombreCliente}-${fechaInicio}-a-${fechaFin}.xlsx`);
+  };
+
+  const imprimir = () => {
+    if (filtrados.length===0) { toast("No hay pedidos en este rango para imprimir","error"); return; }
+    const filasHtml = filtrados.map(p=>{
+      const sub = parseFloat(p.tarifa_s)||0;
+      return `<tr>
+        <td>${p.omd}</td><td>${p.cliente_referencia||"—"}</td>
+        ${empresaId==="todas"?`<td>${nombreEmpresa(p.empresa_id)}</td>`:""}
+        <td>${p.dest_nombre}</td><td>${p.tipo_servicio||"—"}</td><td>${fmt.fecha(p.created_at)}</td>
+        <td style="text-align:right">S/ ${sub.toFixed(2)}</td>
+      </tr>`;
+    }).join("");
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Reporte de facturación</title>
+      <style>
+        body{font-family:Arial,sans-serif;padding:24px;color:#0D1E3D}
+        h1{font-size:18px;margin-bottom:4px} .sub{color:#64748B;font-size:12px;margin-bottom:20px}
+        table{width:100%;border-collapse:collapse;font-size:12px}
+        th{background:#F0F4F8;text-align:left;padding:8px;border-bottom:2px solid #D4AF37}
+        td{padding:7px 8px;border-bottom:1px solid #E2E8F0}
+        .totales{margin-top:16px;text-align:right;font-size:13px}
+        .totales div{margin-bottom:4px} .totales strong{font-size:16px;color:#D4AF37}
+      </style></head><body>
+      <h1>Reporte de facturación — ${empresaId==="todas"?"Todos los clientes":nombreEmpresa(empresaId)}</h1>
+      <div class="sub">Del ${fmt.fecha(fechaInicio+"T00:00:00")} al ${fmt.fecha(fechaFin+"T00:00:00")} · ${filtrados.length} pedido${filtrados.length===1?"":"s"}</div>
+      <table><thead><tr>
+        <th>Tracking Boaz</th><th>N° Orden</th>${empresaId==="todas"?"<th>Cliente</th>":""}<th>Destinatario</th><th>Servicio</th><th>Fecha</th><th style="text-align:right">Subtotal</th>
+      </tr></thead><tbody>${filasHtml}</tbody></table>
+      <div class="totales">
+        <div>Subtotal: S/ ${subtotal.toFixed(2)}</div>
+        <div>IGV 18%: S/ ${igv.toFixed(2)}</div>
+        <div><strong>TOTAL: S/ ${total.toFixed(2)}</strong></div>
+      </div>
+      <button onclick="window.print()" style="margin-top:20px;padding:10px 20px;font-size:14px;cursor:pointer;">🖨️ Imprimir</button>
+      </body></html>`;
+    const ventana = window.open("", "_blank");
+    if (!ventana) return;
+    ventana.document.write(html);
+    ventana.document.close();
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000,
+      display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+      <div style={{ background:B.white, borderRadius:16, padding:28, width:800,
+        maxHeight:"90vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+          <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>📊 Reporte de facturación</div>
+          <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20,
+            color:B.textSec, cursor:"pointer" }}>✕</button>
+        </div>
+        <div style={{ fontSize:12, color:B.textMut, marginBottom:16 }}>
+          Elige un cliente y un rango de fechas para ver qué guías/pedidos entran en la facturación de ese periodo.
+        </div>
+
+        <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr 1fr auto", gap:10, marginBottom:16, alignItems:"end" }}>
+          <div><label style={lbl}>Cliente</label>
+            <select style={inp} value={empresaId} onChange={e=>{setEmpresaId(e.target.value); setGenerado(false);}}>
+              <option value="todas">Todos los clientes</option>
+              {empresas.map(e=><option key={e.id} value={e.id}>{e.nombre}</option>)}
+            </select>
+          </div>
+          <div><label style={lbl}>Desde</label>
+            <input type="date" style={inp} value={fechaInicio} onChange={e=>{setFechaInicio(e.target.value); setGenerado(false);}}/></div>
+          <div><label style={lbl}>Hasta</label>
+            <input type="date" style={inp} value={fechaFin} onChange={e=>{setFechaFin(e.target.value); setGenerado(false);}}/></div>
+          <BtnPri onClick={()=>setGenerado(true)}>Generar</BtnPri>
+        </div>
+
+        {generado && (
+          <>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, marginBottom:16 }}>
+              <div style={{ background:B.bg, borderRadius:10, padding:14 }}>
+                <div style={{ fontSize:10, color:B.textMut }}>PEDIDOS</div>
+                <div style={{ fontSize:18, fontWeight:800, color:B.navy }}>{filtrados.length}</div>
+              </div>
+              <div style={{ background:B.bg, borderRadius:10, padding:14 }}>
+                <div style={{ fontSize:10, color:B.textMut }}>SUBTOTAL + IGV</div>
+                <div style={{ fontSize:14, color:B.textSec }}>{fmt.sol(subtotal)} + {fmt.sol(igv)}</div>
+              </div>
+              <div style={{ background:"#FFF8EF", borderRadius:10, padding:14, border:`1px solid ${B.gold}` }}>
+                <div style={{ fontSize:10, color:B.textMut }}>TOTAL A FACTURAR</div>
+                <div style={{ fontSize:18, fontWeight:800, color:B.gold }}>{fmt.sol(total)}</div>
+              </div>
+            </div>
+
+            {empresaId==="todas" && Object.keys(porCliente).length>1 && (
+              <div style={{ marginBottom:16, display:"flex", flexWrap:"wrap", gap:8 }}>
+                {Object.values(porCliente).map((c,i)=>(
+                  <div key={i} style={{ fontSize:11, background:B.bg, borderRadius:20, padding:"5px 12px" }}>
+                    <strong style={{ color:B.navy }}>{c.nombre}</strong>: {c.pedidos.length} pedidos · {fmt.sol(c.subtotal*1.18)}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ display:"flex", gap:10, marginBottom:14 }}>
+              <BtnSec onClick={exportarExcel}>📥 Exportar a Excel</BtnSec>
+              <BtnSec onClick={imprimir}>🖨️ Imprimir / PDF</BtnSec>
+            </div>
+
+            <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12,
+              overflow:"hidden", maxHeight:340, overflowY:"auto" }}>
+              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                <thead style={{ position:"sticky", top:0 }}>
+                  <tr style={{ background:B.bg }}>
+                    {["Tracking Boaz","N° Orden", ...(empresaId==="todas"?["Cliente"]:[]), "Destinatario","Servicio","Fecha","Subtotal"].map(h=>(
+                      <th key={h} style={{ padding:"8px 12px", textAlign:"left", fontSize:10,
+                        color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtrados.map((p,i)=>(
+                    <tr key={p.id} style={{ borderTop:`1px solid ${B.border}`, background:i%2===0?B.white:"#F8FAFC" }}>
+                      <td style={{ padding:"8px 12px", fontSize:12, fontWeight:700, color:B.navy }}>{p.omd}</td>
+                      <td style={{ padding:"8px 12px", fontSize:12, color:B.textSec }}>{p.cliente_referencia||"—"}</td>
+                      {empresaId==="todas" && <td style={{ padding:"8px 12px", fontSize:12, color:B.textSec }}>{nombreEmpresa(p.empresa_id)}</td>}
+                      <td style={{ padding:"8px 12px", fontSize:12, color:B.textPri }}>{p.dest_nombre}</td>
+                      <td style={{ padding:"8px 12px", fontSize:11, color:B.textSec }}>{p.tipo_servicio||"—"}</td>
+                      <td style={{ padding:"8px 12px", fontSize:11, color:B.textMut }}>{fmt.fecha(p.created_at)}</td>
+                      <td style={{ padding:"8px 12px", fontSize:12, fontWeight:600, color:B.textPri }}>{fmt.sol(p.tarifa_s)}</td>
+                    </tr>
+                  ))}
+                  {filtrados.length===0 && (
+                    <tr><td colSpan={7} style={{ padding:30, textAlign:"center", color:B.textMut, fontSize:13 }}>
+                      No hay pedidos en este rango de fechas
+                    </td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+
+        <div style={{ display:"flex", justifyContent:"flex-end", marginTop:20 }}>
+          <BtnSec onClick={onClose}>Cerrar</BtnSec>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function ModalMarcarPagada({ factura, onClose, onConfirmar }) {
   const [fecha, setFecha] = useState(new Date().toISOString().split("T")[0]);
