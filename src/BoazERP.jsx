@@ -2165,8 +2165,7 @@ function ModalTarifarioCliente({ empresa, tarifariosCliente, tarifarioEstandar, 
 
   const cargarDesdeEstandar = (ambitoId) => {
     const servicioDb = SERVICIOS.find(s=>s.id===servicioTab).db;
-    const base = tarifarioEstandar.find(t=>t.ambito===ambitoId && t.activo &&
-      (t.tipo_servicio===servicioDb || !t.tipo_servicio));
+    const base = obtenerTarifaEstandar(ambitoId, servicioDb, tarifarioEstandar);
     if (!base) { toast("El tarifario estándar no tiene esta zona definida todavía","error"); return; }
     setValores(p=>({ ...p, [servicioTab]: { ...p[servicioTab], [ambitoId]: {
       xs: base.tarifa_xs, s: base.tarifa_s, m: base.tarifa_m, extra: base.extra_kg??1, activo:true,
@@ -2180,8 +2179,7 @@ function ModalTarifarioCliente({ empresa, tarifariosCliente, tarifarioEstandar, 
     let algunoCargado = false;
     const nuevo = { ...valores[servicioTab] };
     AMBITOS.forEach(a=>{
-      const base = tarifarioEstandar.find(t=>t.ambito===a.id && t.activo &&
-        (t.tipo_servicio===servicioDb || !t.tipo_servicio));
+      const base = obtenerTarifaEstandar(a.id, servicioDb, tarifarioEstandar);
       if (base) {
         nuevo[a.id] = { xs: base.tarifa_xs, s: base.tarifa_s, m: base.tarifa_m, extra: base.extra_kg??1, activo:true };
         algunoCargado = true;
