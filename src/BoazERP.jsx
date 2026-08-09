@@ -104,6 +104,14 @@ const obtenerTarifaEmpresa = (empresaId, ambito, tipoServicio, tarifariosCliente
     t.empresa_id===empresaId && t.ambito===ambito && t.activo && !t.tipo_servicio) || null;
 };
 
+// Igual que obtenerTarifaEmpresa, pero sobre el tarifario estándar (sin cliente).
+const obtenerTarifaEstandar = (ambito, tipoServicio, tarifarioEstandar) => {
+  const especifica = tarifarioEstandar.find(t=>
+    t.ambito===ambito && t.activo && t.tipo_servicio===tipoServicio);
+  if (especifica) return especifica;
+  return tarifarioEstandar.find(t=>t.ambito===ambito && t.activo && !t.tipo_servicio) || null;
+};
+
 // ── GEOCODIFICACIÓN GRATUITA (OpenStreetMap / Nominatim) ───────
 // Convierte una dirección en texto a coordenadas lat/lng. Gratis, sin API key.
 // Límite de uso: máx. 1 solicitud por segundo (por eso las cargas masivas
@@ -459,7 +467,7 @@ function Dashboard({ pedidos, repartidores, liquidaciones }) {
 // ══════════════════════════════════════════════════════════════
 // MÓDULO 2: PEDIDOS COMPLETO
 // ══════════════════════════════════════════════════════════════
-function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, onRefresh, toast }) {
+function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, tarifarioEstandar, onRefresh, toast }) {
   const [filtroEstado, setFiltroEstado] = useState("todos");
   const [busqueda, setBusqueda] = useState("");
   const [modalNuevo, setModalNuevo] = useState(false);
@@ -665,9 +673,9 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, onRefresh
         </table>
       </div>
 
-      {modalNuevo && <ModalNuevoPedido repartidores={repartidores} empresas={empresas} tarifariosCliente={tarifariosCliente}
+      {modalNuevo && <ModalNuevoPedido repartidores={repartidores} empresas={empresas} tarifariosCliente={tarifariosCliente} tarifarioEstandar={tarifarioEstandar}
         onClose={()=>setModalNuevo(false)} onSaved={()=>{setModalNuevo(false);onRefresh();}} toast={toast}/>}
-      {modalCarga && <ModalCargaMasiva repartidores={repartidores} empresas={empresas} tarifariosCliente={tarifariosCliente}
+      {modalCarga && <ModalCargaMasiva repartidores={repartidores} empresas={empresas} tarifariosCliente={tarifariosCliente} tarifarioEstandar={tarifarioEstandar}
         onClose={()=>setModalCarga(false)} onSaved={()=>{onRefresh();}} toast={toast}/>}
       {modalGeocodificar && <ModalGeocodificarPendientes pedidos={pedidos}
         onClose={()=>setModalGeocodificar(false)} onDone={onRefresh} toast={toast}/>}
@@ -678,7 +686,7 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, onRefresh
 }
 
 // Modal nuevo pedido
-function ModalNuevoPedido({ repartidores, empresas, tarifariosCliente, onClose, onSaved, toast }) {
+function ModalNuevoPedido({ repartidores, empresas, tarifariosCliente, tarifarioEstandar, onClose, onSaved, toast }) {
   const getTarifa = getTarifaSameDay;
   const [f, setF] = useState({
     dest_nombre:"", dest_telefono:"", dest_direccion:"", dest_distrito:"",
@@ -686,7 +694,9 @@ function ModalNuevoPedido({ repartidores, empresas, tarifariosCliente, onClose, 
     repartidor_id:"", cobro_destino:false, monto_cobrar:"", tipo_servicio:"same_day",
     descripcion:"", fecha_programada: new Date().toISOString().split("T")[0],
   });
-  const tarifaPersonalizada = obtenerTarifaEmpresa(f.empresa_id, f.ambito, f.tipo_servicio, tarifariosCliente);
+  const tarifaCliente = obtenerTarifaEmpresa(f.empresa_id, f.ambito, f.tipo_servicio, tarifariosCliente);
+  const tarifaEstandarAplicable = obtenerTarifaEstandar(f.ambito, f.tipo_servicio, tarifarioEstandar);
+  const tarifaPersonalizada = tarifaCliente || tarifaEstandarAplicable;
   const tarifa = getTarifa(f.ambito, parseFloat(f.peso_kg), tarifaPersonalizada);
   const [guardando, setGuardando] = useState(false);
 
@@ -734,7 +744,8 @@ function ModalNuevoPedido({ repartidores, empresas, tarifariosCliente, onClose, 
             <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>Nuevo pedido</div>
             <div style={{ fontSize:11, color:B.textMut }}>
               Tarifa calculada: <strong style={{color:B.gold}}>{fmt.sol(tarifa)}</strong> ({f.ambito.replace("_"," ")})
-              {tarifaPersonalizada && <span style={{ color:B.green, fontWeight:700 }}> · tarifario personalizado ✓</span>}
+              {tarifaCliente && <span style={{ color:B.green, fontWeight:700 }}> · tarifario negociado con el cliente ✓</span>}
+              {!tarifaCliente && tarifaEstandarAplicable && <span style={{ color:B.gold, fontWeight:700 }}> · tarifario estándar</span>}
             </div>
           </div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20,
@@ -1216,7 +1227,7 @@ function descargarPlantillaAdmin() {
   XLSX.writeFile(wb, "plantilla_pedidos_boaz.xlsx");
 }
 
-function ModalCargaMasiva({ repartidores, empresas, tarifariosCliente, onClose, onSaved, toast }) {
+function ModalCargaMasiva({ repartidores, empresas, tarifariosCliente, tarifarioEstandar, onClose, onSaved, toast }) {
   const [empresaId, setEmpresaId] = useState("");
   const [repartidorId, setRepartidorId] = useState("");
   const [filas, setFilas] = useState([]);
@@ -1262,7 +1273,8 @@ function ModalCargaMasiva({ repartidores, empresas, tarifariosCliente, onClose, 
           const { data: codigo, error: errCodigo } = await sb.rpc("generar_codigo_boaz");
           if (errCodigo || !codigo) { generados.push({ ...fila, ok:false, error:"no se pudo generar código: "+(errCodigo?.message||"sin detalle") }); continue; }
           const coords = await geocodificarDireccion(fila.dest_direccion, fila.dest_distrito);
-          const tarifaPersonalizada = obtenerTarifaEmpresa(empresaId, fila.ambito, fila.tipo_servicio, tarifariosCliente);
+          const tarifaPersonalizada = obtenerTarifaEmpresa(empresaId, fila.ambito, fila.tipo_servicio, tarifariosCliente)
+            || obtenerTarifaEstandar(fila.ambito, fila.tipo_servicio, tarifarioEstandar);
           const tarifa = getTarifaSameDay(fila.ambito, fila.peso_kg, tarifaPersonalizada);
           const { error: errInsert } = await sb.from("pedidos").insert({
             omd: codigo,
@@ -2067,7 +2079,7 @@ function Clientes({ empresas, pedidos, lineasNegocio, tarifariosCliente, onRefre
   );
 }
 
-function ModalTarifarioCliente({ empresa, tarifariosCliente, onClose, onSaved, toast }) {
+function ModalTarifarioCliente({ empresa, tarifariosCliente, tarifarioEstandar, onClose, onSaved, toast }) {
   const AMBITOS = [
     { id:"urbano", label:"Urbano" },
     { id:"semi_urbano", label:"Semi Urbano" },
@@ -2100,6 +2112,16 @@ function ModalTarifarioCliente({ empresa, tarifariosCliente, onClose, onSaved, t
   const set = (ambito, campo, valor) => setValores(p=>({
     ...p, [servicioTab]: { ...p[servicioTab], [ambito]: { ...p[servicioTab][ambito], [campo]:valor } },
   }));
+
+  const cargarDesdeEstandar = (ambitoId) => {
+    const servicioDb = SERVICIOS.find(s=>s.id===servicioTab).db;
+    const base = tarifarioEstandar.find(t=>t.ambito===ambitoId && t.activo &&
+      (t.tipo_servicio===servicioDb || !t.tipo_servicio));
+    if (!base) { toast("El tarifario estándar no tiene esta zona definida todavía","error"); return; }
+    setValores(p=>({ ...p, [servicioTab]: { ...p[servicioTab], [ambitoId]: {
+      xs: base.tarifa_xs, s: base.tarifa_s, m: base.tarifa_m, extra: base.extra_kg??1, activo:true,
+    }}}));
+  };
 
   const guardar = async () => {
     setGuardando(true);
@@ -2158,6 +2180,140 @@ function ModalTarifarioCliente({ empresa, tarifariosCliente, onClose, onSaved, t
                 <div style={{ fontSize:13, fontWeight:700, color:B.navy }}>
                   {a.label} {completo && <span style={{ color: v.activo?B.green:B.textMut, fontSize:11 }}>· {v.activo?"activo":"inactivo"}</span>}
                 </div>
+                <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                  <button onClick={()=>cargarDesdeEstandar(a.id)}
+                    style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer", fontWeight:600 }}>
+                    📋 Cargar desde el estándar
+                  </button>
+                  {completo && (
+                    <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, color:B.textSec, cursor:"pointer" }}>
+                      <input type="checkbox" checked={v.activo} onChange={e=>set(a.id,"activo",e.target.checked)}/>
+                      Activo
+                    </label>
+                  )}
+                </div>
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:8 }}>
+                <div>
+                  <label style={{ ...lbl, marginBottom:4 }}>XS (0-1kg)</label>
+                  <input type="number" style={inp} value={v.xs} onChange={e=>set(a.id,"xs",e.target.value)}/>
+                </div>
+                <div>
+                  <label style={{ ...lbl, marginBottom:4 }}>S (1-3kg)</label>
+                  <input type="number" style={inp} value={v.s} onChange={e=>set(a.id,"s",e.target.value)}/>
+                </div>
+                <div>
+                  <label style={{ ...lbl, marginBottom:4 }}>M (3-7kg)</label>
+                  <input type="number" style={inp} value={v.m} onChange={e=>set(a.id,"m",e.target.value)}/>
+                </div>
+                <div>
+                  <label style={{ ...lbl, marginBottom:4 }}>S/ x kg extra</label>
+                  <input type="number" style={inp} value={v.extra} onChange={e=>set(a.id,"extra",e.target.value)}/>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:8 }}>
+          <BtnSec onClick={onClose}>Cerrar</BtnSec>
+          <BtnPri onClick={guardar} disabled={guardando}>{guardando?"Guardando...":"Guardar tarifario"}</BtnPri>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModalTarifarioEstandar({ tarifarioEstandar, onClose, onSaved, toast }) {
+  const AMBITOS = [
+    { id:"urbano", label:"Urbano" },
+    { id:"semi_urbano", label:"Semi Urbano" },
+    { id:"periferico", label:"Periférico" },
+  ];
+  const SERVICIOS = [
+    { id:"ambos", db:null, label:"Aplica a ambos" },
+    { id:"same_day", db:"same_day", label:"Same Day" },
+    { id:"next_day", db:"next_day", label:"Next Day" },
+  ];
+
+  const construirInicial = () => {
+    const base = {};
+    SERVICIOS.forEach(s=>{
+      base[s.id] = {};
+      AMBITOS.forEach(a=>{
+        const existente = tarifarioEstandar.find(t=>t.ambito===a.id && t.tipo_servicio===s.db);
+        base[s.id][a.id] = existente
+          ? { xs:existente.tarifa_xs, s:existente.tarifa_s, m:existente.tarifa_m, extra:existente.extra_kg??1, activo:existente.activo }
+          : { xs:"", s:"", m:"", extra:1, activo:true };
+      });
+    });
+    return base;
+  };
+
+  const [servicioTab, setServicioTab] = useState("ambos");
+  const [valores, setValores] = useState(construirInicial());
+  const [guardando, setGuardando] = useState(false);
+
+  const set = (ambito, campo, valor) => setValores(p=>({
+    ...p, [servicioTab]: { ...p[servicioTab], [ambito]: { ...p[servicioTab][ambito], [campo]:valor } },
+  }));
+
+  const guardar = async () => {
+    setGuardando(true);
+    for (const s of SERVICIOS) {
+      for (const a of AMBITOS) {
+        const v = valores[s.id][a.id];
+        if (v.xs==="" || v.s==="" || v.m==="") continue;
+        await sb.from("tarifario_estandar").upsert({
+          ambito: a.id, tipo_servicio: s.db,
+          tarifa_xs: parseFloat(v.xs), tarifa_s: parseFloat(v.s), tarifa_m: parseFloat(v.m),
+          extra_kg: parseFloat(v.extra)||1, activo: v.activo,
+        }, { onConflict: "ambito,tipo_servicio" });
+      }
+    }
+    setGuardando(false);
+    toast("Tarifario estándar actualizado ✓");
+    onSaved();
+    onClose();
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000,
+      display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+      <div style={{ background:B.white, borderRadius:16, padding:28, width:600,
+        maxHeight:"85vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+          <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>💰 Tarifario estándar (propuesta base)</div>
+          <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20,
+            color:B.textSec, cursor:"pointer" }}>✕</button>
+        </div>
+        <div style={{ fontSize:12, color:B.textMut, marginBottom:16 }}>
+          Este es el tarifario que se usa por defecto para cualquier cliente sin tarifa negociada propia, y también el que se puede "jalar" al configurar el tarifario de cada cliente.
+        </div>
+
+        <div style={{ display:"flex", gap:6, marginBottom:16 }}>
+          {SERVICIOS.map(s=>(
+            <button key={s.id} onClick={()=>setServicioTab(s.id)}
+              style={{ flex:1, padding:"8px 10px", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer",
+                border: servicioTab===s.id ? `2px solid ${B.gold}` : `1px solid ${B.border}`,
+                background: servicioTab===s.id ? "#FFF7ED" : B.white,
+                color: servicioTab===s.id ? B.goldDk : B.textSec }}>
+              {s.label}
+            </button>
+          ))}
+        </div>
+
+        {AMBITOS.map(a=>{
+          const v = valores[servicioTab][a.id];
+          const completo = v.xs!=="" && v.s!=="" && v.m!=="";
+          return (
+            <div key={a.id} style={{ border:`1px solid ${B.border}`, borderRadius:10, padding:14, marginBottom:12,
+              background: completo && v.activo ? "#FFF8EF" : B.bg,
+              opacity: completo && !v.activo ? 0.6 : 1 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:B.navy }}>
+                  {a.label} {completo && <span style={{ color: v.activo?B.green:B.textMut, fontSize:11 }}>· {v.activo?"activo":"inactivo"}</span>}
+                </div>
                 {completo && (
                   <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, color:B.textSec, cursor:"pointer" }}>
                     <input type="checkbox" checked={v.activo} onChange={e=>set(a.id,"activo",e.target.checked)}/>
@@ -2189,7 +2345,7 @@ function ModalTarifarioCliente({ empresa, tarifariosCliente, onClose, onSaved, t
 
         <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:8 }}>
           <BtnSec onClick={onClose}>Cerrar</BtnSec>
-          <BtnPri onClick={guardar} disabled={guardando}>{guardando?"Guardando...":"Guardar tarifario"}</BtnPri>
+          <BtnPri onClick={guardar} disabled={guardando}>{guardando?"Guardando...":"Guardar tarifario estándar"}</BtnPri>
         </div>
       </div>
     </div>
@@ -3983,24 +4139,30 @@ function Configuracion({ onRefresh, toast }) {
 // líneas de negocio + tipos de servicio, y tarifarios negociados
 // por cliente. Todo el tema de precios en un solo lugar.
 // ══════════════════════════════════════════════════════════════
-function Catalogo({ empresas, lineasNegocio, tiposServicio, tarifariosCliente, tarifarioVehiculoCliente, onRefresh, toast }) {
+function Catalogo({ empresas, lineasNegocio, tiposServicio, tarifariosCliente, tarifarioVehiculoCliente, tarifarioEstandar, onRefresh, toast }) {
   const [modalLinea, setModalLinea] = useState(false);
   const [modalTipo, setModalTipo] = useState(null);
   const [modalTarifario, setModalTarifario] = useState(null); // guarda la empresa seleccionada
   const [modalTarifarioVehiculo, setModalTarifarioVehiculo] = useState(null);
-  const TARIFAS = {
-    urbano:      { XS:10, S:13, M:16 },
-    semi_urbano: { XS:12, S:15, M:18 },
-    periferico:  { XS:15, S:18, M:22 },
-  };
+  const [modalTarifarioEstandar, setModalTarifarioEstandar] = useState(false);
+
+  const AMBITOS_LABEL = { urbano:"Urbano", semi_urbano:"Semi Urbano", periferico:"Periférico" };
+  const filaEstandar = (ambito, tipoServicio) =>
+    tarifarioEstandar.find(t=>t.ambito===ambito && t.tipo_servicio===tipoServicio && t.activo);
 
   return (
     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
-      {/* Tarifario genérico Same Day */}
+      {/* Tarifario estándar (editable) */}
       <div style={{ background:B.white, border:`1px solid ${B.border}`,
         borderRadius:12, padding:20, boxShadow:"0 2px 8px #0D1E3D0A" }}>
-        <div style={{ fontSize:14, fontWeight:800, color:B.navy, marginBottom:16,
-          paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>💰 Tarifario Same Day (genérico)</div>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
+          marginBottom:16, paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>
+          <div style={{ fontSize:14, fontWeight:800, color:B.navy }}>💰 Tarifario estándar (propuesta base)</div>
+          <button onClick={()=>setModalTarifarioEstandar(true)}
+            style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer", fontWeight:700 }}>
+            ✏️ Editar
+          </button>
+        </div>
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
           <thead>
             <tr style={{ background:B.bg }}>
@@ -4011,21 +4173,28 @@ function Catalogo({ empresas, lineasNegocio, tiposServicio, tarifariosCliente, t
             </tr>
           </thead>
           <tbody>
-            {Object.entries(TARIFAS).map(([ambito,t],i)=>(
-              <tr key={ambito} style={{ borderTop:`1px solid ${B.border}`,
-                background:i%2===0?B.white:"#F8FAFC" }}>
-                <td style={{ padding:"10px 12px", fontSize:12, fontWeight:600,
-                  color:B.navy, textTransform:"capitalize" }}>{ambito.replace("_"," ")}</td>
-                {Object.values(t).map((v,j)=>(
-                  <td key={j} style={{ padding:"10px 12px", fontSize:13,
-                    fontWeight:700, color:B.gold }}>S/ {v}</td>
-                ))}
-              </tr>
-            ))}
+            {Object.keys(AMBITOS_LABEL).map((ambito,i)=>{
+              const fila = filaEstandar(ambito, null);
+              return (
+                <tr key={ambito} style={{ borderTop:`1px solid ${B.border}`,
+                  background:i%2===0?B.white:"#F8FAFC" }}>
+                  <td style={{ padding:"10px 12px", fontSize:12, fontWeight:600, color:B.navy }}>{AMBITOS_LABEL[ambito]}</td>
+                  {fila ? (
+                    <>
+                      <td style={{ padding:"10px 12px", fontSize:13, fontWeight:700, color:B.gold }}>S/ {fila.tarifa_xs}</td>
+                      <td style={{ padding:"10px 12px", fontSize:13, fontWeight:700, color:B.gold }}>S/ {fila.tarifa_s}</td>
+                      <td style={{ padding:"10px 12px", fontSize:13, fontWeight:700, color:B.gold }}>S/ {fila.tarifa_m}</td>
+                    </>
+                  ) : (
+                    <td colSpan={3} style={{ padding:"10px 12px", fontSize:11, color:B.textMut, fontStyle:"italic" }}>Sin definir aún</td>
+                  )}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
         <div style={{ fontSize:11, color:B.textMut, marginTop:10 }}>
-          A partir de 7 kg se suma <strong style={{ color:B.gold }}>S/ 1.00 adicional por cada kg extra</strong> sobre la tarifa M. Este es el tarifario por defecto — cada cliente puede tener el suyo propio negociado (ver más abajo).
+          Este es el punto de partida para negociar con cualquier cliente nuevo — cada uno puede tener el suyo propio ajustado (ver más abajo, con la opción "Cargar desde el estándar").
         </div>
       </div>
 
@@ -4153,12 +4322,16 @@ function Catalogo({ empresas, lineasNegocio, tiposServicio, tarifariosCliente, t
           onSaved={()=>{setModalTipo(null); onRefresh();}} toast={toast}/>
       )}
       {modalTarifario && (
-        <ModalTarifarioCliente empresa={modalTarifario} tarifariosCliente={tarifariosCliente}
+        <ModalTarifarioCliente empresa={modalTarifario} tarifariosCliente={tarifariosCliente} tarifarioEstandar={tarifarioEstandar}
           onClose={()=>setModalTarifario(null)} onSaved={()=>{onRefresh();}} toast={toast}/>
       )}
       {modalTarifarioVehiculo && (
         <ModalTarifarioVehiculo empresa={modalTarifarioVehiculo} tarifarioVehiculoCliente={tarifarioVehiculoCliente}
           onClose={()=>setModalTarifarioVehiculo(null)} onSaved={()=>{onRefresh();}} toast={toast}/>
+      )}
+      {modalTarifarioEstandar && (
+        <ModalTarifarioEstandar tarifarioEstandar={tarifarioEstandar}
+          onClose={()=>setModalTarifarioEstandar(false)} onSaved={()=>{onRefresh();}} toast={toast}/>
       )}
     </div>
   );
@@ -4253,6 +4426,7 @@ export default function BoazERP() {
   const [asignacionesUnidad, setAsignacionesUnidad] = useState([]);
   const [tarifariosCliente, setTarifariosCliente] = useState([]);
   const [tarifarioVehiculoCliente, setTarifarioVehiculoCliente] = useState([]);
+  const [tarifarioEstandar, setTarifarioEstandar] = useState([]);
   const [diasServicio, setDiasServicio] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [toast, setToast] = useState(null);
@@ -4263,7 +4437,7 @@ export default function BoazERP() {
   const cargar = useCallback(async (opts={}) => {
     if (!opts.silencioso) setCargando(true);
     try {
-      const [p,r,e,l,ln,ts,u,au,tc,ds,tv] = await Promise.all([
+      const [p,r,e,l,ln,ts,u,au,tc,ds,tv,te] = await Promise.all([
         sb.from("pedidos").select("*").order("created_at",{ascending:false}),
         sb.from("repartidores").select("*").order("nombres"),
         sb.from("empresas").select("*").order("nombre"),
@@ -4275,6 +4449,7 @@ export default function BoazERP() {
         sb.from("tarifarios_cliente").select("*"),
         sb.from("dias_servicio_unidad").select("*"),
         sb.from("tarifario_vehiculo_cliente").select("*"),
+        sb.from("tarifario_estandar").select("*"),
       ]);
       if(p.data) setPedidos(p.data);
       if(r.data) setRepartidores(r.data);
@@ -4287,6 +4462,7 @@ export default function BoazERP() {
       if(tc.data) setTarifariosCliente(tc.data);
       if(ds.data) setDiasServicio(ds.data);
       if(tv.data) setTarifarioVehiculoCliente(tv.data);
+      if(te.data) setTarifarioEstandar(te.data);
     } catch(err) { console.error(err); }
     if (!opts.silencioso) setCargando(false);
   }, []);
@@ -4471,11 +4647,11 @@ if (verificando) {
           ) : (
             <>
               {seccion==="dashboard"     && <Dashboard pedidos={pedidos} repartidores={repartidores} liquidaciones={liquidaciones}/>}
-              {seccion==="pedidos"       && <Pedidos pedidos={pedidos} repartidores={repartidores} empresas={empresas} tarifariosCliente={tarifariosCliente} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccion==="pedidos"       && <Pedidos pedidos={pedidos} repartidores={repartidores} empresas={empresas} tarifariosCliente={tarifariosCliente} tarifarioEstandar={tarifarioEstandar} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="repartidores"  && <Repartidores repartidores={repartidores} pedidos={pedidos} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="unidades"      && <Unidades unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} repartidores={repartidores} tarifarioVehiculoCliente={tarifarioVehiculoCliente} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="clientes"      && <Clientes empresas={empresas} pedidos={pedidos} lineasNegocio={lineasNegocio} tarifariosCliente={tarifariosCliente} onRefresh={cargarSilencioso} toast={showToast}/>}
-              {seccion==="catalogo"      && <Catalogo empresas={empresas} lineasNegocio={lineasNegocio} tiposServicio={tiposServicio} tarifariosCliente={tarifariosCliente} tarifarioVehiculoCliente={tarifarioVehiculoCliente} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccion==="catalogo"      && <Catalogo empresas={empresas} lineasNegocio={lineasNegocio} tiposServicio={tiposServicio} tarifariosCliente={tarifariosCliente} tarifarioVehiculoCliente={tarifarioVehiculoCliente} tarifarioEstandar={tarifarioEstandar} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="liquidaciones" && <Liquidaciones repartidores={repartidores} pedidos={pedidos} liquidaciones={liquidaciones} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="liquidacion-transporte" && <LiquidacionTransporte unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} diasServicio={diasServicio} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="facturacion"   && <Facturacion empresas={empresas} pedidos={pedidos} tiposServicio={tiposServicio} usuario={usuario} toast={showToast}/>}
