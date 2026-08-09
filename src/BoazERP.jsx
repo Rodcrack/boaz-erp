@@ -48,6 +48,12 @@ const ICONOS_HIST = {
   foto_entrega:"📸", foto_no_entrega:"📸",
 };
 
+const BADGE_SERVICIO = {
+  same_day: { bg:"#F5F3FF", color:"#7C3AED", label:"Same Day" },
+  next_day: { bg:"#EFF6FF", color:"#0369A1", label:"Next Day" },
+  especial: { bg:"#FEF3E2", color:"#B45309", label:"Especial" },
+};
+
 // Agrupa las fotos de un mismo evento (mismo timestamp) para mostrarlas juntas.
 function agruparHistorial(historial) {
   const grupos = [];
@@ -72,6 +78,12 @@ const ESTADOS_PEDIDO = {
   en_ruta:     { bg:"#FFFBEB", color:"#B45309", label:"En ruta" },
   entregado:   { bg:"#ECFDF5", color:"#065F46", label:"Entregado" },
   no_entregado:{ bg:"#FEF2F2", color:"#991B1B", label:"No entregado" },
+};
+
+const TIPOS_SERVICIO_PEDIDO = {
+  same_day: { label:"Same Day", bg:"#F5F3FF", color:"#7C3AED" },
+  next_day: { label:"Next Day", bg:"#EFF6FF", color:"#0369A1" },
+  especial: { label:"Especial", bg:"#FFF7ED", color:"#B45309" },
 };
 
 const TARIFAS_SAMEDAY = {
@@ -404,11 +416,11 @@ function Dashboard({ pedidos, repartidores, liquidaciones }) {
                   <td style={{ padding:"10px 14px", fontSize:12, color:B.textPri }}>{p.dest_nombre}</td>
                   <td style={{ padding:"10px 14px", fontSize:12, color:B.textSec }}>{p.dest_distrito||"—"}</td>
                   <td style={{ padding:"10px 14px" }}>
-                    {p.tipo_servicio ? (
+                    {p.tipo_servicio && BADGE_SERVICIO[p.tipo_servicio] ? (
                       <span style={{ fontSize:10, fontWeight:700, padding:"3px 8px", borderRadius:8,
-                        background: p.tipo_servicio==="same_day"?"#F5F3FF":"#EFF6FF",
-                        color: p.tipo_servicio==="same_day"?"#7C3AED":"#0369A1" }}>
-                        {p.tipo_servicio==="same_day"?"Same Day":"Next Day"}
+                        background: BADGE_SERVICIO[p.tipo_servicio].bg,
+                        color: BADGE_SERVICIO[p.tipo_servicio].color }}>
+                        {BADGE_SERVICIO[p.tipo_servicio].label}
                       </span>
                     ) : <span style={{ fontSize:11, color:B.textMut }}>—</span>}
                   </td>
@@ -615,11 +627,11 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, tarifario
                   </td>
                   <td style={{ padding:"11px 14px", fontSize:12, color:B.textSec }}>{p.peso_kg?p.peso_kg+" kg":"—"}</td>
                   <td style={{ padding:"11px 14px" }}>
-                    {p.tipo_servicio ? (
+                    {p.tipo_servicio && BADGE_SERVICIO[p.tipo_servicio] ? (
                       <span style={{ fontSize:10, fontWeight:700, padding:"3px 8px", borderRadius:8,
-                        background: p.tipo_servicio==="same_day"?"#F5F3FF":"#EFF6FF",
-                        color: p.tipo_servicio==="same_day"?"#7C3AED":"#0369A1" }}>
-                        {p.tipo_servicio==="same_day"?"Same Day":"Next Day"}
+                        background: BADGE_SERVICIO[p.tipo_servicio].bg,
+                        color: BADGE_SERVICIO[p.tipo_servicio].color }}>
+                        {BADGE_SERVICIO[p.tipo_servicio].label}
                       </span>
                     ) : <span style={{ fontSize:11, color:B.textMut }}>—</span>}
                   </td>
@@ -790,6 +802,7 @@ function ModalNuevoPedido({ repartidores, empresas, tarifariosCliente, tarifario
             <select style={inp} value={f.tipo_servicio} onChange={e=>setF(p=>({...p,tipo_servicio:e.target.value}))}>
               <option value="same_day">Same Day</option>
               <option value="next_day">Next Day</option>
+              <option value="especial">Especial</option>
             </select>
           </Field>
         </Row>
@@ -1175,7 +1188,7 @@ function mapearFilaAdmin(fila) {
     else if (k.includes("peso")) out.peso_kg = parseFloat(v) || null;
     else if (k.includes("servicio")) {
       const t = normalizarTextoAdmin(v);
-      out.tipo_servicio = t.includes("next") ? "next_day" : t.includes("same") ? "same_day" : "";
+      out.tipo_servicio = t.includes("next") ? "next_day" : t.includes("same") ? "same_day" : t.includes("espec") ? "especial" : "";
     }
     else if (k.includes("cobro")) {
       const t = normalizarTextoAdmin(v);
@@ -2089,6 +2102,7 @@ function ModalTarifarioCliente({ empresa, tarifariosCliente, tarifarioEstandar, 
     { id:"ambos", db:null, label:"Aplica a ambos" },
     { id:"same_day", db:"same_day", label:"Same Day" },
     { id:"next_day", db:"next_day", label:"Next Day" },
+    { id:"especial", db:"especial", label:"Especial" },
   ];
 
   const construirInicial = () => {
@@ -2121,6 +2135,25 @@ function ModalTarifarioCliente({ empresa, tarifariosCliente, tarifarioEstandar, 
     setValores(p=>({ ...p, [servicioTab]: { ...p[servicioTab], [ambitoId]: {
       xs: base.tarifa_xs, s: base.tarifa_s, m: base.tarifa_m, extra: base.extra_kg??1, activo:true,
     }}}));
+  };
+
+  // Habilita de una vez todo el tarifario estándar del tipo de servicio activo
+  // (los 3 ámbitos juntos), en vez de traerlos uno por uno.
+  const cargarTodoElServicioDesdeEstandar = () => {
+    const servicioDb = SERVICIOS.find(s=>s.id===servicioTab).db;
+    let algunoCargado = false;
+    const nuevo = { ...valores[servicioTab] };
+    AMBITOS.forEach(a=>{
+      const base = tarifarioEstandar.find(t=>t.ambito===a.id && t.activo &&
+        (t.tipo_servicio===servicioDb || !t.tipo_servicio));
+      if (base) {
+        nuevo[a.id] = { xs: base.tarifa_xs, s: base.tarifa_s, m: base.tarifa_m, extra: base.extra_kg??1, activo:true };
+        algunoCargado = true;
+      }
+    });
+    if (!algunoCargado) { toast("El tarifario estándar no tiene definido este tipo de servicio todavía","error"); return; }
+    setValores(p=>({ ...p, [servicioTab]: nuevo }));
+    toast("Tarifario cargado — revisa y guarda para confirmar");
   };
 
   const guardar = async () => {
@@ -2157,7 +2190,7 @@ function ModalTarifarioCliente({ empresa, tarifariosCliente, tarifarioEstandar, 
           Deja un ámbito en blanco para que ese cliente siga usando el tarifario genérico ahí. Si el cliente tiene tarifas distintas para Same Day y Next Day, configúralas en su propia pestaña — si no, usa "Aplica a ambos".
         </div>
 
-        <div style={{ display:"flex", gap:6, marginBottom:16 }}>
+        <div style={{ display:"flex", gap:6, marginBottom:10 }}>
           {SERVICIOS.map(s=>(
             <button key={s.id} onClick={()=>setServicioTab(s.id)}
               style={{ flex:1, padding:"8px 10px", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer",
@@ -2168,6 +2201,11 @@ function ModalTarifarioCliente({ empresa, tarifariosCliente, tarifarioEstandar, 
             </button>
           ))}
         </div>
+        <button onClick={cargarTodoElServicioDesdeEstandar}
+          style={{ width:"100%", marginBottom:16, padding:"9px 12px", borderRadius:8, fontSize:12,
+            fontWeight:700, cursor:"pointer", border:`1px dashed ${B.blue}`, background:"#EFF6FF", color:B.blue }}>
+          📋 Habilitar tarifario "{SERVICIOS.find(s=>s.id===servicioTab).label}" completo desde el estándar
+        </button>
 
         {AMBITOS.map(a=>{
           const v = valores[servicioTab][a.id];
@@ -2234,6 +2272,7 @@ function ModalTarifarioEstandar({ tarifarioEstandar, onClose, onSaved, toast }) 
     { id:"ambos", db:null, label:"Aplica a ambos" },
     { id:"same_day", db:"same_day", label:"Same Day" },
     { id:"next_day", db:"next_day", label:"Next Day" },
+    { id:"especial", db:"especial", label:"Especial" },
   ];
 
   const construirInicial = () => {
@@ -2352,7 +2391,100 @@ function ModalTarifarioEstandar({ tarifarioEstandar, onClose, onSaved, toast }) 
   );
 }
 
-function ModalTarifarioVehiculo({ empresa, tarifarioVehiculoCliente, onClose, onSaved, toast }) {
+function ModalTarifarioVehiculoEstandar({ tarifarioVehiculoEstandar, onClose, onSaved, toast }) {
+  const TIPOS_VEHICULO = ["moto","bicicleta","auto","furgoneta","minivan","van","porter"];
+
+  const construirInicial = () => {
+    const base = {};
+    TIPOS_VEHICULO.forEach(tv=>{
+      const existente = tarifarioVehiculoEstandar.find(t=>t.tipo_vehiculo===tv);
+      base[tv] = existente
+        ? { base:existente.tarifa_base, recargo:existente.recargo_periferico??0, activo:existente.activo }
+        : { base:"", recargo:"", activo:true };
+    });
+    return base;
+  };
+
+  const [valores, setValores] = useState(construirInicial());
+  const [guardando, setGuardando] = useState(false);
+
+  const set = (tv, campo, valor) => setValores(p=>({ ...p, [tv]: { ...p[tv], [campo]:valor } }));
+
+  const guardar = async () => {
+    setGuardando(true);
+    for (const tv of TIPOS_VEHICULO) {
+      const v = valores[tv];
+      if (v.base === "") continue;
+      await sb.from("tarifario_vehiculo_estandar").upsert({
+        tipo_vehiculo: tv,
+        tarifa_base: parseFloat(v.base), recargo_periferico: parseFloat(v.recargo)||0,
+        activo: v.activo,
+      }, { onConflict: "tipo_vehiculo" });
+    }
+    setGuardando(false);
+    toast("Tarifario estándar por unidad actualizado ✓");
+    onSaved();
+    onClose();
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000,
+      display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+      <div style={{ background:B.white, borderRadius:16, padding:28, width:560,
+        maxHeight:"85vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+          <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>🚛 Tarifario estándar por unidad</div>
+          <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20,
+            color:B.textSec, cursor:"pointer" }}>✕</button>
+        </div>
+        <div style={{ fontSize:12, color:B.textMut, marginBottom:16 }}>
+          Propuesta base de tarifa por día según tipo de vehículo, para clientes de Transporte y Carga. Deja vacía la tarifa base de un vehículo si aún no aplica.
+        </div>
+
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {TIPOS_VEHICULO.map(tv=>{
+            const v = valores[tv];
+            const completo = v.base !== "";
+            return (
+              <div key={tv} style={{ border:`1px solid ${B.border}`, borderRadius:10, padding:14,
+                background: completo && v.activo ? "#FFF8EF" : B.bg,
+                opacity: completo && !v.activo ? 0.6 : 1 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:B.navy, textTransform:"capitalize" }}>
+                    {tv} {completo && <span style={{ color: v.activo?B.green:B.textMut, fontSize:11 }}>· {v.activo?"activo":"inactivo"}</span>}
+                  </div>
+                  {completo && (
+                    <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, color:B.textSec, cursor:"pointer" }}>
+                      <input type="checkbox" checked={v.activo} onChange={e=>set(tv,"activo",e.target.checked)}/>
+                      Activo
+                    </label>
+                  )}
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                  <div>
+                    <label style={{ ...lbl, marginBottom:4 }}>Tarifa base (S/ — urbano/semi urbano)</label>
+                    <input type="number" style={inp} value={v.base} onChange={e=>set(tv,"base",e.target.value)}/>
+                  </div>
+                  <div>
+                    <label style={{ ...lbl, marginBottom:4 }}>Recargo periférico (S/ adicional)</label>
+                    <input type="number" style={inp} value={v.recargo} onChange={e=>set(tv,"recargo",e.target.value)}/>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:16 }}>
+          <BtnSec onClick={onClose}>Cerrar</BtnSec>
+          <BtnPri onClick={guardar} disabled={guardando}>{guardando?"Guardando...":"Guardar tarifario estándar"}</BtnPri>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModalTarifarioVehiculo({ empresa, tarifarioVehiculoCliente, tarifarioVehiculoEstandar, onClose, onSaved, toast }) {
   const TIPOS_VEHICULO = ["moto","bicicleta","auto","furgoneta","minivan","van","porter"];
 
   const construirInicial = () => {
@@ -2370,6 +2502,12 @@ function ModalTarifarioVehiculo({ empresa, tarifarioVehiculoCliente, onClose, on
   const [guardando, setGuardando] = useState(false);
 
   const set = (tv, campo, valor) => setValores(p=>({ ...p, [tv]: { ...p[tv], [campo]:valor } }));
+
+  const cargarDesdeEstandar = (tv) => {
+    const base = tarifarioVehiculoEstandar.find(t=>t.tipo_vehiculo===tv && t.activo);
+    if (!base) { toast("El tarifario estándar no tiene definido este vehículo todavía","error"); return; }
+    setValores(p=>({ ...p, [tv]: { base: base.tarifa_base, recargo: base.recargo_periferico??0, activo:true } }));
+  };
 
   const guardar = async () => {
     setGuardando(true);
@@ -2414,12 +2552,18 @@ function ModalTarifarioVehiculo({ empresa, tarifarioVehiculoCliente, onClose, on
                   <div style={{ fontSize:13, fontWeight:700, color:B.navy, textTransform:"capitalize" }}>
                     {tv} {completo && <span style={{ color: v.activo?B.green:B.textMut, fontSize:11 }}>· {v.activo?"activo":"inactivo"}</span>}
                   </div>
-                  {completo && (
-                    <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, color:B.textSec, cursor:"pointer" }}>
-                      <input type="checkbox" checked={v.activo} onChange={e=>set(tv,"activo",e.target.checked)}/>
-                      Activo
-                    </label>
-                  )}
+                  <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                    <button onClick={()=>cargarDesdeEstandar(tv)}
+                      style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer", fontWeight:600 }}>
+                      📋 Cargar desde el estándar
+                    </button>
+                    {completo && (
+                      <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, color:B.textSec, cursor:"pointer" }}>
+                        <input type="checkbox" checked={v.activo} onChange={e=>set(tv,"activo",e.target.checked)}/>
+                        Activo
+                      </label>
+                    )}
+                  </div>
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
                   <div>
@@ -4139,29 +4283,43 @@ function Configuracion({ onRefresh, toast }) {
 // líneas de negocio + tipos de servicio, y tarifarios negociados
 // por cliente. Todo el tema de precios en un solo lugar.
 // ══════════════════════════════════════════════════════════════
-function Catalogo({ empresas, lineasNegocio, tiposServicio, tarifariosCliente, tarifarioVehiculoCliente, tarifarioEstandar, onRefresh, toast }) {
+function Catalogo({ empresas, lineasNegocio, tiposServicio, tarifariosCliente, tarifarioVehiculoCliente, tarifarioEstandar, tarifarioVehiculoEstandar, onRefresh, toast }) {
   const [modalLinea, setModalLinea] = useState(false);
   const [modalTipo, setModalTipo] = useState(null);
   const [modalTarifario, setModalTarifario] = useState(null); // guarda la empresa seleccionada
   const [modalTarifarioVehiculo, setModalTarifarioVehiculo] = useState(null);
   const [modalTarifarioEstandar, setModalTarifarioEstandar] = useState(false);
+  const [modalTarifarioVehiculoEstandar, setModalTarifarioVehiculoEstandar] = useState(false);
+  const [tabEstandar, setTabEstandar] = useState("same_day");
 
   const AMBITOS_LABEL = { urbano:"Urbano", semi_urbano:"Semi Urbano", periferico:"Periférico" };
+  const TIPOS_VEHICULO_LABEL = { moto:"Moto", bicicleta:"Bicicleta", auto:"Auto", furgoneta:"Furgoneta", minivan:"Minivan", van:"Van", porter:"Porter" };
   const filaEstandar = (ambito, tipoServicio) =>
     tarifarioEstandar.find(t=>t.ambito===ambito && t.tipo_servicio===tipoServicio && t.activo);
 
   return (
     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
-      {/* Tarifario estándar (editable) */}
+      {/* Tarifario estándar por pedido (editable) */}
       <div style={{ background:B.white, border:`1px solid ${B.border}`,
         borderRadius:12, padding:20, boxShadow:"0 2px 8px #0D1E3D0A" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
-          marginBottom:16, paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>
-          <div style={{ fontSize:14, fontWeight:800, color:B.navy }}>💰 Tarifario estándar (propuesta base)</div>
+          marginBottom:12, paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>
+          <div style={{ fontSize:14, fontWeight:800, color:B.navy }}>💰 Tarifario estándar por pedido</div>
           <button onClick={()=>setModalTarifarioEstandar(true)}
             style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer", fontWeight:700 }}>
             ✏️ Editar
           </button>
+        </div>
+        <div style={{ display:"flex", gap:6, marginBottom:12 }}>
+          {[["same_day","Same Day"],["next_day","Next Day"],["especial","Especial"]].map(([id,label])=>(
+            <button key={id} onClick={()=>setTabEstandar(id)}
+              style={{ flex:1, padding:"6px 8px", borderRadius:8, fontSize:11, fontWeight:700, cursor:"pointer",
+                border: tabEstandar===id ? `2px solid ${B.gold}` : `1px solid ${B.border}`,
+                background: tabEstandar===id ? "#FFF7ED" : B.white,
+                color: tabEstandar===id ? B.goldDk : B.textSec }}>
+              {label}
+            </button>
+          ))}
         </div>
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
           <thead>
@@ -4174,7 +4332,7 @@ function Catalogo({ empresas, lineasNegocio, tiposServicio, tarifariosCliente, t
           </thead>
           <tbody>
             {Object.keys(AMBITOS_LABEL).map((ambito,i)=>{
-              const fila = filaEstandar(ambito, null);
+              const fila = filaEstandar(ambito, tabEstandar);
               return (
                 <tr key={ambito} style={{ borderTop:`1px solid ${B.border}`,
                   background:i%2===0?B.white:"#F8FAFC" }}>
@@ -4194,7 +4352,52 @@ function Catalogo({ empresas, lineasNegocio, tiposServicio, tarifariosCliente, t
           </tbody>
         </table>
         <div style={{ fontSize:11, color:B.textMut, marginTop:10 }}>
-          Este es el punto de partida para negociar con cualquier cliente nuevo — cada uno puede tener el suyo propio ajustado (ver más abajo, con la opción "Cargar desde el estándar").
+          Punto de partida para negociar con cualquier cliente — cada uno puede tener el suyo propio ajustado (ver "Tarifarios negociados por cliente", con la opción "Cargar desde el estándar"). Tarifas sin IGV; +S/1 por kg extra sobre 7kg salvo que indiques otro monto al editar.
+        </div>
+      </div>
+
+      {/* Tarifario estándar por unidad (transporte y carga) */}
+      <div style={{ background:B.white, border:`1px solid ${B.border}`,
+        borderRadius:12, padding:20, boxShadow:"0 2px 8px #0D1E3D0A" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
+          marginBottom:16, paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>
+          <div style={{ fontSize:14, fontWeight:800, color:B.navy }}>🚛 Tarifario estándar por unidad</div>
+          <button onClick={()=>setModalTarifarioVehiculoEstandar(true)}
+            style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer", fontWeight:700 }}>
+            ✏️ Editar
+          </button>
+        </div>
+        <table style={{ width:"100%", borderCollapse:"collapse" }}>
+          <thead>
+            <tr style={{ background:B.bg }}>
+              {["Tipo de vehículo","Tarifa base (día)","Recargo periférico"].map(h=>(
+                <th key={h} style={{ padding:"8px 12px", textAlign:"left", fontSize:10,
+                  color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {Object.keys(TIPOS_VEHICULO_LABEL).map((tv,i)=>{
+              const fila = tarifarioVehiculoEstandar.find(t=>t.tipo_vehiculo===tv && t.activo);
+              return (
+                <tr key={tv} style={{ borderTop:`1px solid ${B.border}`,
+                  background:i%2===0?B.white:"#F8FAFC" }}>
+                  <td style={{ padding:"10px 12px", fontSize:12, fontWeight:600, color:B.navy }}>{TIPOS_VEHICULO_LABEL[tv]}</td>
+                  {fila ? (
+                    <>
+                      <td style={{ padding:"10px 12px", fontSize:13, fontWeight:700, color:B.gold }}>S/ {fila.tarifa_base}</td>
+                      <td style={{ padding:"10px 12px", fontSize:12, color:B.textSec }}>{fila.recargo_periferico>0?`+ S/ ${fila.recargo_periferico}`:"—"}</td>
+                    </>
+                  ) : (
+                    <td colSpan={2} style={{ padding:"10px 12px", fontSize:11, color:B.textMut, fontStyle:"italic" }}>Sin definir aún</td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        <div style={{ fontSize:11, color:B.textMut, marginTop:10 }}>
+          Tarifa por día según tipo de vehículo — punto de partida para clientes de Transporte y Carga (Deliverman, Globalia, etc.).
         </div>
       </div>
 
@@ -4326,12 +4529,16 @@ function Catalogo({ empresas, lineasNegocio, tiposServicio, tarifariosCliente, t
           onClose={()=>setModalTarifario(null)} onSaved={()=>{onRefresh();}} toast={toast}/>
       )}
       {modalTarifarioVehiculo && (
-        <ModalTarifarioVehiculo empresa={modalTarifarioVehiculo} tarifarioVehiculoCliente={tarifarioVehiculoCliente}
+        <ModalTarifarioVehiculo empresa={modalTarifarioVehiculo} tarifarioVehiculoCliente={tarifarioVehiculoCliente} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar}
           onClose={()=>setModalTarifarioVehiculo(null)} onSaved={()=>{onRefresh();}} toast={toast}/>
       )}
       {modalTarifarioEstandar && (
         <ModalTarifarioEstandar tarifarioEstandar={tarifarioEstandar}
           onClose={()=>setModalTarifarioEstandar(false)} onSaved={()=>{onRefresh();}} toast={toast}/>
+      )}
+      {modalTarifarioVehiculoEstandar && (
+        <ModalTarifarioVehiculoEstandar tarifarioVehiculoEstandar={tarifarioVehiculoEstandar}
+          onClose={()=>setModalTarifarioVehiculoEstandar(false)} onSaved={()=>{onRefresh();}} toast={toast}/>
       )}
     </div>
   );
@@ -4427,6 +4634,7 @@ export default function BoazERP() {
   const [tarifariosCliente, setTarifariosCliente] = useState([]);
   const [tarifarioVehiculoCliente, setTarifarioVehiculoCliente] = useState([]);
   const [tarifarioEstandar, setTarifarioEstandar] = useState([]);
+  const [tarifarioVehiculoEstandar, setTarifarioVehiculoEstandar] = useState([]);
   const [diasServicio, setDiasServicio] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [toast, setToast] = useState(null);
@@ -4437,7 +4645,7 @@ export default function BoazERP() {
   const cargar = useCallback(async (opts={}) => {
     if (!opts.silencioso) setCargando(true);
     try {
-      const [p,r,e,l,ln,ts,u,au,tc,ds,tv,te] = await Promise.all([
+      const [p,r,e,l,ln,ts,u,au,tc,ds,tv,te,tve] = await Promise.all([
         sb.from("pedidos").select("*").order("created_at",{ascending:false}),
         sb.from("repartidores").select("*").order("nombres"),
         sb.from("empresas").select("*").order("nombre"),
@@ -4450,6 +4658,7 @@ export default function BoazERP() {
         sb.from("dias_servicio_unidad").select("*"),
         sb.from("tarifario_vehiculo_cliente").select("*"),
         sb.from("tarifario_estandar").select("*"),
+        sb.from("tarifario_vehiculo_estandar").select("*"),
       ]);
       if(p.data) setPedidos(p.data);
       if(r.data) setRepartidores(r.data);
@@ -4463,6 +4672,7 @@ export default function BoazERP() {
       if(ds.data) setDiasServicio(ds.data);
       if(tv.data) setTarifarioVehiculoCliente(tv.data);
       if(te.data) setTarifarioEstandar(te.data);
+      if(tve.data) setTarifarioVehiculoEstandar(tve.data);
     } catch(err) { console.error(err); }
     if (!opts.silencioso) setCargando(false);
   }, []);
@@ -4651,7 +4861,7 @@ if (verificando) {
               {seccion==="repartidores"  && <Repartidores repartidores={repartidores} pedidos={pedidos} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="unidades"      && <Unidades unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} repartidores={repartidores} tarifarioVehiculoCliente={tarifarioVehiculoCliente} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="clientes"      && <Clientes empresas={empresas} pedidos={pedidos} lineasNegocio={lineasNegocio} tarifariosCliente={tarifariosCliente} onRefresh={cargarSilencioso} toast={showToast}/>}
-              {seccion==="catalogo"      && <Catalogo empresas={empresas} lineasNegocio={lineasNegocio} tiposServicio={tiposServicio} tarifariosCliente={tarifariosCliente} tarifarioVehiculoCliente={tarifarioVehiculoCliente} tarifarioEstandar={tarifarioEstandar} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccion==="catalogo"      && <Catalogo empresas={empresas} lineasNegocio={lineasNegocio} tiposServicio={tiposServicio} tarifariosCliente={tarifariosCliente} tarifarioVehiculoCliente={tarifarioVehiculoCliente} tarifarioEstandar={tarifarioEstandar} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="liquidaciones" && <Liquidaciones repartidores={repartidores} pedidos={pedidos} liquidaciones={liquidaciones} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="liquidacion-transporte" && <LiquidacionTransporte unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} diasServicio={diasServicio} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="facturacion"   && <Facturacion empresas={empresas} pedidos={pedidos} tiposServicio={tiposServicio} usuario={usuario} toast={showToast}/>}

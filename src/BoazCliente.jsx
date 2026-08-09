@@ -99,7 +99,7 @@ function mapearFila(fila) {
     else if (k.includes("peso")) out.peso_kg = parseFloat(v) || null;
     else if (k.includes("servicio")) {
       const t = normalizarTexto(v);
-      out.tipo_servicio = t.includes("next") ? "next_day" : t.includes("same") ? "same_day" : "";
+      out.tipo_servicio = t.includes("next") ? "next_day" : t.includes("same") ? "same_day" : t.includes("espec") ? "especial" : "";
     }
     else if (k.includes("cobro")) {
       const t = normalizarTexto(v);
@@ -248,6 +248,7 @@ function Login({ onLogin }) {
 const TIPOS_SERVICIO = {
   same_day: { label:"Same Day", color:"#7C3AED", bg:"#F5F3FF" },
   next_day: { label:"Next Day", color:"#0369A1", bg:"#EFF6FF" },
+  especial: { label:"Especial", color:"#B45309", bg:"#FEF3E2" },
 };
 
 // ── HELPERS: REPORTES E INDICADORES ────────────────────────────
@@ -371,10 +372,11 @@ function Reportes({ pedidos, contacto }) {
   const topDistritos = Object.entries(porDistrito).sort((a,b)=>b[1]-a[1]).slice(0,6);
   const maxDistrito = topDistritos.length ? topDistritos[0][1] : 0;
 
-  const porServicio = { same_day:0, next_day:0, sin_definir:0 };
+  const porServicio = { same_day:0, next_day:0, especial:0, sin_definir:0 };
   filtrados.forEach(p=>{
     if (p.tipo_servicio==="same_day") porServicio.same_day++;
     else if (p.tipo_servicio==="next_day") porServicio.next_day++;
+    else if (p.tipo_servicio==="especial") porServicio.especial++;
     else porServicio.sin_definir++;
   });
 
@@ -653,6 +655,7 @@ function Reportes({ pedidos, contacto }) {
             </div>
             <BarraHorizontal label="Same Day" valor={porServicio.same_day} max={filtrados.length} color="#7C3AED"/>
             <BarraHorizontal label="Next Day" valor={porServicio.next_day} max={filtrados.length} color="#0369A1"/>
+            <BarraHorizontal label="Especial" valor={porServicio.especial} max={filtrados.length} color="#B45309"/>
             <BarraHorizontal label="Sin definir" valor={porServicio.sin_definir} max={filtrados.length} color={C.textMut}/>
           </div>
         </div>
@@ -684,7 +687,7 @@ function escapeHtmlEtiquetaCliente(str) {
 function generarHtmlEtiquetasCliente(pedidosSel, empresa) {
   const filas = pedidosSel.map(p => {
     const tipoServicio = p.tipo_servicio==="same_day" ? "Same Day"
-      : p.tipo_servicio==="next_day" ? "Next Day" : "—";
+      : p.tipo_servicio==="next_day" ? "Next Day" : p.tipo_servicio==="especial" ? "Especial" : "—";
     const cod = p.cobro_destino ? `COD — S/ ${p.monto_cobrar||""}` : "Pagado";
     const codigo = escapeHtmlEtiquetaCliente(p.omd);
     return `
@@ -955,6 +958,7 @@ function Dashboard({ pedidos, onVerPedido }) {
             <option value="">Todos</option>
             <option value="same_day">Same Day</option>
             <option value="next_day">Next Day</option>
+            <option value="especial">Especial</option>
           </select>
         </div>
         <div>
