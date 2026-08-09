@@ -981,7 +981,7 @@ function Dashboard({ pedidos, onVerPedido }) {
         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
           <thead>
             <tr style={{ background:C.bg, textAlign:"left" }}>
-              {["Tracking Boaz","Estado","Tipo servicio","Destinatario","Distrito","Fecha",""].map(h=>(
+              {["Tracking Boaz","N° Orden","Estado","Tipo servicio","Destinatario","Distrito","Fecha",""].map(h=>(
                 <th key={h} style={{ padding:"12px 14px", fontSize:11, fontWeight:700,
                   color:C.textSec, textTransform:"uppercase", letterSpacing:"0.4px",
                   borderBottom:`1px solid ${C.border}` }}>{h}</th>
@@ -991,13 +991,14 @@ function Dashboard({ pedidos, onVerPedido }) {
           <tbody>
             {filtrados.length===0 ? (
               <tr>
-                <td colSpan={7} style={{ padding:40, textAlign:"center", color:C.textMut }}>
+                <td colSpan={8} style={{ padding:40, textAlign:"center", color:C.textMut }}>
                   📦 No se encontraron pedidos con estos filtros
                 </td>
               </tr>
             ) : filtrados.map(p=>(
               <tr key={p.id} style={{ borderBottom:`1px solid #F1F5F9` }}>
                 <td style={{ padding:"12px 14px", fontWeight:800, color:C.navy }}>{p.omd}</td>
+                <td style={{ padding:"12px 14px", color:C.textSec }}>{p.cliente_referencia||"—"}</td>
                 <td style={{ padding:"12px 14px" }}>
                   <span style={{ fontSize:11, padding:"3px 10px", borderRadius:20, fontWeight:700,
                     background:ESTADOS[p.estado]?.bg, color:ESTADOS[p.estado]?.color,

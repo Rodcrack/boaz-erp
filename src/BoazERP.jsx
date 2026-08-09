@@ -381,7 +381,7 @@ function Dashboard({ pedidos, repartidores, liquidaciones }) {
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead>
               <tr style={{ background:B.bg }}>
-                {["Tracking Boaz","Destinatario","Distrito","Servicio","Repartidor","Estado","Fecha"].map(h=>(
+                {["Tracking Boaz","N° Orden","Destinatario","Distrito","Servicio","Repartidor","Estado","Fecha"].map(h=>(
                   <th key={h} style={{ padding:"8px 14px", textAlign:"left", fontSize:10,
                     color:B.textMut, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.7px" }}>{h}</th>
                 ))}
@@ -392,6 +392,7 @@ function Dashboard({ pedidos, repartidores, liquidaciones }) {
                 <tr key={p.id} style={{ borderTop:`1px solid ${B.border}`,
                   background: i%2===0?B.white:"#F8FAFC" }}>
                   <td style={{ padding:"10px 14px", fontSize:12, fontWeight:700, color:B.navy }}>{p.omd}</td>
+                  <td style={{ padding:"10px 14px", fontSize:12, color:B.textSec }}>{p.cliente_referencia||"—"}</td>
                   <td style={{ padding:"10px 14px", fontSize:12, color:B.textPri }}>{p.dest_nombre}</td>
                   <td style={{ padding:"10px 14px", fontSize:12, color:B.textSec }}>{p.dest_distrito||"—"}</td>
                   <td style={{ padding:"10px 14px" }}>
@@ -411,7 +412,7 @@ function Dashboard({ pedidos, repartidores, liquidaciones }) {
                   <td style={{ padding:"10px 14px", fontSize:11, color:B.textMut }}>{fmt.fecha(p.created_at)}</td>
                 </tr>
               ))}
-              {recientes.length===0&&<tr><td colSpan={7} style={{ padding:32, textAlign:"center",
+              {recientes.length===0&&<tr><td colSpan={8} style={{ padding:32, textAlign:"center",
                 color:B.textMut, fontSize:13 }}>No hay pedidos aún</td></tr>}
             </tbody>
           </table>
@@ -480,6 +481,7 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, onRefresh
 
   const VALOR_COL = {
     tracking: p => p.omd || "",
+    orden_cliente: p => p.cliente_referencia || "",
     destinatario: p => p.dest_nombre || "",
     direccion: p => p.dest_direccion || "",
     peso: p => parseFloat(p.peso_kg) || 0,
@@ -494,6 +496,7 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, onRefresh
     const okE = filtroEstado==="todos" || p.estado===filtroEstado;
     const okB = !busqueda ||
       p.omd?.toLowerCase().includes(busqueda.toLowerCase()) ||
+      p.cliente_referencia?.toLowerCase().includes(busqueda.toLowerCase()) ||
       p.dest_nombre?.toLowerCase().includes(busqueda.toLowerCase()) ||
       p.dest_distrito?.toLowerCase().includes(busqueda.toLowerCase()) ||
       p.dest_telefono?.includes(busqueda);
@@ -532,7 +535,7 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, onRefresh
     <div>
       {/* Barra de herramientas */}
       <div style={{ display:"flex", gap:10, marginBottom:16, flexWrap:"wrap", alignItems:"center" }}>
-        <input placeholder="🔍 Buscar por OMD, nombre, teléfono, distrito..."
+        <input placeholder="🔍 Buscar por OMD, N° de orden, nombre, teléfono, distrito..."
           value={busqueda} onChange={e=>setBusqueda(e.target.value)}
           style={{ ...inp, width:320, background:B.white, boxShadow:"0 1px 3px #0D1E3D14" }} />
         <div style={{ display:"flex", gap:6 }}>
@@ -566,7 +569,7 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, onRefresh
           <thead>
             <tr style={{ background:B.bg }}>
               {[
-                ["Tracking Boaz","tracking"],["Destinatario","destinatario"],["Dirección","direccion"],
+                ["Tracking Boaz","tracking"],["N° Orden","orden_cliente"],["Destinatario","destinatario"],["Dirección","direccion"],
                 ["Peso","peso"],["Servicio","servicio"],["Ámbito","ambito"],["Repartidor","repartidor"],
                 ["Estado","estado"],["Fecha","fecha"],["Acciones",null],
               ].map(([h,col])=>(
@@ -593,6 +596,7 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, onRefresh
                   cursor:"pointer" }}
                   onClick={()=>setModalDetalle(p)}>
                   <td style={{ padding:"11px 14px", fontSize:12, fontWeight:700, color:B.navy }}>{p.omd}</td>
+                  <td style={{ padding:"11px 14px", fontSize:12, color:B.textSec }}>{p.cliente_referencia||"—"}</td>
                   <td style={{ padding:"11px 14px" }}>
                     <div style={{ fontSize:12, color:B.textPri, fontWeight:600 }}>{p.dest_nombre}</div>
                     <div style={{ fontSize:10, color:B.textMut }}>{p.dest_telefono}</div>
@@ -1567,7 +1571,7 @@ function ModalDetallePedido({ pedido: p, repartidores, onClose, onRefresh, toast
           <div>
             <div style={{ fontSize:11, fontWeight:700, color:B.navy, textTransform:"uppercase",
               letterSpacing:"0.8px", marginBottom:10, paddingBottom:6, borderBottom:`1px solid ${B.border}` }}>Detalles</div>
-            {[["Peso",p.peso_kg?p.peso_kg+" kg":"—"],["Tarifa",fmt.sol(p.tarifa_s)],
+            {[["N° Orden",p.cliente_referencia||"—"],["Peso",p.peso_kg?p.peso_kg+" kg":"—"],["Tarifa",fmt.sol(p.tarifa_s)],
               ["Ámbito",p.ambito?.replace("_"," ")||"—"],["Repartidor",rep?`${rep.nombres} ${rep.apellidos}`:"Sin asignar"],
               ["Cobro destino",p.cobro_destino?fmt.sol(p.monto_cobrar):"No"],
               ["Fecha prog.",fmt.fecha(p.fecha_programada)]].map(([k,v])=>(

@@ -1021,7 +1021,12 @@ function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, ini
               )}
               <div style={{ display:"flex", justifyContent:"space-between",
                 alignItems:"flex-start", marginBottom:8 }}>
-                <div style={{ fontSize:14, fontWeight:800, color:C.navy }}>{p.omd}</div>
+                <div>
+                  <div style={{ fontSize:14, fontWeight:800, color:C.navy }}>{p.omd}</div>
+                  {p.cliente_referencia && (
+                    <div style={{ fontSize:10, color:C.textMut }}>N° Orden: {p.cliente_referencia}</div>
+                  )}
+                </div>
                 <span style={{ fontSize:11, padding:"3px 10px", borderRadius:20,
                   fontWeight:700, background:ESTADOS[p.estado]?.bg,
                   color:ESTADOS[p.estado]?.color, border:`1px solid ${ESTADOS[p.estado]?.color}33` }}>
@@ -1223,6 +1228,9 @@ function DetallePedido({ pedido: p, onVolver, onActualizar, onActualizarLocal, t
             fontSize:13, cursor:"pointer", fontWeight:600 }}>← Volver</button>
         <div>
           <div style={{ fontSize:18, fontWeight:900, color:C.navy }}>{p.omd}</div>
+          {p.cliente_referencia && (
+            <div style={{ fontSize:11, color:C.textMut, marginBottom:2 }}>N° Orden: {p.cliente_referencia}</div>
+          )}
           <span style={{ fontSize:11, padding:"2px 10px", borderRadius:20, fontWeight:700,
             background:ESTADOS[p.estado]?.bg, color:ESTADOS[p.estado]?.color }}>
             {ESTADOS[p.estado]?.label}

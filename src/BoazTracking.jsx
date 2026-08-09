@@ -264,6 +264,7 @@ export default function BoazTracking() {
                   <div style={{ fontSize:11, color:"#8FA3BA", textTransform:"uppercase",
                     letterSpacing:"0.8px", marginBottom:12, fontWeight:700 }}>Información</div>
                   {[
+                    ["N° de orden", pedido.cliente_referencia||"—"],
                     ["Peso", pedido.peso_kg?pedido.peso_kg+" kg":"—"],
                     ["Fecha programada", fmt.fecha(pedido.fecha_programada)],
                     ["Fecha entrega", (pedido.estado==="entregado" && pedido.fecha_entrega)?fmt.fecha(pedido.fecha_entrega)+" "+fmt.hora(pedido.fecha_entrega):"Pendiente"],
