@@ -3676,9 +3676,9 @@ function obtenerFeriadosPeru(anio) {
   const viernes = new Date(pascua); viernes.setDate(pascua.getDate()-2);
   return new Set([
     `${anio}-01-01`, fechaStr(jueves), fechaStr(viernes),
-    `${anio}-05-01`, `${anio}-06-29`, `${anio}-07-28`, `${anio}-07-29`,
-    `${anio}-08-30`, `${anio}-10-08`, `${anio}-11-01`,
-    `${anio}-12-08`, `${anio}-12-09`, `${anio}-12-25`,
+    `${anio}-05-01`, `${anio}-06-07`, `${anio}-06-29`, `${anio}-07-23`,
+    `${anio}-07-28`, `${anio}-07-29`, `${anio}-08-06`, `${anio}-08-30`,
+    `${anio}-10-08`, `${anio}-11-01`, `${anio}-12-08`, `${anio}-12-09`, `${anio}-12-25`,
   ]);
 }
 function esFeriadoPeru(fechaStr) {
