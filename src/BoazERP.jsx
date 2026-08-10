@@ -505,6 +505,7 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, tarifario
     destinatario: p => p.dest_nombre || "",
     direccion: p => p.dest_direccion || "",
     peso: p => parseFloat(p.peso_kg) || 0,
+    tamano: p => bandaDePeso(p.peso_kg),
     servicio: p => p.tipo_servicio || "",
     ambito: p => p.ambito || "",
     repartidor: p => { const r = repartidores.find(r=>r.id===p.repartidor_id); return r ? `${r.nombres} ${r.apellidos}` : ""; },
@@ -590,7 +591,7 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, tarifario
             <tr style={{ background:B.bg }}>
               {[
                 ["Tracking Boaz","tracking"],["N° Orden","orden_cliente"],["Destinatario","destinatario"],["Dirección","direccion"],
-                ["Peso","peso"],["Servicio","servicio"],["Ámbito","ambito"],["Repartidor","repartidor"],
+                ["Peso","peso"],["Tamaño","tamano"],["Servicio","servicio"],["Ámbito","ambito"],["Repartidor","repartidor"],
                 ["Estado","estado"],["Fecha","fecha"],["Acciones",null],
               ].map(([h,col])=>(
                 <th key={h} onClick={()=>col && ordenarPor(col)}
@@ -626,6 +627,12 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, tarifario
                     <div style={{ fontSize:10, color:B.textMut }}>{p.dest_distrito}</div>
                   </td>
                   <td style={{ padding:"11px 14px", fontSize:12, color:B.textSec }}>{p.peso_kg?p.peso_kg+" kg":"—"}</td>
+                  <td style={{ padding:"11px 14px" }}>
+                    <span style={{ fontSize:10, fontWeight:700, padding:"3px 8px", borderRadius:8,
+                      background:"#F0F4F8", color:B.navy }}>
+                      {bandaDePeso(p.peso_kg)}
+                    </span>
+                  </td>
                   <td style={{ padding:"11px 14px" }}>
                     {p.tipo_servicio && BADGE_SERVICIO[p.tipo_servicio] ? (
                       <span style={{ fontSize:10, fontWeight:700, padding:"3px 8px", borderRadius:8,
@@ -2650,9 +2657,22 @@ function calcularDiasAsignacion(a, diasServicio) {
   const fin = a.fecha_fin ? new Date(a.fecha_fin+"T00:00:00") : new Date();
   return Math.max(1, Math.round((fin-inicio)/86400000)+1);
 }
-const calcularMontoAsignacion = (a, diasServicio) => calcularDiasAsignacion(a, diasServicio) * (parseFloat(a.tarifa_dia)||0);
-const calcularIGVAsignacion = (a, diasServicio) => calcularMontoAsignacion(a, diasServicio) * 0.18;
-const calcularTotalConIGVAsignacion = (a, diasServicio) => calcularMontoAsignacion(a, diasServicio) * 1.18;
+// Si hay calendario real (con fechas exactas), suma día por día y aplica el
+// recargo de feriado a cada día que corresponda. Sin calendario, usa la
+// estimación plana anterior (no se puede aplicar recargo sin fechas exactas).
+function calcularMontoAsignacion(a, diasServicio, recargoFeriadoPct=0) {
+  const registrosCalendario = diasServicio.filter(d=>d.asignacion_id===a.id);
+  const tarifaDia = parseFloat(a.tarifa_dia)||0;
+  if (registrosCalendario.length > 0) {
+    return registrosCalendario.filter(d=>d.prestado).reduce((sum,d)=>{
+      const recargo = esFeriadoPeru(d.fecha) ? tarifaDia*(recargoFeriadoPct/100) : 0;
+      return sum + tarifaDia + recargo;
+    }, 0);
+  }
+  return calcularDiasAsignacion(a, diasServicio) * tarifaDia;
+}
+const calcularIGVAsignacion = (a, diasServicio, recargoFeriadoPct=0) => calcularMontoAsignacion(a, diasServicio, recargoFeriadoPct) * 0.18;
+const calcularTotalConIGVAsignacion = (a, diasServicio, recargoFeriadoPct=0) => calcularMontoAsignacion(a, diasServicio, recargoFeriadoPct) * 1.18;
 
 function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidores, onRefresh, toast }) {
   const [vista, setVista] = useState("asignaciones");
@@ -2792,7 +2812,7 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
 // MÓDULO: LIQUIDACIÓN TRANSPORTE (Finanzas — cálculo de IGV/total
 // y calendario de días de servicio para clientes de Transporte y Carga)
 // ══════════════════════════════════════════════════════════════
-function LiquidacionTransporte({ unidades, asignaciones, empresas, tiposServicio, diasServicio, onRefresh, toast }) {
+function LiquidacionTransporte({ unidades, asignaciones, empresas, tiposServicio, diasServicio, recargoFeriadoPct, onRefresh, toast }) {
   const [modalCalendario, setModalCalendario] = useState(null);
 
   const marcarLiquidado = async (a) => {
@@ -2804,7 +2824,7 @@ function LiquidacionTransporte({ unidades, asignaciones, empresas, tiposServicio
 
   const totalPendiente = asignaciones
     .filter(a=>!a.liquidado)
-    .reduce((sum,a)=>sum+calcularTotalConIGVAsignacion(a, diasServicio), 0);
+    .reduce((sum,a)=>sum+calcularTotalConIGVAsignacion(a, diasServicio, recargoFeriadoPct), 0);
 
   return (
     <div>
@@ -2836,9 +2856,9 @@ function LiquidacionTransporte({ unidades, asignaciones, empresas, tiposServicio
               const empresa = empresas.find(e=>e.id===a.empresa_id);
               const servicio = tiposServicio.find(t=>t.id===a.tipo_servicio_id);
               const dias = calcularDiasAsignacion(a, diasServicio);
-              const monto = calcularMontoAsignacion(a, diasServicio);
-              const igv = calcularIGVAsignacion(a, diasServicio);
-              const totalConIGV = calcularTotalConIGVAsignacion(a, diasServicio);
+              const monto = calcularMontoAsignacion(a, diasServicio, recargoFeriadoPct);
+              const igv = calcularIGVAsignacion(a, diasServicio, recargoFeriadoPct);
+              const totalConIGV = calcularTotalConIGVAsignacion(a, diasServicio, recargoFeriadoPct);
               const tieneRegistro = diasServicio.some(d=>d.asignacion_id===a.id);
               return (
                 <tr key={a.id} style={{ borderTop:`1px solid ${B.border}`, background:i%2===0?B.white:"#F8FAFC" }}>
@@ -2885,13 +2905,14 @@ function LiquidacionTransporte({ unidades, asignaciones, empresas, tiposServicio
           diasServicio={diasServicio.filter(d=>d.asignacion_id===modalCalendario.id)}
           unidad={unidades.find(u=>u.id===modalCalendario.unidad_id)}
           empresa={empresas.find(e=>e.id===modalCalendario.empresa_id)}
+          recargoFeriadoPct={recargoFeriadoPct}
           onClose={()=>setModalCalendario(null)} onCambio={onRefresh} toast={toast}/>
       )}
     </div>
   );
 }
 
-function ModalCalendarioServicio({ asignacion, diasServicio, unidad, empresa, onClose, onCambio, toast }) {
+function ModalCalendarioServicio({ asignacion, diasServicio, unidad, empresa, recargoFeriadoPct, onClose, onCambio, toast }) {
   const [inicializando, setInicializando] = useState(true);
 
   const fechas = useMemo(() => {
@@ -2905,6 +2926,18 @@ function ModalCalendarioServicio({ asignacion, diasServicio, unidad, empresa, on
     }
     return arr;
   }, [asignacion.fecha_inicio, asignacion.fecha_fin]);
+
+  const mesesDisponibles = useMemo(() => {
+    const set = new Set(fechas.map(f=>f.slice(0,7)));
+    return Array.from(set).sort();
+  }, [fechas]);
+  const [mesActivo, setMesActivo] = useState(null);
+  useEffect(() => {
+    if (mesesDisponibles.length && !mesActivo) {
+      const hoyMes = new Date().toISOString().slice(0,7);
+      setMesActivo(mesesDisponibles.includes(hoyMes) ? hoyMes : mesesDisponibles[mesesDisponibles.length-1]);
+    }
+  }, [mesesDisponibles]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     (async () => {
@@ -2935,14 +2968,21 @@ function ModalCalendarioServicio({ asignacion, diasServicio, unidad, empresa, on
   const mapa = {};
   diasServicio.forEach(d=>{ mapa[d.fecha] = d.prestado; });
   const totalPrestados = fechas.filter(f => mapa[f] === true).length;
-  const subtotal = totalPrestados * (parseFloat(asignacion.tarifa_dia)||0);
+  const feriadosActivos = fechas.filter(f => mapa[f] === true && esFeriadoPeru(f)).length;
+  const subtotal = calcularMontoAsignacion(asignacion, diasServicio, recargoFeriadoPct);
   const igv = subtotal * 0.18;
   const totalConIGV = subtotal * 1.18;
+
+  const fechasDelMes = mesActivo ? fechas.filter(f=>f.startsWith(mesActivo)) : [];
+  const idxMes = mesesDisponibles.indexOf(mesActivo);
+  const labelMes = mesActivo
+    ? new Date(mesActivo+"-01T12:00:00").toLocaleDateString("es-PE",{month:"long",year:"numeric"})
+    : "";
 
   return (
     <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000,
       display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
-      <div style={{ background:B.white, borderRadius:16, padding:28, width:540,
+      <div style={{ background:B.white, borderRadius:16, padding:28, width:560,
         maxHeight:"85vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
         <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
           <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>📅 Calendario de servicio</div>
@@ -2955,11 +2995,12 @@ function ModalCalendarioServicio({ asignacion, diasServicio, unidad, empresa, on
         <div style={{ background:B.bg, borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
           <div style={{ fontSize:12, color:B.textSec, marginBottom:10 }}>
             Todos los días empiezan sin marcar. Toca cada día que sí tuvo servicio para activarlo.
+            {recargoFeriadoPct>0 && ` Los feriados llevan +${recargoFeriadoPct}% de recargo automático.`}
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:10, textAlign:"center" }}>
             <div>
               <div style={{ fontSize:18, fontWeight:900, color:B.navy }}>{totalPrestados}</div>
-              <div style={{ fontSize:9, color:B.textMut, textTransform:"uppercase" }}>Días</div>
+              <div style={{ fontSize:9, color:B.textMut, textTransform:"uppercase" }}>Días{feriadosActivos>0?` (${feriadosActivos} fer.)`:""}</div>
             </div>
             <div>
               <div style={{ fontSize:14, fontWeight:700, color:B.textSec }}>{fmt.sol(subtotal)}</div>
@@ -2979,27 +3020,50 @@ function ModalCalendarioServicio({ asignacion, diasServicio, unidad, empresa, on
         {inicializando ? (
           <div style={{ textAlign:"center", padding:30, color:B.textMut, fontSize:13 }}>Preparando calendario...</div>
         ) : (
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(74px, 1fr))", gap:8 }}>
-            {fechas.map(f => {
-              const prestado = mapa[f] === true;
-              const fechaObj = new Date(f+"T12:00:00");
-              return (
-                <button key={f} onClick={()=>toggle(f, prestado)}
-                  style={{ padding:"10px 4px", borderRadius:8, border:`2px solid ${prestado?B.green:B.border}`,
-                    background: prestado?"#ECFDF5":B.bg, cursor:"pointer", textAlign:"center" }}>
-                  <div style={{ fontSize:9, color:B.textMut, textTransform:"uppercase" }}>
-                    {fechaObj.toLocaleDateString("es-PE",{weekday:"short"})}
-                  </div>
-                  <div style={{ fontSize:14, fontWeight:800, color: prestado?B.green:B.textMut }}>
-                    {fechaObj.getDate()}
-                  </div>
-                  <div style={{ fontSize:9, color:B.textMut }}>
-                    {fechaObj.toLocaleDateString("es-PE",{month:"short"})}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+          <>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+              <button onClick={()=>setMesActivo(mesesDisponibles[idxMes-1])} disabled={idxMes<=0}
+                style={{ background:"none", border:`1px solid ${B.border}`, borderRadius:8, width:32, height:32,
+                  cursor: idxMes<=0?"default":"pointer", opacity: idxMes<=0?0.3:1, fontSize:14 }}>‹</button>
+              <div style={{ fontSize:14, fontWeight:700, color:B.navy, textTransform:"capitalize" }}>{labelMes}</div>
+              <button onClick={()=>setMesActivo(mesesDisponibles[idxMes+1])} disabled={idxMes>=mesesDisponibles.length-1}
+                style={{ background:"none", border:`1px solid ${B.border}`, borderRadius:8, width:32, height:32,
+                  cursor: idxMes>=mesesDisponibles.length-1?"default":"pointer", opacity: idxMes>=mesesDisponibles.length-1?0.3:1, fontSize:14 }}>›</button>
+            </div>
+
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(66px, 1fr))", gap:8 }}>
+              {fechasDelMes.map(f => {
+                const prestado = mapa[f] === true;
+                const feriado = esFeriadoPeru(f);
+                const fechaObj = new Date(f+"T12:00:00");
+                const bg = prestado && feriado ? "linear-gradient(135deg, #ECFDF5 50%, #FEF2F2 50%)"
+                  : prestado ? "#ECFDF5" : feriado ? "#FEF2F2" : B.bg;
+                const borderColor = prestado && feriado ? B.gold : prestado ? B.green : feriado ? B.red : B.border;
+                const textColor = prestado && feriado ? B.goldDk : prestado ? B.green : feriado ? B.red : B.textMut;
+                return (
+                  <button key={f} onClick={()=>toggle(f, prestado)}
+                    style={{ padding:"10px 4px", borderRadius:8, border:`2px solid ${borderColor}`,
+                      background: bg, cursor:"pointer", textAlign:"center", position:"relative" }}>
+                    <div style={{ fontSize:9, color:B.textMut, textTransform:"uppercase" }}>
+                      {fechaObj.toLocaleDateString("es-PE",{weekday:"short"})}
+                    </div>
+                    <div style={{ fontSize:14, fontWeight:800, color:textColor }}>
+                      {fechaObj.getDate()}
+                    </div>
+                    {feriado && (
+                      <div style={{ fontSize:8, color:B.red, fontWeight:700, marginTop:1 }}>feriado</div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div style={{ display:"flex", gap:14, marginTop:14, fontSize:10, color:B.textMut, flexWrap:"wrap" }}>
+              <span><span style={{ display:"inline-block", width:10, height:10, background:"#ECFDF5", border:`1.5px solid ${B.green}`, borderRadius:3, marginRight:4 }}/>Activo</span>
+              <span><span style={{ display:"inline-block", width:10, height:10, background:"#FEF2F2", border:`1.5px solid ${B.red}`, borderRadius:3, marginRight:4 }}/>Feriado</span>
+              <span><span style={{ display:"inline-block", width:10, height:10, background:"linear-gradient(135deg,#ECFDF5 50%,#FEF2F2 50%)", border:`1.5px solid ${B.gold}`, borderRadius:3, marginRight:4 }}/>Activo + Feriado (con recargo)</span>
+            </div>
+          </>
         )}
 
         <div style={{ display:"flex", justifyContent:"flex-end", marginTop:20 }}>
@@ -3296,7 +3360,7 @@ function Liquidaciones({ repartidores, pedidos, toast, onRefresh }) {
 // ══════════════════════════════════════════════════════════════
 // MÓDULO 6: FACTURACIÓN
 // ══════════════════════════════════════════════════════════════
-function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }) {
+function Facturacion({ empresas, pedidos, tiposServicio, usuario, unidades, asignacionesUnidad, diasServicio, tarifarioVehiculoEstandar, recargoFeriadoPct, toast }) {
   const [facturas, setFacturas] = useState([]);
   const [modal, setModal] = useState(false);
   const [modalPago, setModalPago] = useState(null); // factura seleccionada para marcar pagada
@@ -3476,6 +3540,8 @@ function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }) {
       )}
       {modalReporte && (
         <ModalReporteFacturacion pedidos={pedidos} empresas={empresas}
+          unidades={unidades} asignacionesUnidad={asignacionesUnidad} diasServicio={diasServicio}
+          tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} recargoFeriadoPct={recargoFeriadoPct}
           onClose={()=>setModalReporte(false)} toast={toast}/>
       )}
 
@@ -3587,6 +3653,37 @@ function cargarExcelJS() {
     script.onerror = () => resolve(null);
     document.head.appendChild(script);
   });
+}
+
+// Feriados oficiales de Perú. Los fijos son siempre la misma fecha; Jueves y
+// Viernes Santo dependen de la Pascua, calculada con el algoritmo estándar
+// (Meeus/Jones/Butcher). Devuelve un Set de fechas "YYYY-MM-DD" para el año dado.
+function calcularPascua(anio) {
+  const a = anio % 19, b = Math.floor(anio/100), c = anio % 100;
+  const d = Math.floor(b/4), e = b % 4, f = Math.floor((b+8)/25);
+  const g = Math.floor((b-f+1)/3), h = (19*a+b-d-g+15) % 30;
+  const i = Math.floor(c/4), k = c % 4, l = (32+2*e+2*i-h-k) % 7;
+  const m = Math.floor((a+11*h+22*l)/451);
+  const mes = Math.floor((h+l-7*m+114)/31);
+  const dia = ((h+l-7*m+114) % 31) + 1;
+  return new Date(anio, mes-1, dia);
+}
+function obtenerFeriadosPeru(anio) {
+  const f2 = (n)=>String(n).padStart(2,"0");
+  const fechaStr = (d)=> `${d.getFullYear()}-${f2(d.getMonth()+1)}-${f2(d.getDate())}`;
+  const pascua = calcularPascua(anio);
+  const jueves = new Date(pascua); jueves.setDate(pascua.getDate()-3);
+  const viernes = new Date(pascua); viernes.setDate(pascua.getDate()-2);
+  return new Set([
+    `${anio}-01-01`, fechaStr(jueves), fechaStr(viernes),
+    `${anio}-05-01`, `${anio}-06-29`, `${anio}-07-28`, `${anio}-07-29`,
+    `${anio}-08-30`, `${anio}-10-08`, `${anio}-11-01`,
+    `${anio}-12-08`, `${anio}-12-09`, `${anio}-12-25`,
+  ]);
+}
+function esFeriadoPeru(fechaStr) {
+  const anio = parseInt(fechaStr.slice(0,4));
+  return obtenerFeriadosPeru(anio).has(fechaStr);
 }
 
 const bandaDePeso = (kg) => {
@@ -3760,7 +3857,153 @@ async function generarLiquidacionEntregas({ pedidosOrdenados, empresa, fechaInic
   URL.revokeObjectURL(url);
 }
 
-function ModalReporteFacturacion({ pedidos, empresas, onClose, toast }) {
+// Igual que generarLiquidacionEntregas, pero para clientes de Transporte y
+// Carga (Deliverman, Globalia, etc.) que no tienen pedidos — se liquidan por
+// placa y días de servicio trabajados dentro del rango elegido.
+async function generarLiquidacionTransporte({ filasTransporte, empresa, fechaInicio, fechaFin, numeroLiquidacion, tarifarioVehiculoEstandar, toast }) {
+  const ExcelJS = await cargarExcelJS();
+  if (!ExcelJS) { toast("No se pudo cargar el generador de Excel — revisa tu conexión","error"); return; }
+
+  const NAVY = "FF1B2A4A", AMBER = "FFE8A33D", LIGHT_GRAY = "FFF2F2F2", WHITE = "FFFFFFFF", BLUE_EDIT = "FFEFF6FF";
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Liquidación", { views: [{ showGridLines: false }] });
+
+  const anchos = [5, 14, 16, 14, 12, 12, 11, 12];
+  anchos.forEach((w,i)=>{ ws.getColumn(i+1).width = w; });
+
+  const bordeFino = { style:"thin", color:{ argb:"FFBFBFBF" } };
+  const borde = { top:bordeFino, left:bordeFino, right:bordeFino, bottom:bordeFino };
+
+  ws.mergeCells("A1:H1");
+  const titulo = ws.getCell("A1");
+  titulo.value = "GRUPO BOAZ S.A.C.";
+  titulo.font = { size:16, bold:true, color:{ argb:WHITE } };
+  titulo.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:NAVY } };
+  titulo.alignment = { horizontal:"center", vertical:"middle" };
+  ws.getRow(1).height = 28;
+
+  ws.mergeCells("A2:H2");
+  const sub = ws.getCell("A2");
+  sub.value = "RUC 20613172301  ·  Con Boaz, tu negocio no para  ·  contacto@boaz.com.pe  ·  +51 960 622 471";
+  sub.font = { size:9, color:{ argb:WHITE } };
+  sub.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:NAVY } };
+  sub.alignment = { horizontal:"center" };
+
+  ws.mergeCells("A4:H4");
+  const tituloDoc = ws.getCell("A4");
+  tituloDoc.value = "LIQUIDACIÓN DE SERVICIOS DE TRANSPORTE";
+  tituloDoc.font = { size:13, bold:true, color:{ argb:NAVY } };
+  tituloDoc.alignment = { horizontal:"center" };
+
+  const infoRows = [
+    ["N° de Liquidación:", numeroLiquidacion],
+    ["Cliente:", empresa.nombre],
+    ["RUC del cliente:", empresa.ruc||"—"],
+    ["Periodo:", `${fmt.fecha(fechaInicio+"T00:00:00")} al ${fmt.fecha(fechaFin+"T00:00:00")}`],
+    ["Tipo de servicio:", "Transporte y Carga — por día"],
+  ];
+  let filaInfo = 6;
+  infoRows.forEach(([label,val])=>{
+    ws.getCell(`A${filaInfo}`).value = label;
+    ws.getCell(`A${filaInfo}`).font = { bold:true, size:10, color:{ argb:NAVY } };
+    ws.mergeCells(`B${filaInfo}:D${filaInfo}`);
+    ws.getCell(`B${filaInfo}`).value = val;
+    ws.getCell(`B${filaInfo}`).font = { size:10 };
+    filaInfo++;
+  });
+
+  const filaTabla = filaInfo + 1;
+  const encabezados = ["N°","Placa","Tipo de Vehículo","Días trabajados","Tarifa/día","Subtotal","IGV","Total"];
+  encabezados.forEach((h,i)=>{
+    const celda = ws.getCell(filaTabla, i+1);
+    celda.value = h;
+    celda.font = { bold:true, size:10, color:{ argb:WHITE } };
+    celda.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:NAVY } };
+    celda.alignment = { horizontal:"center", vertical:"middle" };
+    celda.border = borde;
+  });
+  ws.getRow(filaTabla).height = 20;
+
+  let subtotal = 0, diasTotales = 0;
+  filasTransporte.forEach((f,i)=>{
+    const fila = filaTabla + 1 + i;
+    subtotal += f.monto;
+    diasTotales += f.dias;
+    const valores = [i+1, f.unidad?.placa||"—", f.unidad?.tipo_vehiculo||"—", f.dias,
+      parseFloat(f.asignacion.tarifa_dia)||0, f.monto, f.igv, f.total];
+    valores.forEach((v,j)=>{
+      const celda = ws.getCell(fila, j+1);
+      celda.value = v;
+      celda.border = borde;
+      celda.font = { size:10 };
+      if (i%2===1) celda.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:LIGHT_GRAY } };
+      if (j===4) celda.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:BLUE_EDIT } }; // tarifa/día editable
+      if (j>=4) celda.numFmt = '"S/" #,##0.00';
+      if (j===0 || j===3) celda.alignment = { horizontal:"center" };
+    });
+  });
+
+  const filaTotales = filaTabla + 1 + filasTransporte.length;
+  ws.mergeCells(`A${filaTotales}:E${filaTotales}`);
+  ws.getCell(`A${filaTotales}`).value = `Total de unidades: ${filasTransporte.length}  ·  Total de días: ${diasTotales}`;
+  ws.getCell(`A${filaTotales}`).font = { bold:true, size:10, color:{ argb:NAVY } };
+  ws.getCell(`F${filaTotales}`).value = "Subtotal";
+  ws.getCell(`F${filaTotales}`).font = { bold:true, size:9 };
+  ws.getCell(`G${filaTotales}`).value = "IGV 18%";
+  ws.getCell(`G${filaTotales}`).font = { bold:true, size:9 };
+  ws.getCell(`H${filaTotales}`).value = "TOTAL";
+  ws.getCell(`H${filaTotales}`).font = { bold:true, size:11, color:{ argb:NAVY } };
+
+  const filaMontos = filaTotales + 1;
+  ws.getCell(`F${filaMontos}`).value = subtotal;
+  ws.getCell(`G${filaMontos}`).value = subtotal*0.18;
+  ws.getCell(`H${filaMontos}`).value = subtotal*1.18;
+  [`F${filaMontos}`,`G${filaMontos}`,`H${filaMontos}`].forEach(c=>{
+    ws.getCell(c).numFmt = '"S/" #,##0.00';
+    ws.getCell(c).font = { bold:true, size:11, color:{ argb:NAVY } };
+    ws.getCell(c).fill = { type:"pattern", pattern:"solid", fgColor:{ argb:AMBER } };
+  });
+
+  // ── Tarifario de referencia por vehículo ──
+  let filaResumen = filaMontos + 3;
+  ws.getCell(`A${filaResumen}`).value = "TARIFARIO ESTÁNDAR POR UNIDAD DE REFERENCIA (sin IGV)";
+  ws.getCell(`A${filaResumen}`).font = { bold:true, size:11, color:{ argb:NAVY } };
+  filaResumen++;
+  const filaTarifHead = filaResumen;
+  ["Tipo de vehículo","Tarifa base (día)","Recargo periférico"].forEach((h,i)=>{
+    const c = ws.getCell(filaTarifHead, i+1);
+    c.value = h; c.font = { bold:true, size:9, color:{ argb:WHITE } };
+    c.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:NAVY } };
+    c.border = borde;
+  });
+  const vehiculosOrden = ["moto","bicicleta","auto","furgoneta","minivan","van","porter"];
+  const filasVehiculo = vehiculosOrden
+    .map(tv=>tarifarioVehiculoEstandar.find(t=>t.tipo_vehiculo===tv && t.activo))
+    .filter(Boolean);
+  filasVehiculo.forEach((t,i)=>{
+    const f = filaTarifHead + 1 + i;
+    [t.tipo_vehiculo, `S/ ${t.tarifa_base}`, t.recargo_periferico>0?`+ S/ ${t.recargo_periferico}`:"—"].forEach((v,j)=>{
+      const c = ws.getCell(f, j+1);
+      c.value = v;
+      c.font = { size:9 };
+      c.border = borde;
+      if (i%2===1) c.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:LIGHT_GRAY } };
+    });
+  });
+
+  ws.views = [{ state:"frozen", ySplit: filaTabla, showGridLines:false }];
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type:"application/octet-stream" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${numeroLiquidacion}-${empresa.nombre.replace(/\s+/g,"-")}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function ModalReporteFacturacion({ pedidos, empresas, unidades, asignacionesUnidad, diasServicio, tarifarioVehiculoEstandar, recargoFeriadoPct, onClose, toast }) {
   const hoy = new Date().toISOString().split("T")[0];
   const primerDiaMes = hoy.slice(0,8)+"01";
   const [empresaId, setEmpresaId] = useState("todas");
@@ -3768,6 +4011,49 @@ function ModalReporteFacturacion({ pedidos, empresas, onClose, toast }) {
   const [fechaFin, setFechaFin] = useState(hoy);
   const [generado, setGenerado] = useState(false);
   const [generandoLiquidacion, setGenerandoLiquidacion] = useState(false);
+
+  // Si el cliente elegido tiene asignaciones de unidades registradas, es un
+  // cliente de Transporte y Carga — el reporte se arma por placa/días
+  // trabajados en vez de por pedidos.
+  const esClienteTransporte = empresaId!=="todas" && asignacionesUnidad.some(a=>a.empresa_id===empresaId);
+
+  const diasTrabajadosEnRango = (asignacion) => {
+    const registrados = diasServicio.filter(d=>d.asignacion_id===asignacion.id && d.fecha>=fechaInicio && d.fecha<=fechaFin);
+    if (registrados.length > 0) return registrados.filter(d=>d.prestado).length;
+    // Sin registro explícito de calendario: estima por solapamiento entre el
+    // rango de la asignación y el rango de fechas elegido para el reporte.
+    const inicioAsig = new Date(asignacion.fecha_inicio+"T00:00:00");
+    const finAsig = asignacion.fecha_fin ? new Date(asignacion.fecha_fin+"T00:00:00") : new Date();
+    const inicioRango = new Date(fechaInicio+"T00:00:00");
+    const finRango = new Date(fechaFin+"T00:00:00");
+    const desde = inicioAsig > inicioRango ? inicioAsig : inicioRango;
+    const hasta = finAsig < finRango ? finAsig : finRango;
+    if (hasta < desde) return 0;
+    return Math.round((hasta-desde)/86400000)+1;
+  };
+
+  const filasTransporte = esClienteTransporte
+    ? asignacionesUnidad.filter(a=>a.empresa_id===empresaId).map(a=>{
+        const tarifaDia = parseFloat(a.tarifa_dia)||0;
+        const registrados = diasServicio.filter(d=>d.asignacion_id===a.id && d.fecha>=fechaInicio && d.fecha<=fechaFin && d.prestado);
+        let dias, monto;
+        if (registrados.length > 0) {
+          dias = registrados.length;
+          monto = registrados.reduce((sum,d)=>{
+            const recargo = esFeriadoPeru(d.fecha) ? tarifaDia*(recargoFeriadoPct/100) : 0;
+            return sum + tarifaDia + recargo;
+          }, 0);
+        } else {
+          dias = diasTrabajadosEnRango(a); // sin fechas exactas registradas: estimado, sin recargo
+          monto = dias * tarifaDia;
+        }
+        const unidad = unidades.find(u=>u.id===a.unidad_id);
+        return { asignacion:a, unidad, dias, monto, igv: monto*0.18, total: monto*1.18 };
+      }).filter(f=>f.dias>0)
+    : [];
+  const subtotalTransporte = filasTransporte.reduce((s,f)=>s+f.monto,0);
+  const igvTransporte = subtotalTransporte*0.18;
+  const totalTransporte = subtotalTransporte*1.18;
 
   const dentroDelRango = (p) => {
     if (!p.created_at) return false;
@@ -3797,6 +4083,7 @@ function ModalReporteFacturacion({ pedidos, empresas, onClose, toast }) {
   });
 
   const exportarExcel = () => {
+    if (esClienteTransporte) { toast("Este cliente se liquida por días de transporte — usa el botón de Liquidación de Transporte","error"); return; }
     if (filtrados.length===0) { toast("No hay pedidos en este rango para exportar","error"); return; }
     const filas = filtrados.map(p=>{
       const sub = parseFloat(p.tarifa_s)||0;
@@ -3820,6 +4107,7 @@ function ModalReporteFacturacion({ pedidos, empresas, onClose, toast }) {
   };
 
   const imprimir = () => {
+    if (esClienteTransporte) { toast("Este cliente se liquida por días de transporte — usa el botón de Liquidación de Transporte","error"); return; }
     if (filtrados.length===0) { toast("No hay pedidos en este rango para imprimir","error"); return; }
     const filasHtml = filtrados.map(p=>{
       const sub = parseFloat(p.tarifa_s)||0;
@@ -3859,11 +4147,21 @@ function ModalReporteFacturacion({ pedidos, empresas, onClose, toast }) {
   };
 
   const generarLiquidacion = async () => {
-    if (filtrados.length===0) { toast("No hay pedidos en este rango para generar la liquidación","error"); return; }
     const empresa = empresas.find(e=>e.id===empresaId);
     if (!empresa) return;
-    setGenerandoLiquidacion(true);
     const numeroLiquidacion = `LIQ-BOAZ-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
+    if (esClienteTransporte) {
+      if (filasTransporte.length===0) { toast("No hay días de servicio registrados en este rango para generar la liquidación","error"); return; }
+      setGenerandoLiquidacion(true);
+      await generarLiquidacionTransporte({
+        filasTransporte, empresa, fechaInicio, fechaFin, numeroLiquidacion, tarifarioVehiculoEstandar, toast,
+      });
+      setGenerandoLiquidacion(false);
+      toast("Liquidación de transporte generada ✓ — revisa el número correlativo antes de enviarla");
+      return;
+    }
+    if (filtrados.length===0) { toast("No hay pedidos en este rango para generar la liquidación","error"); return; }
+    setGenerandoLiquidacion(true);
     await generarLiquidacionEntregas({
       pedidosOrdenados: filtrados, empresa, fechaInicio, fechaFin, numeroLiquidacion, toast,
     });
@@ -3903,20 +4201,35 @@ function ModalReporteFacturacion({ pedidos, empresas, onClose, toast }) {
           <>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, marginBottom:16 }}>
               <div style={{ background:B.bg, borderRadius:10, padding:14 }}>
-                <div style={{ fontSize:10, color:B.textMut }}>PEDIDOS</div>
-                <div style={{ fontSize:18, fontWeight:800, color:B.navy }}>{filtrados.length}</div>
+                <div style={{ fontSize:10, color:B.textMut }}>{esClienteTransporte ? "UNIDADES" : "PEDIDOS"}</div>
+                <div style={{ fontSize:18, fontWeight:800, color:B.navy }}>
+                  {esClienteTransporte ? filasTransporte.length : filtrados.length}
+                </div>
               </div>
               <div style={{ background:B.bg, borderRadius:10, padding:14 }}>
                 <div style={{ fontSize:10, color:B.textMut }}>SUBTOTAL + IGV</div>
-                <div style={{ fontSize:14, color:B.textSec }}>{fmt.sol(subtotal)} + {fmt.sol(igv)}</div>
+                <div style={{ fontSize:14, color:B.textSec }}>
+                  {esClienteTransporte
+                    ? `${fmt.sol(subtotalTransporte)} + ${fmt.sol(igvTransporte)}`
+                    : `${fmt.sol(subtotal)} + ${fmt.sol(igv)}`}
+                </div>
               </div>
               <div style={{ background:"#FFF8EF", borderRadius:10, padding:14, border:`1px solid ${B.gold}` }}>
                 <div style={{ fontSize:10, color:B.textMut }}>TOTAL A FACTURAR</div>
-                <div style={{ fontSize:18, fontWeight:800, color:B.gold }}>{fmt.sol(total)}</div>
+                <div style={{ fontSize:18, fontWeight:800, color:B.gold }}>
+                  {fmt.sol(esClienteTransporte ? totalTransporte : total)}
+                </div>
               </div>
             </div>
 
-            {empresaId==="todas" && Object.keys(porCliente).length>1 && (
+            {esClienteTransporte && (
+              <div style={{ background:"#EFF6FF", border:"1px solid #BFDBFE", borderRadius:10,
+                padding:"10px 14px", marginBottom:16, fontSize:12, color:"#1E40AF" }}>
+                🚛 Este cliente se liquida por <strong>días de transporte trabajados</strong> (Unidades), no por pedidos — por eso la tabla de abajo muestra placas en vez de guías.
+              </div>
+            )}
+
+            {!esClienteTransporte && empresaId==="todas" && Object.keys(porCliente).length>1 && (
               <div style={{ marginBottom:16, display:"flex", flexWrap:"wrap", gap:8 }}>
                 {Object.values(porCliente).map((c,i)=>(
                   <div key={i} style={{ fontSize:11, background:B.bg, borderRadius:20, padding:"5px 12px" }}>
@@ -3927,51 +4240,89 @@ function ModalReporteFacturacion({ pedidos, empresas, onClose, toast }) {
             )}
 
             <div style={{ display:"flex", gap:10, marginBottom:14, flexWrap:"wrap" }}>
-              <BtnSec onClick={exportarExcel}>📥 Exportar a Excel</BtnSec>
-              <BtnSec onClick={imprimir}>🖨️ Imprimir / PDF</BtnSec>
+              {!esClienteTransporte && (
+                <>
+                  <BtnSec onClick={exportarExcel}>📥 Exportar a Excel</BtnSec>
+                  <BtnSec onClick={imprimir}>🖨️ Imprimir / PDF</BtnSec>
+                </>
+              )}
               {empresaId!=="todas" && (
                 <BtnPri onClick={generarLiquidacion} disabled={generandoLiquidacion}>
-                  {generandoLiquidacion ? "Generando..." : "📄 Generar Liquidación de Entregas (formato Boaz)"}
+                  {generandoLiquidacion ? "Generando..." : esClienteTransporte
+                    ? "📄 Generar Liquidación de Transporte (formato Boaz)"
+                    : "📄 Generar Liquidación de Entregas (formato Boaz)"}
                 </BtnPri>
               )}
             </div>
             {empresaId==="todas" && (
               <div style={{ fontSize:11, color:B.textMut, marginTop:-8, marginBottom:14 }}>
-                Elige un cliente específico (no "Todos los clientes") para generar la Liquidación de Entregas con el formato Boaz.
+                Elige un cliente específico (no "Todos los clientes") para generar la liquidación con el formato Boaz.
               </div>
             )}
 
-            <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12,
-              overflow:"hidden", maxHeight:340, overflowY:"auto" }}>
-              <table style={{ width:"100%", borderCollapse:"collapse" }}>
-                <thead style={{ position:"sticky", top:0 }}>
-                  <tr style={{ background:B.bg }}>
-                    {["Tracking Boaz","N° Orden", ...(empresaId==="todas"?["Cliente"]:[]), "Destinatario","Servicio","Fecha","Subtotal"].map(h=>(
-                      <th key={h} style={{ padding:"8px 12px", textAlign:"left", fontSize:10,
-                        color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtrados.map((p,i)=>(
-                    <tr key={p.id} style={{ borderTop:`1px solid ${B.border}`, background:i%2===0?B.white:"#F8FAFC" }}>
-                      <td style={{ padding:"8px 12px", fontSize:12, fontWeight:700, color:B.navy }}>{p.omd}</td>
-                      <td style={{ padding:"8px 12px", fontSize:12, color:B.textSec }}>{p.cliente_referencia||"—"}</td>
-                      {empresaId==="todas" && <td style={{ padding:"8px 12px", fontSize:12, color:B.textSec }}>{nombreEmpresa(p.empresa_id)}</td>}
-                      <td style={{ padding:"8px 12px", fontSize:12, color:B.textPri }}>{p.dest_nombre}</td>
-                      <td style={{ padding:"8px 12px", fontSize:11, color:B.textSec }}>{p.tipo_servicio||"—"}</td>
-                      <td style={{ padding:"8px 12px", fontSize:11, color:B.textMut }}>{fmt.fecha(p.created_at)}</td>
-                      <td style={{ padding:"8px 12px", fontSize:12, fontWeight:600, color:B.textPri }}>{fmt.sol(p.tarifa_s)}</td>
+            {esClienteTransporte ? (
+              <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12,
+                overflow:"hidden", maxHeight:340, overflowY:"auto" }}>
+                <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                  <thead style={{ position:"sticky", top:0 }}>
+                    <tr style={{ background:B.bg }}>
+                      {["Placa","Tipo de Vehículo","Días trabajados","Tarifa/día","Subtotal"].map(h=>(
+                        <th key={h} style={{ padding:"8px 12px", textAlign:"left", fontSize:10,
+                          color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
+                      ))}
                     </tr>
-                  ))}
-                  {filtrados.length===0 && (
-                    <tr><td colSpan={7} style={{ padding:30, textAlign:"center", color:B.textMut, fontSize:13 }}>
-                      No hay pedidos en este rango de fechas
-                    </td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {filasTransporte.map((f,i)=>(
+                      <tr key={f.asignacion.id} style={{ borderTop:`1px solid ${B.border}`, background:i%2===0?B.white:"#F8FAFC" }}>
+                        <td style={{ padding:"8px 12px", fontSize:12, fontWeight:700, color:B.navy }}>{f.unidad?.placa||"—"}</td>
+                        <td style={{ padding:"8px 12px", fontSize:12, color:B.textPri, textTransform:"capitalize" }}>{f.unidad?.tipo_vehiculo||"—"}</td>
+                        <td style={{ padding:"8px 12px", fontSize:12, color:B.textSec }}>{f.dias}</td>
+                        <td style={{ padding:"8px 12px", fontSize:12, color:B.textSec }}>{fmt.sol(f.asignacion.tarifa_dia)}</td>
+                        <td style={{ padding:"8px 12px", fontSize:12, fontWeight:600, color:B.textPri }}>{fmt.sol(f.monto)}</td>
+                      </tr>
+                    ))}
+                    {filasTransporte.length===0 && (
+                      <tr><td colSpan={5} style={{ padding:30, textAlign:"center", color:B.textMut, fontSize:13 }}>
+                        No hay días de servicio en este rango de fechas
+                      </td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12,
+                overflow:"hidden", maxHeight:340, overflowY:"auto" }}>
+                <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                  <thead style={{ position:"sticky", top:0 }}>
+                    <tr style={{ background:B.bg }}>
+                      {["Tracking Boaz","N° Orden", ...(empresaId==="todas"?["Cliente"]:[]), "Destinatario","Servicio","Fecha","Subtotal"].map(h=>(
+                        <th key={h} style={{ padding:"8px 12px", textAlign:"left", fontSize:10,
+                          color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtrados.map((p,i)=>(
+                      <tr key={p.id} style={{ borderTop:`1px solid ${B.border}`, background:i%2===0?B.white:"#F8FAFC" }}>
+                        <td style={{ padding:"8px 12px", fontSize:12, fontWeight:700, color:B.navy }}>{p.omd}</td>
+                        <td style={{ padding:"8px 12px", fontSize:12, color:B.textSec }}>{p.cliente_referencia||"—"}</td>
+                        {empresaId==="todas" && <td style={{ padding:"8px 12px", fontSize:12, color:B.textSec }}>{nombreEmpresa(p.empresa_id)}</td>}
+                        <td style={{ padding:"8px 12px", fontSize:12, color:B.textPri }}>{p.dest_nombre}</td>
+                        <td style={{ padding:"8px 12px", fontSize:11, color:B.textSec }}>{p.tipo_servicio||"—"}</td>
+                        <td style={{ padding:"8px 12px", fontSize:11, color:B.textMut }}>{fmt.fecha(p.created_at)}</td>
+                        <td style={{ padding:"8px 12px", fontSize:12, fontWeight:600, color:B.textPri }}>{fmt.sol(p.tarifa_s)}</td>
+                      </tr>
+                    ))}
+                    {filtrados.length===0 && (
+                      <tr><td colSpan={7} style={{ padding:30, textAlign:"center", color:B.textMut, fontSize:13 }}>
+                        No hay pedidos en este rango de fechas
+                      </td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </>
         )}
 
@@ -4746,12 +5097,27 @@ function Configuracion({ onRefresh, toast }) {
 // líneas de negocio + tipos de servicio, y tarifarios negociados
 // por cliente. Todo el tema de precios en un solo lugar.
 // ══════════════════════════════════════════════════════════════
-function Catalogo({ lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVehiculoEstandar, onRefresh, toast }) {
+function Catalogo({ lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVehiculoEstandar, recargoFeriadoPct, onRefresh, toast }) {
   const [modalLinea, setModalLinea] = useState(false);
   const [modalTipo, setModalTipo] = useState(null);
   const [modalTarifarioEstandar, setModalTarifarioEstandar] = useState(false);
   const [modalTarifarioVehiculoEstandar, setModalTarifarioVehiculoEstandar] = useState(false);
   const [tabEstandar, setTabEstandar] = useState("same_day");
+  const [recargoInput, setRecargoInput] = useState(String(recargoFeriadoPct||0));
+  const [guardandoRecargo, setGuardandoRecargo] = useState(false);
+
+  const guardarRecargo = async () => {
+    setGuardandoRecargo(true);
+    const { data: fila } = await sb.from("configuracion_recargos").select("id").limit(1).maybeSingle();
+    const payload = { recargo_feriado_pct: parseFloat(recargoInput)||0 };
+    const { error } = fila
+      ? await sb.from("configuracion_recargos").update(payload).eq("id", fila.id)
+      : await sb.from("configuracion_recargos").insert([payload]);
+    setGuardandoRecargo(false);
+    if (error) { toast("Error: "+error.message, "error"); return; }
+    toast("Recargo por feriado actualizado ✓");
+    onRefresh();
+  };
 
   const AMBITOS_LABEL = { urbano:"Urbano", semi_urbano:"Semi Urbano", periferico:"Periférico" };
   const TIPOS_VEHICULO_LABEL = { moto:"Moto", bicicleta:"Bicicleta", auto:"Auto", furgoneta:"Furgoneta", minivan:"Minivan", van:"Van", porter:"Porter" };
@@ -4760,6 +5126,24 @@ function Catalogo({ lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVe
 
   return (
     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+      {/* Recargo por feriados */}
+      <div style={{ background:B.white, border:`1px solid ${B.border}`,
+        borderRadius:12, padding:20, boxShadow:"0 2px 8px #0D1E3D0A", gridColumn:"span 2" }}>
+        <div style={{ fontSize:14, fontWeight:800, color:B.navy, marginBottom:12,
+          paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>📅 Recargo por feriados</div>
+        <div style={{ fontSize:12, color:B.textMut, marginBottom:12 }}>
+          Se aplica automáticamente sobre la tarifa/día de Transporte y Carga cuando un día marcado como activo en el calendario de servicio cae en un feriado oficial de Perú.
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <input type="number" step="0.1" value={recargoInput} onChange={e=>setRecargoInput(e.target.value)}
+            style={{ ...inp, width:100 }}/>
+          <span style={{ fontSize:13, color:B.textSec }}>% de recargo sobre la tarifa/día</span>
+          <BtnPri onClick={guardarRecargo} disabled={guardandoRecargo} style={{ marginLeft:"auto", padding:"7px 14px", fontSize:12 }}>
+            {guardandoRecargo?"Guardando...":"Guardar"}
+          </BtnPri>
+        </div>
+      </div>
+
       {/* Tarifario estándar por pedido (editable) */}
       <div style={{ background:B.white, border:`1px solid ${B.border}`,
         borderRadius:12, padding:20, boxShadow:"0 2px 8px #0D1E3D0A" }}>
@@ -5023,6 +5407,7 @@ export default function BoazERP() {
   const [tarifarioVehiculoCliente, setTarifarioVehiculoCliente] = useState([]);
   const [tarifarioEstandar, setTarifarioEstandar] = useState([]);
   const [tarifarioVehiculoEstandar, setTarifarioVehiculoEstandar] = useState([]);
+  const [recargoFeriadoPct, setRecargoFeriadoPct] = useState(0);
   const [diasServicio, setDiasServicio] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [toast, setToast] = useState(null);
@@ -5033,7 +5418,7 @@ export default function BoazERP() {
   const cargar = useCallback(async (opts={}) => {
     if (!opts.silencioso) setCargando(true);
     try {
-      const [p,r,e,l,ln,ts,u,au,tc,ds,tv,te,tve] = await Promise.all([
+      const [p,r,e,l,ln,ts,u,au,tc,ds,tv,te,tve,cr] = await Promise.all([
         sb.from("pedidos").select("*").order("created_at",{ascending:false}),
         sb.from("repartidores").select("*").order("nombres"),
         sb.from("empresas").select("*").order("nombre"),
@@ -5047,6 +5432,7 @@ export default function BoazERP() {
         sb.from("tarifario_vehiculo_cliente").select("*"),
         sb.from("tarifario_estandar").select("*"),
         sb.from("tarifario_vehiculo_estandar").select("*"),
+        sb.from("configuracion_recargos").select("*").limit(1).maybeSingle(),
       ]);
       if(p.data) setPedidos(p.data);
       if(r.data) setRepartidores(r.data);
@@ -5061,6 +5447,7 @@ export default function BoazERP() {
       if(tv.data) setTarifarioVehiculoCliente(tv.data);
       if(te.data) setTarifarioEstandar(te.data);
       if(tve.data) setTarifarioVehiculoEstandar(tve.data);
+      if(cr.data) setRecargoFeriadoPct(parseFloat(cr.data.recargo_feriado_pct)||0);
     } catch(err) { console.error(err); }
     if (!opts.silencioso) setCargando(false);
   }, []);
@@ -5249,10 +5636,10 @@ if (verificando) {
               {seccion==="repartidores"  && <Repartidores repartidores={repartidores} pedidos={pedidos} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="unidades"      && <Unidades unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} repartidores={repartidores} tarifarioVehiculoCliente={tarifarioVehiculoCliente} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="clientes"      && <Clientes empresas={empresas} pedidos={pedidos} lineasNegocio={lineasNegocio} tarifariosCliente={tarifariosCliente} tarifarioVehiculoCliente={tarifarioVehiculoCliente} tarifarioEstandar={tarifarioEstandar} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} onRefresh={cargarSilencioso} toast={showToast}/>}
-              {seccion==="catalogo"      && <Catalogo lineasNegocio={lineasNegocio} tiposServicio={tiposServicio} tarifarioEstandar={tarifarioEstandar} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccion==="catalogo"      && <Catalogo lineasNegocio={lineasNegocio} tiposServicio={tiposServicio} tarifarioEstandar={tarifarioEstandar} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} recargoFeriadoPct={recargoFeriadoPct} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="liquidaciones" && <Liquidaciones repartidores={repartidores} pedidos={pedidos} liquidaciones={liquidaciones} onRefresh={cargarSilencioso} toast={showToast}/>}
-              {seccion==="liquidacion-transporte" && <LiquidacionTransporte unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} diasServicio={diasServicio} onRefresh={cargarSilencioso} toast={showToast}/>}
-              {seccion==="facturacion"   && <Facturacion empresas={empresas} pedidos={pedidos} tiposServicio={tiposServicio} usuario={usuario} toast={showToast}/>}
+              {seccion==="liquidacion-transporte" && <LiquidacionTransporte unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} diasServicio={diasServicio} recargoFeriadoPct={recargoFeriadoPct} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccion==="facturacion"   && <Facturacion empresas={empresas} pedidos={pedidos} tiposServicio={tiposServicio} usuario={usuario} unidades={unidades} asignacionesUnidad={asignacionesUnidad} diasServicio={diasServicio} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} recargoFeriadoPct={recargoFeriadoPct} toast={showToast}/>}
               {seccion==="reportes"      && <Reportes pedidos={pedidos} repartidores={repartidores} empresas={empresas} toast={showToast}/>}
               {seccion==="configuracion" && <Configuracion onRefresh={cargarSilencioso} toast={showToast}/>}
             </>
