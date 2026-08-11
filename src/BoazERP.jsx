@@ -142,9 +142,9 @@ async function geocodificarDireccion(direccion, distrito) {
 const esperar = (ms) => new Promise(r => setTimeout(r, ms));
 
 const ROLES_ACCESO = {
-  admin: ["dashboard","pedidos","repartidores","clientes","unidades","catalogo","liquidaciones","liquidacion-transporte","facturacion","reportes","configuracion"],
+  admin: ["dashboard","pedidos","repartidores","clientes","unidades","catalogo","liquidaciones","liquidacion-transporte","liquidacion-clientes","facturacion","reportes","configuracion"],
   operaciones: ["dashboard","pedidos","repartidores","clientes","unidades","catalogo"],
-  finanzas: ["dashboard","clientes","catalogo","liquidaciones","liquidacion-transporte","facturacion","reportes"],
+  finanzas: ["dashboard","clientes","catalogo","liquidaciones","liquidacion-transporte","liquidacion-clientes","facturacion","reportes"],
 };
 const Chip = ({ estado, size="sm" }) => {
   const s = ESTADOS_PEDIDO[estado] || { bg:"#F3F4F6", color:"#374151", label: estado };
@@ -3360,12 +3360,11 @@ function Liquidaciones({ repartidores, pedidos, toast, onRefresh }) {
 // ══════════════════════════════════════════════════════════════
 // MÓDULO 6: FACTURACIÓN
 // ══════════════════════════════════════════════════════════════
-function Facturacion({ empresas, pedidos, tiposServicio, usuario, unidades, asignacionesUnidad, diasServicio, tarifarioVehiculoEstandar, recargoFeriadoPct, toast }) {
+function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }) {
   const [facturas, setFacturas] = useState([]);
   const [modal, setModal] = useState(false);
   const [modalPago, setModalPago] = useState(null); // factura seleccionada para marcar pagada
   const [editandoFactura, setEditandoFactura] = useState(null);
-  const [modalReporte, setModalReporte] = useState(false);
   const [filtroPago, setFiltroPago] = useState("todas");
   const facturaVacia = () => ({
     empresa_id:"", serie:"E001", numero:"", descripcion:
@@ -3472,7 +3471,6 @@ function Facturacion({ empresas, pedidos, tiposServicio, usuario, unidades, asig
           ))}
         </div>
         <div style={{ display:"flex", gap:8 }}>
-          <BtnSec onClick={()=>setModalReporte(true)}>📊 Reporte de facturación</BtnSec>
           <BtnPri onClick={abrirNuevaFactura}>+ Registrar factura</BtnPri>
         </div>
       </div>
@@ -3537,12 +3535,6 @@ function Facturacion({ empresas, pedidos, tiposServicio, usuario, unidades, asig
 
       {modalPago && (
         <ModalMarcarPagada factura={modalPago} onClose={()=>setModalPago(null)} onConfirmar={marcarPagado}/>
-      )}
-      {modalReporte && (
-        <ModalReporteFacturacion pedidos={pedidos} empresas={empresas}
-          unidades={unidades} asignacionesUnidad={asignacionesUnidad} diasServicio={diasServicio}
-          tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} recargoFeriadoPct={recargoFeriadoPct}
-          onClose={()=>setModalReporte(false)} toast={toast}/>
       )}
 
       {modal && (
@@ -4003,7 +3995,7 @@ async function generarLiquidacionTransporte({ filasTransporte, empresa, fechaIni
   URL.revokeObjectURL(url);
 }
 
-function ModalReporteFacturacion({ pedidos, empresas, unidades, asignacionesUnidad, diasServicio, tarifarioVehiculoEstandar, recargoFeriadoPct, onClose, toast }) {
+function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesUnidad, diasServicio, tarifarioVehiculoEstandar, recargoFeriadoPct, toast }) {
   const hoy = new Date().toISOString().split("T")[0];
   const primerDiaMes = hoy.slice(0,8)+"01";
   const [empresaId, setEmpresaId] = useState("todas");
@@ -4170,34 +4162,29 @@ function ModalReporteFacturacion({ pedidos, empresas, unidades, asignacionesUnid
   };
 
   return (
-    <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000,
-      display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
-      <div style={{ background:B.white, borderRadius:16, padding:28, width:800,
-        maxHeight:"90vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
-          <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>📊 Reporte de facturación</div>
-          <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20,
-            color:B.textSec, cursor:"pointer" }}>✕</button>
-        </div>
-        <div style={{ fontSize:12, color:B.textMut, marginBottom:16 }}>
-          Elige un cliente y un rango de fechas para ver qué guías/pedidos entran en la facturación de ese periodo.
-        </div>
+    <div>
+      <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+        <div style={{ fontSize:18, fontWeight:800, color:B.navy }}>💼 Liquidación de Clientes</div>
+      </div>
+      <div style={{ fontSize:12, color:B.textMut, marginBottom:16 }}>
+        Elige un cliente y un rango de fechas para ver qué guías/pedidos (o placas y días de transporte) entran en la facturación de ese periodo.
+      </div>
 
-        <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr 1fr auto", gap:10, marginBottom:16, alignItems:"end" }}>
-          <div><label style={lbl}>Cliente</label>
-            <select style={inp} value={empresaId} onChange={e=>{setEmpresaId(e.target.value); setGenerado(false);}}>
-              <option value="todas">Todos los clientes</option>
-              {empresas.map(e=><option key={e.id} value={e.id}>{e.nombre}</option>)}
-            </select>
-          </div>
-          <div><label style={lbl}>Desde</label>
-            <input type="date" style={inp} value={fechaInicio} onChange={e=>{setFechaInicio(e.target.value); setGenerado(false);}}/></div>
-          <div><label style={lbl}>Hasta</label>
-            <input type="date" style={inp} value={fechaFin} onChange={e=>{setFechaFin(e.target.value); setGenerado(false);}}/></div>
-          <BtnPri onClick={()=>setGenerado(true)}>Generar</BtnPri>
+      <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr 1fr auto", gap:10, marginBottom:16, alignItems:"end" }}>
+        <div><label style={lbl}>Cliente</label>
+          <select style={inp} value={empresaId} onChange={e=>{setEmpresaId(e.target.value); setGenerado(false);}}>
+            <option value="todas">Todos los clientes</option>
+            {empresas.map(e=><option key={e.id} value={e.id}>{e.nombre}</option>)}
+          </select>
         </div>
+        <div><label style={lbl}>Desde</label>
+          <input type="date" style={inp} value={fechaInicio} onChange={e=>{setFechaInicio(e.target.value); setGenerado(false);}}/></div>
+        <div><label style={lbl}>Hasta</label>
+          <input type="date" style={inp} value={fechaFin} onChange={e=>{setFechaFin(e.target.value); setGenerado(false);}}/></div>
+        <BtnPri onClick={()=>setGenerado(true)}>Generar</BtnPri>
+      </div>
 
-        {generado && (
+      {generado && (
           <>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, marginBottom:16 }}>
               <div style={{ background:B.bg, borderRadius:10, padding:14 }}>
@@ -4325,11 +4312,6 @@ function ModalReporteFacturacion({ pedidos, empresas, unidades, asignacionesUnid
             )}
           </>
         )}
-
-        <div style={{ display:"flex", justifyContent:"flex-end", marginTop:20 }}>
-          <BtnSec onClick={onClose}>Cerrar</BtnSec>
-        </div>
-      </div>
     </div>
   );
 }
@@ -5478,6 +5460,7 @@ export default function BoazERP() {
     { id:"liquidaciones",icon:"💰", label:"Liq. Repartidores",
       badge: liquidaciones.filter(l=>l.estado==="pendiente").length || null },
     { id:"liquidacion-transporte", icon:"📅", label:"Liq. Transporte" },
+    { id:"liquidacion-clientes", icon:"💼", label:"Liq. Clientes" },
     { id:"facturacion",  icon:"🧾", label:"Facturación" },
     { section:"ANÁLISIS" },
     { id:"reportes",     icon:"📊", label:"Reportes" },
@@ -5639,7 +5622,8 @@ if (verificando) {
               {seccion==="catalogo"      && <Catalogo lineasNegocio={lineasNegocio} tiposServicio={tiposServicio} tarifarioEstandar={tarifarioEstandar} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} recargoFeriadoPct={recargoFeriadoPct} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="liquidaciones" && <Liquidaciones repartidores={repartidores} pedidos={pedidos} liquidaciones={liquidaciones} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="liquidacion-transporte" && <LiquidacionTransporte unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} diasServicio={diasServicio} recargoFeriadoPct={recargoFeriadoPct} onRefresh={cargarSilencioso} toast={showToast}/>}
-              {seccion==="facturacion"   && <Facturacion empresas={empresas} pedidos={pedidos} tiposServicio={tiposServicio} usuario={usuario} unidades={unidades} asignacionesUnidad={asignacionesUnidad} diasServicio={diasServicio} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} recargoFeriadoPct={recargoFeriadoPct} toast={showToast}/>}
+              {seccion==="liquidacion-clientes" && <LiquidacionClientes pedidos={pedidos} empresas={empresas} unidades={unidades} asignacionesUnidad={asignacionesUnidad} diasServicio={diasServicio} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} recargoFeriadoPct={recargoFeriadoPct} toast={showToast}/>}
+              {seccion==="facturacion"   && <Facturacion empresas={empresas} pedidos={pedidos} tiposServicio={tiposServicio} usuario={usuario} toast={showToast}/>}
               {seccion==="reportes"      && <Reportes pedidos={pedidos} repartidores={repartidores} empresas={empresas} toast={showToast}/>}
               {seccion==="configuracion" && <Configuracion onRefresh={cargarSilencioso} toast={showToast}/>}
             </>
