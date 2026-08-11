@@ -3968,8 +3968,10 @@ async function generarLiquidacionTransporte({ filasTransporte, empresa, fechaIni
     c.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:NAVY } };
     c.border = borde;
   });
-  const vehiculosOrden = ["moto","bicicleta","auto","furgoneta","minivan","van","porter"];
-  const filasVehiculo = vehiculosOrden
+  // Solo se muestran los tipos de vehículo que realmente aparecen en esta
+  // liquidación (ej. si solo trabajó una minivan, solo sale la fila de minivan).
+  const tiposVehiculoUsados = [...new Set(filasTransporte.map(f=>f.unidad?.tipo_vehiculo).filter(Boolean))];
+  const filasVehiculo = tiposVehiculoUsados
     .map(tv=>tarifarioVehiculoEstandar.find(t=>t.tipo_vehiculo===tv && t.activo))
     .filter(Boolean);
   filasVehiculo.forEach((t,i)=>{
