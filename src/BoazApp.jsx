@@ -438,14 +438,18 @@ function CapturaFotos({ fotos, setFotos, minimo = 2, label = "Evidencias" }) {
   const inputCamara = useRef();
   const inputGaleria = useRef();
   const [procesando, setProcesando] = useState(false);
-  const agregarFoto = async (e) => {
-    const file = e.target.files?.[0];
+  const agregarFotos = async (e) => {
+    const files = Array.from(e.target.files || []);
     e.target.value = "";
-    if (!file) return;
+    if (!files.length) return;
     setProcesando(true);
-    const archivoFinal = await convertirSiEsHeic(file);
+    // Convierte todas las fotos elegidas (HEIC → JPEG si hace falta) en paralelo
+    // y las agrega todas juntas, en vez de una por una.
+    const archivosFinales = await Promise.all(files.map(f => convertirSiEsHeic(f)));
     setProcesando(false);
-    setFotos(prev => [...prev, { file: archivoFinal, preview: URL.createObjectURL(archivoFinal), rota:false }]);
+    setFotos(prev => [...prev, ...archivosFinales.map(archivo => ({
+      file: archivo, preview: URL.createObjectURL(archivo), rota:false,
+    }))]);
   };
   const marcarRota = (i) => setFotos(prev => prev.map((f,idx)=> idx===i ? { ...f, rota:true } : f));
   const quitar = (i) => setFotos(prev => prev.filter((_,idx)=>idx!==i));
@@ -500,9 +504,9 @@ function CapturaFotos({ fotos, setFotos, minimo = 2, label = "Evidencias" }) {
           🖼️ Subir de galería
         </button>
         <input ref={inputCamara} type="file" accept="image/*" capture="environment"
-          style={{display:"none"}} onChange={agregarFoto}/>
-        <input ref={inputGaleria} type="file" accept="image/*"
-          style={{display:"none"}} onChange={agregarFoto}/>
+          style={{display:"none"}} onChange={agregarFotos}/>
+        <input ref={inputGaleria} type="file" accept="image/*" multiple
+          style={{display:"none"}} onChange={agregarFotos}/>
       </div>
       {!completo && (
         <div style={{ fontSize:11, color:C.textMut }}>Toma o sube al menos {minimo} fotos para continuar.</div>
@@ -898,7 +902,8 @@ function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, ini
     p.repartidor_id===repartidor.id && p.estado==="entregado" && p.fecha_entrega?.startsWith(hoy)
   );
   const noEntregadosHoy = pedidos.filter(p=>
-    p.repartidor_id===repartidor.id && p.estado==="no_entregado"
+    p.repartidor_id===repartidor.id && p.estado==="no_entregado" &&
+    p.historial?.some(h=>h.tipo==="estado" && h.timestamp?.startsWith(hoy))
   );
   const listaActual = filtroLista==="ruta" ? misP : filtroLista==="entregados" ? entregadosHoy : noEntregadosHoy;
 
