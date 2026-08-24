@@ -142,9 +142,9 @@ async function geocodificarDireccion(direccion, distrito) {
 const esperar = (ms) => new Promise(r => setTimeout(r, ms));
 
 const ROLES_ACCESO = {
-  admin: ["dashboard","pedidos","repartidores","clientes","unidades","catalogo","liquidaciones","liquidacion-transporte","liquidacion-clientes","facturacion","reportes","configuracion"],
+  admin: ["dashboard","pedidos","repartidores","clientes","unidades","catalogo","liquidaciones","liquidacion-transporte","liquidacion-clientes","facturacion","planilla","reportes","configuracion"],
   operaciones: ["dashboard","pedidos","repartidores","clientes","unidades","catalogo"],
-  finanzas: ["dashboard","clientes","catalogo","liquidaciones","liquidacion-transporte","liquidacion-clientes","facturacion","reportes"],
+  finanzas: ["dashboard","clientes","catalogo","liquidaciones","liquidacion-transporte","liquidacion-clientes","facturacion","planilla","reportes"],
 };
 const Chip = ({ estado, size="sm" }) => {
   const s = ESTADOS_PEDIDO[estado] || { bg:"#F3F4F6", color:"#374151", label: estado };
@@ -3696,14 +3696,14 @@ async function generarLiquidacionEntregas({ pedidosOrdenados, empresa, fechaInic
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("Liquidación", { views: [{ showGridLines: false }] });
 
-  const anchos = [5, 26, 20, 16, 14, 9, 9, 13, 11, 11, 12];
+  const anchos = [5, 24, 18, 16, 12, 32, 9, 9, 13, 11, 11, 12];
   anchos.forEach((w,i)=>{ ws.getColumn(i+1).width = w; });
 
   const bordeFino = { style:"thin", color:{ argb:"FFBFBFBF" } };
   const borde = { top:bordeFino, left:bordeFino, right:bordeFino, bottom:bordeFino };
 
   // ── Encabezado ──
-  ws.mergeCells("A1:K1");
+  ws.mergeCells("A1:L1");
   const titulo = ws.getCell("A1");
   titulo.value = "GRUPO BOAZ S.A.C.";
   titulo.font = { size:16, bold:true, color:{ argb:WHITE } };
@@ -3711,14 +3711,14 @@ async function generarLiquidacionEntregas({ pedidosOrdenados, empresa, fechaInic
   titulo.alignment = { horizontal:"center", vertical:"middle" };
   ws.getRow(1).height = 28;
 
-  ws.mergeCells("A2:K2");
+  ws.mergeCells("A2:L2");
   const sub = ws.getCell("A2");
   sub.value = "RUC 20613172301  ·  Con Boaz, tu negocio no para  ·  contacto@boaz.com.pe  ·  +51 960 622 471";
   sub.font = { size:9, color:{ argb:WHITE } };
   sub.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:NAVY } };
   sub.alignment = { horizontal:"center" };
 
-  ws.mergeCells("A4:K4");
+  ws.mergeCells("A4:L4");
   const tituloDoc = ws.getCell("A4");
   tituloDoc.value = "LIQUIDACIÓN DE ENTREGAS";
   tituloDoc.font = { size:13, bold:true, color:{ argb:NAVY } };
@@ -3743,7 +3743,7 @@ async function generarLiquidacionEntregas({ pedidosOrdenados, empresa, fechaInic
 
   // ── Tabla de puntos ──
   const filaTabla = filaInfo + 1;
-  const encabezados = ["N°","Punto / Destinatario","Distrito","Tracking Boaz","N° Orden","Peso (kg)","Banda","Ámbito","Tarifa","IGV","Total"];
+  const encabezados = ["N°","Punto / Destinatario","Distrito","Tracking Boaz","N° Orden","Detalle de Servicio","Peso (kg)","Banda","Ámbito","Tarifa","IGV","Total"];
   encabezados.forEach((h,i)=>{
     const celda = ws.getCell(filaTabla, i+1);
     celda.value = h;
@@ -3761,36 +3761,41 @@ async function generarLiquidacionEntregas({ pedidosOrdenados, empresa, fechaInic
     const igv = tarifa*0.18;
     const total = tarifa*1.18;
     subtotal += tarifa;
-    const valores = [i+1, p.dest_nombre, p.dest_distrito||"—", p.omd, p.cliente_referencia||"—",
+    const tipoServLabel = p.tipo_servicio==="same_day" ? "SAME DAY"
+      : p.tipo_servicio==="next_day" ? "NEXT DAY"
+      : p.tipo_servicio==="especial" ? "ESPECIAL" : "";
+    const detalle = "SERVICIO DE TRANSPORTE Y DISTRIBUCIÓN MULTIPUNTO" + (tipoServLabel ? ` - ${tipoServLabel}` : "");
+    const valores = [i+1, p.dest_nombre, p.dest_distrito||"—", p.omd, p.cliente_referencia||"—", detalle,
       parseFloat(p.peso_kg)||0, bandaDePeso(p.peso_kg), (p.ambito||"—").replace("_"," "), tarifa, igv, total];
     valores.forEach((v,j)=>{
       const celda = ws.getCell(fila, j+1);
       celda.value = v;
       celda.border = borde;
       celda.font = { size:10 };
+      if (j===5) celda.font = { size:8, italic:true, color:{ argb:"FF4B5563" } };
       if (i%2===1) celda.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:LIGHT_GRAY } };
-      if (j===8) celda.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:BLUE_EDIT } }; // tarifa editable
-      if (j>=8) celda.numFmt = '"S/" #,##0.00';
-      if (j===0 || j===5) celda.alignment = { horizontal:"center" };
+      if (j===9) celda.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:BLUE_EDIT } }; // tarifa editable
+      if (j>=9) celda.numFmt = '"S/" #,##0.00';
+      if (j===0 || j===6) celda.alignment = { horizontal:"center" };
     });
   });
 
   const filaTotales = filaTabla + 1 + pedidosOrdenados.length;
-  ws.mergeCells(`A${filaTotales}:H${filaTotales}`);
+  ws.mergeCells(`A${filaTotales}:I${filaTotales}`);
   ws.getCell(`A${filaTotales}`).value = `Total de puntos: ${pedidosOrdenados.length}`;
   ws.getCell(`A${filaTotales}`).font = { bold:true, size:10, color:{ argb:NAVY } };
-  ws.getCell(`I${filaTotales}`).value = "Subtotal";
-  ws.getCell(`I${filaTotales}`).font = { bold:true, size:10 };
-  ws.getCell(`J${filaTotales}`).value = "IGV 18%";
+  ws.getCell(`J${filaTotales}`).value = "Subtotal";
   ws.getCell(`J${filaTotales}`).font = { bold:true, size:10 };
-  ws.getCell(`K${filaTotales}`).value = "TOTAL";
-  ws.getCell(`K${filaTotales}`).font = { bold:true, size:11, color:{ argb:NAVY } };
+  ws.getCell(`K${filaTotales}`).value = "IGV 18%";
+  ws.getCell(`K${filaTotales}`).font = { bold:true, size:10 };
+  ws.getCell(`L${filaTotales}`).value = "TOTAL";
+  ws.getCell(`L${filaTotales}`).font = { bold:true, size:11, color:{ argb:NAVY } };
 
   const filaMontos = filaTotales + 1;
-  ws.getCell(`I${filaMontos}`).value = subtotal;
-  ws.getCell(`J${filaMontos}`).value = subtotal*0.18;
-  ws.getCell(`K${filaMontos}`).value = subtotal*1.18;
-  [`I${filaMontos}`,`J${filaMontos}`,`K${filaMontos}`].forEach(c=>{
+  ws.getCell(`J${filaMontos}`).value = subtotal;
+  ws.getCell(`K${filaMontos}`).value = subtotal*0.18;
+  ws.getCell(`L${filaMontos}`).value = subtotal*1.18;
+  [`J${filaMontos}`,`K${filaMontos}`,`L${filaMontos}`].forEach(c=>{
     ws.getCell(c).numFmt = '"S/" #,##0.00';
     ws.getCell(c).font = { bold:true, size:11, color:{ argb:NAVY } };
     ws.getCell(c).fill = { type:"pattern", pattern:"solid", fgColor:{ argb:AMBER } };
@@ -3852,7 +3857,7 @@ async function generarLiquidacionEntregas({ pedidosOrdenados, empresa, fechaInic
 // Igual que generarLiquidacionEntregas, pero para clientes de Transporte y
 // Carga (Deliverman, Globalia, etc.) que no tienen pedidos — se liquidan por
 // placa y días de servicio trabajados dentro del rango elegido.
-async function generarLiquidacionTransporte({ filasTransporte, empresa, fechaInicio, fechaFin, numeroLiquidacion, tarifarioVehiculoEstandar, toast }) {
+async function generarLiquidacionTransporte({ filasTransporte, empresa, fechaInicio, fechaFin, numeroLiquidacion, toast }) {
   const ExcelJS = await cargarExcelJS();
   if (!ExcelJS) { toast("No se pudo cargar el generador de Excel — revisa tu conexión","error"); return; }
 
@@ -3860,13 +3865,13 @@ async function generarLiquidacionTransporte({ filasTransporte, empresa, fechaIni
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("Liquidación", { views: [{ showGridLines: false }] });
 
-  const anchos = [5, 14, 16, 14, 12, 12, 11, 12];
+  const anchos = [5, 14, 16, 42, 14, 12, 12, 11, 12];
   anchos.forEach((w,i)=>{ ws.getColumn(i+1).width = w; });
 
   const bordeFino = { style:"thin", color:{ argb:"FFBFBFBF" } };
   const borde = { top:bordeFino, left:bordeFino, right:bordeFino, bottom:bordeFino };
 
-  ws.mergeCells("A1:H1");
+  ws.mergeCells("A1:I1");
   const titulo = ws.getCell("A1");
   titulo.value = "GRUPO BOAZ S.A.C.";
   titulo.font = { size:16, bold:true, color:{ argb:WHITE } };
@@ -3874,14 +3879,14 @@ async function generarLiquidacionTransporte({ filasTransporte, empresa, fechaIni
   titulo.alignment = { horizontal:"center", vertical:"middle" };
   ws.getRow(1).height = 28;
 
-  ws.mergeCells("A2:H2");
+  ws.mergeCells("A2:I2");
   const sub = ws.getCell("A2");
   sub.value = "RUC 20613172301  ·  Con Boaz, tu negocio no para  ·  contacto@boaz.com.pe  ·  +51 960 622 471";
   sub.font = { size:9, color:{ argb:WHITE } };
   sub.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:NAVY } };
   sub.alignment = { horizontal:"center" };
 
-  ws.mergeCells("A4:H4");
+  ws.mergeCells("A4:I4");
   const tituloDoc = ws.getCell("A4");
   tituloDoc.value = "LIQUIDACIÓN DE SERVICIOS DE TRANSPORTE";
   tituloDoc.font = { size:13, bold:true, color:{ argb:NAVY } };
@@ -3905,7 +3910,7 @@ async function generarLiquidacionTransporte({ filasTransporte, empresa, fechaIni
   });
 
   const filaTabla = filaInfo + 1;
-  const encabezados = ["N°","Placa","Tipo de Vehículo","Días trabajados","Tarifa/día","Subtotal","IGV","Total"];
+  const encabezados = ["N°","Placa","Tipo de Vehículo","Detalle de Servicio","Días trabajados","Tarifa/día","Subtotal","IGV","Total"];
   encabezados.forEach((h,i)=>{
     const celda = ws.getCell(filaTabla, i+1);
     celda.value = h;
@@ -3921,63 +3926,62 @@ async function generarLiquidacionTransporte({ filasTransporte, empresa, fechaIni
     const fila = filaTabla + 1 + i;
     subtotal += f.monto;
     diasTotales += f.dias;
-    const valores = [i+1, f.unidad?.placa||"—", f.unidad?.tipo_vehiculo||"—", f.dias,
+    const tipoVehiculo = f.unidad?.tipo_vehiculo||"—";
+    const placa = f.unidad?.placa||"—";
+    const detalle = `SERVICIO DE TRANSPORTE REALIZADO CON LA UNIDAD ${tipoVehiculo.toUpperCase()} DE PLACA ${placa}, ${f.dias} DÍA${f.dias===1?"":"S"} DE SERVICIO`;
+    const valores = [i+1, placa, tipoVehiculo, detalle, f.dias,
       parseFloat(f.asignacion.tarifa_dia)||0, f.monto, f.igv, f.total];
     valores.forEach((v,j)=>{
       const celda = ws.getCell(fila, j+1);
       celda.value = v;
       celda.border = borde;
       celda.font = { size:10 };
+      if (j===3) celda.font = { size:8, italic:true, color:{ argb:"FF4B5563" } };
       if (i%2===1) celda.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:LIGHT_GRAY } };
-      if (j===4) celda.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:BLUE_EDIT } }; // tarifa/día editable
-      if (j>=4) celda.numFmt = '"S/" #,##0.00';
-      if (j===0 || j===3) celda.alignment = { horizontal:"center" };
+      if (j===5) celda.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:BLUE_EDIT } }; // tarifa/día editable
+      if (j>=5) celda.numFmt = '"S/" #,##0.00';
+      if (j===0 || j===4) celda.alignment = { horizontal:"center" };
     });
   });
 
   const filaTotales = filaTabla + 1 + filasTransporte.length;
-  ws.mergeCells(`A${filaTotales}:E${filaTotales}`);
+  ws.mergeCells(`A${filaTotales}:F${filaTotales}`);
   ws.getCell(`A${filaTotales}`).value = `Total de unidades: ${filasTransporte.length}  ·  Total de días: ${diasTotales}`;
   ws.getCell(`A${filaTotales}`).font = { bold:true, size:10, color:{ argb:NAVY } };
-  ws.getCell(`F${filaTotales}`).value = "Subtotal";
-  ws.getCell(`F${filaTotales}`).font = { bold:true, size:9 };
-  ws.getCell(`G${filaTotales}`).value = "IGV 18%";
+  ws.getCell(`G${filaTotales}`).value = "Subtotal";
   ws.getCell(`G${filaTotales}`).font = { bold:true, size:9 };
-  ws.getCell(`H${filaTotales}`).value = "TOTAL";
-  ws.getCell(`H${filaTotales}`).font = { bold:true, size:11, color:{ argb:NAVY } };
+  ws.getCell(`H${filaTotales}`).value = "IGV 18%";
+  ws.getCell(`H${filaTotales}`).font = { bold:true, size:9 };
+  ws.getCell(`I${filaTotales}`).value = "TOTAL";
+  ws.getCell(`I${filaTotales}`).font = { bold:true, size:11, color:{ argb:NAVY } };
 
   const filaMontos = filaTotales + 1;
-  ws.getCell(`F${filaMontos}`).value = subtotal;
-  ws.getCell(`G${filaMontos}`).value = subtotal*0.18;
-  ws.getCell(`H${filaMontos}`).value = subtotal*1.18;
-  [`F${filaMontos}`,`G${filaMontos}`,`H${filaMontos}`].forEach(c=>{
+  ws.getCell(`G${filaMontos}`).value = subtotal;
+  ws.getCell(`H${filaMontos}`).value = subtotal*0.18;
+  ws.getCell(`I${filaMontos}`).value = subtotal*1.18;
+  [`G${filaMontos}`,`H${filaMontos}`,`I${filaMontos}`].forEach(c=>{
     ws.getCell(c).numFmt = '"S/" #,##0.00';
     ws.getCell(c).font = { bold:true, size:11, color:{ argb:NAVY } };
     ws.getCell(c).fill = { type:"pattern", pattern:"solid", fgColor:{ argb:AMBER } };
   });
 
-  // ── Tarifario de referencia por vehículo ──
+  // ── Tarifas realmente aplicadas en esta liquidación (no el tarifario
+  // estándar genérico — el costo real del servicio prestado por vehículo) ──
   let filaResumen = filaMontos + 3;
-  ws.getCell(`A${filaResumen}`).value = "TARIFARIO ESTÁNDAR POR UNIDAD DE REFERENCIA (sin IGV)";
+  ws.getCell(`A${filaResumen}`).value = "TARIFAS APLICADAS EN ESTA LIQUIDACIÓN (sin IGV)";
   ws.getCell(`A${filaResumen}`).font = { bold:true, size:11, color:{ argb:NAVY } };
   filaResumen++;
   const filaTarifHead = filaResumen;
-  ["Tipo de vehículo","Tarifa base (día)","Recargo periférico"].forEach((h,i)=>{
+  ["Placa","Tipo de vehículo","Tarifa/día aplicada"].forEach((h,i)=>{
     const c = ws.getCell(filaTarifHead, i+1);
     c.value = h; c.font = { bold:true, size:9, color:{ argb:WHITE } };
     c.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:NAVY } };
     c.border = borde;
   });
-  // Solo se muestran los tipos de vehículo que realmente aparecen en esta
-  // liquidación (ej. si solo trabajó una minivan, solo sale la fila de minivan).
-  const tiposVehiculoUsados = [...new Set(filasTransporte.map(f=>f.unidad?.tipo_vehiculo).filter(Boolean))];
-  const filasVehiculo = tiposVehiculoUsados
-    .map(tv=>tarifarioVehiculoEstandar.find(t=>t.tipo_vehiculo===tv && t.activo))
-    .filter(Boolean);
-  filasVehiculo.forEach((t,i)=>{
-    const f = filaTarifHead + 1 + i;
-    [t.tipo_vehiculo, `S/ ${t.tarifa_base}`, t.recargo_periferico>0?`+ S/ ${t.recargo_periferico}`:"—"].forEach((v,j)=>{
-      const c = ws.getCell(f, j+1);
+  filasTransporte.forEach((f,i)=>{
+    const fila = filaTarifHead + 1 + i;
+    [f.unidad?.placa||"—", f.unidad?.tipo_vehiculo||"—", `S/ ${(parseFloat(f.asignacion.tarifa_dia)||0).toFixed(2)}`].forEach((v,j)=>{
+      const c = ws.getCell(fila, j+1);
       c.value = v;
       c.font = { size:9 };
       c.border = borde;
@@ -4148,7 +4152,7 @@ function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesUnidad, 
       if (filasTransporte.length===0) { toast("No hay días de servicio registrados en este rango para generar la liquidación","error"); return; }
       setGenerandoLiquidacion(true);
       await generarLiquidacionTransporte({
-        filasTransporte, empresa, fechaInicio, fechaFin, numeroLiquidacion, tarifarioVehiculoEstandar, toast,
+        filasTransporte, empresa, fechaInicio, fechaFin, numeroLiquidacion, toast,
       });
       setGenerandoLiquidacion(false);
       toast("Liquidación de transporte generada ✓ — revisa el número correlativo antes de enviarla");
@@ -4350,6 +4354,500 @@ function ModalMarcarPagada({ factura, onClose, onConfirmar }) {
         <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
           <BtnSec onClick={onClose}>Cancelar</BtnSec>
           <BtnPri onClick={()=>onConfirmar(fecha, banco, numeroOperacion)}>Confirmar pago</BtnPri>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// MÓDULO: PLANILLA (personal propio + terceros por honorarios/factura)
+// ══════════════════════════════════════════════════════════════
+const PORCENTAJE_ONP = 13;
+const PORCENTAJE_ESSALUD = 9; // lo paga la empresa, no se descuenta al trabajador
+const UMBRAL_RETENCION_HONORARIOS = 1500; // referencial — confirma caso por caso
+
+function calcularNetoPlanilla(sueldoBruto, sistemaPension, porcentajeAfp) {
+  const bruto = parseFloat(sueldoBruto) || 0;
+  const pctPension = sistemaPension === "afp" ? (parseFloat(porcentajeAfp) || 0) : PORCENTAJE_ONP;
+  const descuentoPension = bruto * (pctPension / 100);
+  const essalud = bruto * (PORCENTAJE_ESSALUD / 100); // informativo, costo empleador
+  const neto = bruto - descuentoPension;
+  return { descuentoPension, essalud, neto, pctPension };
+}
+
+function Planilla({ toast }) {
+  const [tab, setTab] = useState("planilla");
+  const [personal, setPersonal] = useState([]);
+  const [terceros, setTerceros] = useState([]);
+  const [pagosPlanilla, setPagosPlanilla] = useState([]);
+  const [pagosTerceros, setPagosTerceros] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [modalPersonal, setModalPersonal] = useState(false);
+  const [editandoPersonal, setEditandoPersonal] = useState(null);
+  const [modalTercero, setModalTercero] = useState(false);
+  const [editandoTercero, setEditandoTercero] = useState(null);
+  const [modalPago, setModalPago] = useState(null); // { tipo:'planilla'|'tercero', registro }
+
+  const cargar = async () => {
+    setCargando(true);
+    const [p, t, pp, pt] = await Promise.all([
+      sb.from("personal_planilla").select("*").order("nombres"),
+      sb.from("terceros_planilla").select("*").order("nombre"),
+      sb.from("pagos_planilla").select("*,personal_planilla(nombres,apellidos)").order("created_at",{ascending:false}),
+      sb.from("pagos_terceros").select("*,terceros_planilla(nombre)").order("created_at",{ascending:false}),
+    ]);
+    if (p.data) setPersonal(p.data);
+    if (t.data) setTerceros(t.data);
+    if (pp.data) setPagosPlanilla(pp.data);
+    if (pt.data) setPagosTerceros(pt.data);
+    setCargando(false);
+  };
+  useEffect(() => { cargar(); }, []);
+
+  const totalMensualPlanilla = personal.filter(p=>p.activo)
+    .reduce((s,p)=>s + calcularNetoPlanilla(p.sueldo_bruto, p.sistema_pension, p.porcentaje_afp).neto, 0);
+  const pendientesPlanilla = pagosPlanilla.filter(p=>p.estado==="pendiente").length;
+  const pendientesTerceros = pagosTerceros.filter(p=>p.estado==="pendiente").length;
+
+  if (cargando) return <div style={{ padding:40, textAlign:"center", color:B.textMut }}>Cargando...</div>;
+
+  return (
+    <div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14, marginBottom:20 }}>
+        <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:18, borderTop:`3px solid ${B.navy}` }}>
+          <div style={{ fontSize:10, color:B.textMut }}>PERSONAL EN PLANILLA (activos)</div>
+          <div style={{ fontSize:20, fontWeight:800, color:B.navy }}>{personal.filter(p=>p.activo).length}</div>
+        </div>
+        <div style={{ background:"#FFF8EF", border:`1px solid ${B.gold}`, borderRadius:12, padding:18 }}>
+          <div style={{ fontSize:10, color:B.textMut }}>NETO MENSUAL ESTIMADO (planilla activa)</div>
+          <div style={{ fontSize:20, fontWeight:800, color:B.gold }}>{fmt.sol(totalMensualPlanilla)}</div>
+        </div>
+        <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:18, borderTop:`3px solid ${B.red}` }}>
+          <div style={{ fontSize:10, color:B.textMut }}>PAGOS PENDIENTES</div>
+          <div style={{ fontSize:20, fontWeight:800, color:B.red }}>{pendientesPlanilla + pendientesTerceros}</div>
+        </div>
+      </div>
+
+      <div style={{ display:"flex", gap:6, marginBottom:16 }}>
+        {[["planilla","👤 Personal en Planilla"],["terceros","🧾 Terceros (Honorarios/Factura)"]].map(([id,label])=>(
+          <button key={id} onClick={()=>setTab(id)}
+            style={{ padding:"8px 16px", borderRadius:8, fontSize:12, cursor:"pointer",
+              border:`1px solid ${tab===id?B.gold:B.border}`,
+              background:tab===id?B.gold:"transparent",
+              color:tab===id?B.navy:B.textSec, fontWeight:tab===id?700:400 }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab==="planilla" ? (
+        <>
+          <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:12 }}>
+            <BtnPri onClick={()=>{setEditandoPersonal(null); setModalPersonal(true);}}>+ Nuevo trabajador</BtnPri>
+          </div>
+          <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden", marginBottom:20 }}>
+            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+              <thead><tr style={{ background:B.bg }}>
+                {["Nombre","Cargo","Sueldo bruto","Pensión","Descuento","EsSalud (empresa)","Neto","Estado","Acciones"].map(h=>(
+                  <th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:10, color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {personal.map((p,i)=>{
+                  const calc = calcularNetoPlanilla(p.sueldo_bruto, p.sistema_pension, p.porcentaje_afp);
+                  return (
+                    <tr key={p.id} style={{ borderTop:`1px solid ${B.border}`, background:i%2===0?B.white:"#F8FAFC", opacity:p.activo?1:0.5 }}>
+                      <td style={{ padding:"9px 12px", fontSize:12, fontWeight:700, color:B.navy }}>{p.nombres} {p.apellidos}</td>
+                      <td style={{ padding:"9px 12px", fontSize:12, color:B.textSec }}>{p.cargo||"—"}</td>
+                      <td style={{ padding:"9px 12px", fontSize:12, color:B.textPri }}>{fmt.sol(p.sueldo_bruto)}</td>
+                      <td style={{ padding:"9px 12px", fontSize:11, color:B.textSec, textTransform:"uppercase" }}>
+                        {p.sistema_pension==="afp" ? `AFP ${p.afp_nombre||""} (${calc.pctPension}%)` : `ONP (${PORCENTAJE_ONP}%)`}
+                      </td>
+                      <td style={{ padding:"9px 12px", fontSize:12, color:B.red }}>- {fmt.sol(calc.descuentoPension)}</td>
+                      <td style={{ padding:"9px 12px", fontSize:11, color:B.textMut }}>{fmt.sol(calc.essalud)}</td>
+                      <td style={{ padding:"9px 12px", fontSize:13, fontWeight:800, color:B.gold }}>{fmt.sol(calc.neto)}</td>
+                      <td style={{ padding:"9px 12px" }}>
+                        <span style={{ fontSize:10, padding:"3px 8px", borderRadius:10, fontWeight:700,
+                          background:p.activo?"#ECFDF5":"#F3F4F6", color:p.activo?B.green:B.textMut }}>
+                          {p.activo?"Activo":"Inactivo"}
+                        </span>
+                      </td>
+                      <td style={{ padding:"9px 12px" }}>
+                        <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                          <button onClick={()=>setModalPago({ tipo:"planilla", registro:p })}
+                            style={{ fontSize:11, color:B.green, background:"none", border:"none", cursor:"pointer", fontWeight:700 }}>💰 Registrar pago</button>
+                          <button onClick={()=>{setEditandoPersonal(p); setModalPersonal(true);}}
+                            style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer" }}>✏️ Editar</button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {personal.length===0 && <tr><td colSpan={9} style={{ padding:30, textAlign:"center", color:B.textMut, fontSize:13 }}>Sin personal registrado</td></tr>}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ fontSize:13, fontWeight:700, color:B.navy, marginBottom:10 }}>Historial de pagos</div>
+          <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden" }}>
+            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+              <thead><tr style={{ background:B.bg }}>
+                {["Trabajador","Periodo","Neto pagado","Fecha de pago","Estado"].map(h=>(
+                  <th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:10, color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {pagosPlanilla.slice(0,20).map((pg,i)=>(
+                  <tr key={pg.id} style={{ borderTop:`1px solid ${B.border}`, background:i%2===0?B.white:"#F8FAFC" }}>
+                    <td style={{ padding:"9px 12px", fontSize:12, color:B.textPri }}>{pg.personal_planilla?.nombres} {pg.personal_planilla?.apellidos}</td>
+                    <td style={{ padding:"9px 12px", fontSize:12, color:B.textSec }}>{pg.periodo}</td>
+                    <td style={{ padding:"9px 12px", fontSize:12, fontWeight:700, color:B.gold }}>{fmt.sol(pg.neto_pagar)}</td>
+                    <td style={{ padding:"9px 12px", fontSize:11, color:B.textMut }}>{pg.fecha_pago?fmt.fecha(pg.fecha_pago+"T00:00:00"):"—"}</td>
+                    <td style={{ padding:"9px 12px" }}>
+                      <span style={{ fontSize:10, padding:"3px 8px", borderRadius:10, fontWeight:700,
+                        background:pg.estado==="pagado"?"#ECFDF5":"#FFFBEB", color:pg.estado==="pagado"?B.green:B.goldDk }}>
+                        {pg.estado==="pagado"?"Pagado":"Pendiente"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+                {pagosPlanilla.length===0 && <tr><td colSpan={5} style={{ padding:24, textAlign:"center", color:B.textMut, fontSize:13 }}>Sin pagos registrados</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : (
+        <>
+          <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:12 }}>
+            <BtnPri onClick={()=>{setEditandoTercero(null); setModalTercero(true);}}>+ Nuevo tercero</BtnPri>
+          </div>
+          <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden", marginBottom:20 }}>
+            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+              <thead><tr style={{ background:B.bg }}>
+                {["Nombre","RUC/DNI","Tipo de documento","Servicio","Estado","Acciones"].map(h=>(
+                  <th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:10, color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {terceros.map((t,i)=>(
+                  <tr key={t.id} style={{ borderTop:`1px solid ${B.border}`, background:i%2===0?B.white:"#F8FAFC", opacity:t.activo?1:0.5 }}>
+                    <td style={{ padding:"9px 12px", fontSize:12, fontWeight:700, color:B.navy }}>{t.nombre}</td>
+                    <td style={{ padding:"9px 12px", fontSize:12, color:B.textSec }}>{t.ruc_dni||"—"}</td>
+                    <td style={{ padding:"9px 12px", fontSize:11, color:B.textSec }}>
+                      {t.tipo_documento==="factura"?"Factura":"Recibo por honorarios"}
+                    </td>
+                    <td style={{ padding:"9px 12px", fontSize:12, color:B.textPri }}>{t.servicio||"—"}</td>
+                    <td style={{ padding:"9px 12px" }}>
+                      <span style={{ fontSize:10, padding:"3px 8px", borderRadius:10, fontWeight:700,
+                        background:t.activo?"#ECFDF5":"#F3F4F6", color:t.activo?B.green:B.textMut }}>
+                        {t.activo?"Activo":"Inactivo"}
+                      </span>
+                    </td>
+                    <td style={{ padding:"9px 12px" }}>
+                      <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                        <button onClick={()=>setModalPago({ tipo:"tercero", registro:t })}
+                          style={{ fontSize:11, color:B.green, background:"none", border:"none", cursor:"pointer", fontWeight:700 }}>💰 Registrar pago</button>
+                        <button onClick={()=>{setEditandoTercero(t); setModalTercero(true);}}
+                          style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer" }}>✏️ Editar</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {terceros.length===0 && <tr><td colSpan={6} style={{ padding:30, textAlign:"center", color:B.textMut, fontSize:13 }}>Sin terceros registrados</td></tr>}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ fontSize:13, fontWeight:700, color:B.navy, marginBottom:10 }}>Historial de pagos</div>
+          <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden" }}>
+            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+              <thead><tr style={{ background:B.bg }}>
+                {["Tercero","N° Documento","Bruto","Retención 8%","Neto pagado","Fecha","Estado"].map(h=>(
+                  <th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:10, color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {pagosTerceros.slice(0,20).map((pg,i)=>(
+                  <tr key={pg.id} style={{ borderTop:`1px solid ${B.border}`, background:i%2===0?B.white:"#F8FAFC" }}>
+                    <td style={{ padding:"9px 12px", fontSize:12, color:B.textPri }}>{pg.terceros_planilla?.nombre}</td>
+                    <td style={{ padding:"9px 12px", fontSize:11, color:B.textSec }}>{pg.numero_documento||"—"}</td>
+                    <td style={{ padding:"9px 12px", fontSize:12, color:B.textSec }}>{fmt.sol(pg.monto_bruto)}</td>
+                    <td style={{ padding:"9px 12px", fontSize:11, color:pg.aplica_retencion?B.red:B.textMut }}>
+                      {pg.aplica_retencion?`- ${fmt.sol(pg.monto_retencion)}`:"No aplica"}
+                    </td>
+                    <td style={{ padding:"9px 12px", fontSize:12, fontWeight:700, color:B.gold }}>{fmt.sol(pg.monto_neto)}</td>
+                    <td style={{ padding:"9px 12px", fontSize:11, color:B.textMut }}>{pg.fecha_pago?fmt.fecha(pg.fecha_pago+"T00:00:00"):"—"}</td>
+                    <td style={{ padding:"9px 12px" }}>
+                      <span style={{ fontSize:10, padding:"3px 8px", borderRadius:10, fontWeight:700,
+                        background:pg.estado==="pagado"?"#ECFDF5":"#FFFBEB", color:pg.estado==="pagado"?B.green:B.goldDk }}>
+                        {pg.estado==="pagado"?"Pagado":"Pendiente"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+                {pagosTerceros.length===0 && <tr><td colSpan={7} style={{ padding:24, textAlign:"center", color:B.textMut, fontSize:13 }}>Sin pagos registrados</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {modalPersonal && (
+        <ModalPersonalPlanilla persona={editandoPersonal}
+          onClose={()=>setModalPersonal(false)} onSaved={()=>{setModalPersonal(false); cargar();}} toast={toast}/>
+      )}
+      {modalTercero && (
+        <ModalTerceroPlanilla tercero={editandoTercero}
+          onClose={()=>setModalTercero(false)} onSaved={()=>{setModalTercero(false); cargar();}} toast={toast}/>
+      )}
+      {modalPago && (
+        <ModalRegistrarPago tipo={modalPago.tipo} registro={modalPago.registro}
+          onClose={()=>setModalPago(null)} onSaved={()=>{setModalPago(null); cargar();}} toast={toast}/>
+      )}
+    </div>
+  );
+}
+
+function ModalPersonalPlanilla({ persona, onClose, onSaved, toast }) {
+  const [f, setF] = useState(persona || {
+    nombres:"", apellidos:"", dni:"", cargo:"", fecha_ingreso:"",
+    sueldo_bruto:"", sistema_pension:"onp", afp_nombre:"", porcentaje_afp:"12.5",
+  });
+  const [guardando, setGuardando] = useState(false);
+  const calc = calcularNetoPlanilla(f.sueldo_bruto, f.sistema_pension, f.porcentaje_afp);
+
+  const guardar = async () => {
+    if (!f.nombres || !f.apellidos || !f.sueldo_bruto) { toast("Completa nombres, apellidos y sueldo","error"); return; }
+    setGuardando(true);
+    const payload = {
+      nombres:f.nombres, apellidos:f.apellidos, dni:f.dni||null, cargo:f.cargo||null,
+      fecha_ingreso:f.fecha_ingreso||null, sueldo_bruto:parseFloat(f.sueldo_bruto)||0,
+      sistema_pension:f.sistema_pension,
+      afp_nombre: f.sistema_pension==="afp" ? (f.afp_nombre||null) : null,
+      porcentaje_afp: f.sistema_pension==="afp" ? (parseFloat(f.porcentaje_afp)||0) : null,
+      activo: f.activo ?? true,
+    };
+    let error;
+    if (persona) ({ error } = await sb.from("personal_planilla").update(payload).eq("id", persona.id));
+    else ({ error } = await sb.from("personal_planilla").insert([payload]));
+    setGuardando(false);
+    if (error) { toast("Error: "+error.message,"error"); return; }
+    toast(persona?"Trabajador actualizado ✓":"Trabajador registrado ✓");
+    onSaved();
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+      <div style={{ background:B.white, borderRadius:16, padding:28, width:520, maxHeight:"88vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:16 }}>
+          <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>{persona?"Editar trabajador":"Nuevo trabajador en planilla"}</div>
+          <button onClick={onClose} style={{ background:"none", border:"none", fontSize:18, color:B.textSec, cursor:"pointer" }}>✕</button>
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12 }}>
+          <div><label style={lbl}>Nombres</label><input style={inp} value={f.nombres} onChange={e=>setF(p=>({...p,nombres:e.target.value}))}/></div>
+          <div><label style={lbl}>Apellidos</label><input style={inp} value={f.apellidos} onChange={e=>setF(p=>({...p,apellidos:e.target.value}))}/></div>
+          <div><label style={lbl}>DNI</label><input style={inp} value={f.dni||""} onChange={e=>setF(p=>({...p,dni:e.target.value}))}/></div>
+          <div><label style={lbl}>Cargo</label><input style={inp} value={f.cargo||""} onChange={e=>setF(p=>({...p,cargo:e.target.value}))}/></div>
+          <div><label style={lbl}>Fecha de ingreso</label><input type="date" style={inp} value={f.fecha_ingreso||""} onChange={e=>setF(p=>({...p,fecha_ingreso:e.target.value}))}/></div>
+          <div><label style={lbl}>Sueldo bruto (S/)</label><input type="number" style={inp} value={f.sueldo_bruto} onChange={e=>setF(p=>({...p,sueldo_bruto:e.target.value}))}/></div>
+        </div>
+        <label style={lbl}>Sistema de pensión</label>
+        <select style={{ ...inp, marginBottom:12 }} value={f.sistema_pension} onChange={e=>setF(p=>({...p,sistema_pension:e.target.value}))}>
+          <option value="onp">ONP — 13% fijo</option>
+          <option value="afp">AFP</option>
+        </select>
+        {f.sistema_pension==="afp" && (
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12 }}>
+            <div><label style={lbl}>AFP</label>
+              <select style={inp} value={f.afp_nombre||""} onChange={e=>setF(p=>({...p,afp_nombre:e.target.value}))}>
+                <option value="">— Selecciona —</option>
+                <option value="Integra">Integra</option>
+                <option value="Prima">Prima</option>
+                <option value="Profuturo">Profuturo</option>
+                <option value="Habitat">Habitat</option>
+              </select>
+            </div>
+            <div><label style={lbl}>% de aporte total</label>
+              <input type="number" step="0.1" style={inp} value={f.porcentaje_afp} onChange={e=>setF(p=>({...p,porcentaje_afp:e.target.value}))}/>
+            </div>
+          </div>
+        )}
+        {f.sueldo_bruto && (
+          <div style={{ background:B.bg, borderRadius:10, padding:14, marginBottom:16, display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
+            <div><div style={{ fontSize:10, color:B.textMut }}>DESCUENTO PENSIÓN</div>
+              <div style={{ fontSize:14, fontWeight:700, color:B.red }}>- {fmt.sol(calc.descuentoPension)}</div></div>
+            <div><div style={{ fontSize:10, color:B.textMut }}>ESSALUD (empresa)</div>
+              <div style={{ fontSize:14, fontWeight:700, color:B.textMut }}>{fmt.sol(calc.essalud)}</div></div>
+            <div><div style={{ fontSize:10, color:B.textMut }}>NETO A PAGAR</div>
+              <div style={{ fontSize:16, fontWeight:800, color:B.gold }}>{fmt.sol(calc.neto)}</div></div>
+          </div>
+        )}
+        {persona && (
+          <label style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16, cursor:"pointer" }}>
+            <input type="checkbox" checked={f.activo!==false} onChange={e=>setF(p=>({...p,activo:e.target.checked}))}/>
+            <span style={{ fontSize:13 }}>Trabajador activo</span>
+          </label>
+        )}
+        <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+          <BtnSec onClick={onClose}>Cancelar</BtnSec>
+          <BtnPri onClick={guardar} disabled={guardando}>{guardando?"Guardando...":persona?"Guardar cambios":"Registrar"}</BtnPri>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModalTerceroPlanilla({ tercero, onClose, onSaved, toast }) {
+  const [f, setF] = useState(tercero || { nombre:"", tipo_documento:"recibo_honorarios", ruc_dni:"", servicio:"", activo:true });
+  const [guardando, setGuardando] = useState(false);
+
+  const guardar = async () => {
+    if (!f.nombre) { toast("Completa el nombre","error"); return; }
+    setGuardando(true);
+    const payload = { nombre:f.nombre, tipo_documento:f.tipo_documento, ruc_dni:f.ruc_dni||null, servicio:f.servicio||null, activo:f.activo??true };
+    let error;
+    if (tercero) ({ error } = await sb.from("terceros_planilla").update(payload).eq("id", tercero.id));
+    else ({ error } = await sb.from("terceros_planilla").insert([payload]));
+    setGuardando(false);
+    if (error) { toast("Error: "+error.message,"error"); return; }
+    toast(tercero?"Tercero actualizado ✓":"Tercero registrado ✓");
+    onSaved();
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+      <div style={{ background:B.white, borderRadius:16, padding:28, width:460, boxShadow:"0 20px 60px #0003" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:16 }}>
+          <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>{tercero?"Editar tercero":"Nuevo tercero"}</div>
+          <button onClick={onClose} style={{ background:"none", border:"none", fontSize:18, color:B.textSec, cursor:"pointer" }}>✕</button>
+        </div>
+        <label style={lbl}>Nombre / Razón social</label>
+        <input style={{ ...inp, marginBottom:12 }} value={f.nombre} onChange={e=>setF(p=>({...p,nombre:e.target.value}))}/>
+        <label style={lbl}>Tipo de documento que emite</label>
+        <select style={{ ...inp, marginBottom:12 }} value={f.tipo_documento} onChange={e=>setF(p=>({...p,tipo_documento:e.target.value}))}>
+          <option value="recibo_honorarios">Recibo por honorarios</option>
+          <option value="factura">Factura</option>
+        </select>
+        <label style={lbl}>RUC / DNI</label>
+        <input style={{ ...inp, marginBottom:12 }} value={f.ruc_dni||""} onChange={e=>setF(p=>({...p,ruc_dni:e.target.value}))}/>
+        <label style={lbl}>Servicio que presta</label>
+        <input style={{ ...inp, marginBottom:16 }} value={f.servicio||""} onChange={e=>setF(p=>({...p,servicio:e.target.value}))}/>
+        {tercero && (
+          <label style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16, cursor:"pointer" }}>
+            <input type="checkbox" checked={f.activo!==false} onChange={e=>setF(p=>({...p,activo:e.target.checked}))}/>
+            <span style={{ fontSize:13 }}>Tercero activo</span>
+          </label>
+        )}
+        <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+          <BtnSec onClick={onClose}>Cancelar</BtnSec>
+          <BtnPri onClick={guardar} disabled={guardando}>{guardando?"Guardando...":tercero?"Guardar cambios":"Registrar"}</BtnPri>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModalRegistrarPago({ tipo, registro, onClose, onSaved, toast }) {
+  const hoy = new Date().toISOString().split("T")[0];
+  const esPlanilla = tipo==="planilla";
+  const [periodo, setPeriodo] = useState(hoy.slice(0,7));
+  const [montoBruto, setMontoBruto] = useState(esPlanilla ? String(registro.sueldo_bruto||"") : "");
+  const [aplicaRetencion, setAplicaRetencion] = useState(!esPlanilla && (parseFloat(registro.monto_bruto)||0) >= UMBRAL_RETENCION_HONORARIOS);
+  const [numeroDocumento, setNumeroDocumento] = useState("");
+  const [fechaPago, setFechaPago] = useState(hoy);
+  const [guardando, setGuardando] = useState(false);
+
+  const bruto = parseFloat(montoBruto)||0;
+  const calcPlanilla = esPlanilla ? calcularNetoPlanilla(bruto, registro.sistema_pension, registro.porcentaje_afp) : null;
+  const retencion = !esPlanilla && aplicaRetencion ? bruto*0.08 : 0;
+  const netoTercero = bruto - retencion;
+
+  const guardar = async () => {
+    if (!bruto) { toast("Ingresa el monto","error"); return; }
+    setGuardando(true);
+    let error;
+    if (esPlanilla) {
+      ({ error } = await sb.from("pagos_planilla").insert([{
+        personal_id: registro.id, periodo, sueldo_bruto: bruto,
+        descuento_pension: calcPlanilla.descuentoPension, monto_essalud: calcPlanilla.essalud,
+        neto_pagar: calcPlanilla.neto, fecha_pago: fechaPago, estado:"pagado",
+      }]));
+    } else {
+      ({ error } = await sb.from("pagos_terceros").insert([{
+        tercero_id: registro.id, descripcion: registro.servicio||null, monto_bruto: bruto,
+        aplica_retencion: aplicaRetencion, monto_retencion: retencion, monto_neto: netoTercero,
+        numero_documento: numeroDocumento||null, fecha_pago: fechaPago, estado:"pagado",
+      }]));
+    }
+    setGuardando(false);
+    if (error) { toast("Error: "+error.message,"error"); return; }
+    toast("Pago registrado ✓");
+    onSaved();
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+      <div style={{ background:B.white, borderRadius:16, padding:28, width:480, boxShadow:"0 20px 60px #0003" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+          <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>💰 Registrar pago</div>
+          <button onClick={onClose} style={{ background:"none", border:"none", fontSize:18, color:B.textSec, cursor:"pointer" }}>✕</button>
+        </div>
+        <div style={{ fontSize:13, color:B.textSec, marginBottom:16 }}>
+          {esPlanilla ? `${registro.nombres} ${registro.apellidos}` : registro.nombre}
+        </div>
+
+        {esPlanilla ? (
+          <div style={{ marginBottom:12 }}>
+            <label style={lbl}>Periodo (mes)</label>
+            <input type="month" style={inp} value={periodo} onChange={e=>setPeriodo(e.target.value)}/>
+          </div>
+        ) : (
+          <div style={{ marginBottom:12 }}>
+            <label style={lbl}>N° de documento (recibo/factura)</label>
+            <input style={inp} value={numeroDocumento} onChange={e=>setNumeroDocumento(e.target.value)} placeholder="Ej. E001-123"/>
+          </div>
+        )}
+
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12 }}>
+          <div><label style={lbl}>Monto bruto (S/)</label>
+            <input type="number" style={inp} value={montoBruto} onChange={e=>setMontoBruto(e.target.value)}/></div>
+          <div><label style={lbl}>Fecha de pago</label>
+            <input type="date" style={inp} value={fechaPago} onChange={e=>setFechaPago(e.target.value)}/></div>
+        </div>
+
+        {!esPlanilla && (
+          <label style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12, cursor:"pointer" }}>
+            <input type="checkbox" checked={aplicaRetencion} onChange={e=>setAplicaRetencion(e.target.checked)}/>
+            <span style={{ fontSize:12, color:B.textSec }}>Aplica retención de renta 8% (recibo por honorarios ≥ S/ {UMBRAL_RETENCION_HONORARIOS} — confirma si corresponde)</span>
+          </label>
+        )}
+
+        {bruto>0 && (
+          <div style={{ background:B.bg, borderRadius:10, padding:14, marginBottom:16 }}>
+            {esPlanilla ? (
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
+                <div><div style={{ fontSize:10, color:B.textMut }}>DESC. PENSIÓN</div>
+                  <div style={{ fontSize:14, fontWeight:700, color:B.red }}>- {fmt.sol(calcPlanilla.descuentoPension)}</div></div>
+                <div><div style={{ fontSize:10, color:B.textMut }}>ESSALUD (empresa)</div>
+                  <div style={{ fontSize:14, fontWeight:700, color:B.textMut }}>{fmt.sol(calcPlanilla.essalud)}</div></div>
+                <div><div style={{ fontSize:10, color:B.textMut }}>NETO A PAGAR</div>
+                  <div style={{ fontSize:16, fontWeight:800, color:B.gold }}>{fmt.sol(calcPlanilla.neto)}</div></div>
+              </div>
+            ) : (
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <div><div style={{ fontSize:10, color:B.textMut }}>RETENCIÓN 8%</div>
+                  <div style={{ fontSize:14, fontWeight:700, color:B.red }}>{aplicaRetencion?`- ${fmt.sol(retencion)}`:"No aplica"}</div></div>
+                <div><div style={{ fontSize:10, color:B.textMut }}>NETO A PAGAR</div>
+                  <div style={{ fontSize:16, fontWeight:800, color:B.gold }}>{fmt.sol(netoTercero)}</div></div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+          <BtnSec onClick={onClose}>Cancelar</BtnSec>
+          <BtnPri onClick={guardar} disabled={guardando}>{guardando?"Guardando...":"Confirmar pago"}</BtnPri>
         </div>
       </div>
     </div>
@@ -5464,6 +5962,7 @@ export default function BoazERP() {
     { id:"liquidacion-transporte", icon:"📅", label:"Liq. Transporte" },
     { id:"liquidacion-clientes", icon:"💼", label:"Liq. Clientes" },
     { id:"facturacion",  icon:"🧾", label:"Facturación" },
+    { id:"planilla",     icon:"👥", label:"Planilla" },
     { section:"ANÁLISIS" },
     { id:"reportes",     icon:"📊", label:"Reportes" },
     { section:"SISTEMA" },
@@ -5626,6 +6125,7 @@ if (verificando) {
               {seccion==="liquidacion-transporte" && <LiquidacionTransporte unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} diasServicio={diasServicio} recargoFeriadoPct={recargoFeriadoPct} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="liquidacion-clientes" && <LiquidacionClientes pedidos={pedidos} empresas={empresas} unidades={unidades} asignacionesUnidad={asignacionesUnidad} diasServicio={diasServicio} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} recargoFeriadoPct={recargoFeriadoPct} toast={showToast}/>}
               {seccion==="facturacion"   && <Facturacion empresas={empresas} pedidos={pedidos} tiposServicio={tiposServicio} usuario={usuario} toast={showToast}/>}
+              {seccion==="planilla"      && <Planilla toast={showToast}/>}
               {seccion==="reportes"      && <Reportes pedidos={pedidos} repartidores={repartidores} empresas={empresas} toast={showToast}/>}
               {seccion==="configuracion" && <Configuracion onRefresh={cargarSilencioso} toast={showToast}/>}
             </>
