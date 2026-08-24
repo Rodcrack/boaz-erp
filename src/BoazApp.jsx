@@ -704,6 +704,24 @@ function cargarHeic2Any() {
   });
 }
 
+// Fecha de "hoy" en la zona horaria local (Lima), no en UTC. new Date().toISOString()
+// da la fecha en UTC — después de las 7pm hora de Lima ya es "mañana" en UTC, lo que
+// rompe cualquier comparación de fecha basada en el día (ej. encontrar la ruta activa).
+function fechaLocalHoy() {
+  const d = new Date();
+  const f2 = (n) => String(n).padStart(2,"0");
+  return `${d.getFullYear()}-${f2(d.getMonth()+1)}-${f2(d.getDate())}`;
+}
+// Convierte una marca de tiempo guardada (en UTC) a su fecha en hora local,
+// para comparar correctamente contra fechaLocalHoy() — comparar el prefijo
+// del string ISO directamente (.startsWith) da la fecha en UTC, no en Lima.
+function fechaLocalDe(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  const f2 = (n) => String(n).padStart(2,"0");
+  return `${d.getFullYear()}-${f2(d.getMonth()+1)}-${f2(d.getDate())}`;
+}
+
 function esPosibleHeic(file) {
   const tipo = (file.type || "").toLowerCase();
   const nombre = (file.name || "").toLowerCase();
@@ -978,15 +996,15 @@ function calcularPedidosActivos(pedidos, repartidorId, rutaActiva) {
 
 function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, iniciando, onOrdenarRuta, onVerMapa, rutaActiva, onFinalizarRuta }) {
   const [filtroLista, setFiltroLista] = useState("ruta");
-  const hoy = new Date().toISOString().split("T")[0];
+  const hoy = fechaLocalHoy();
   const { misEnRuta, pedidosIniciables, pedidosEnEspera, loteAIniciar, misP } =
     calcularPedidosActivos(pedidos, repartidor.id, rutaActiva);
   const entregadosHoy = pedidos.filter(p=>
-    p.repartidor_id===repartidor.id && p.estado==="entregado" && p.fecha_entrega?.startsWith(hoy)
+    p.repartidor_id===repartidor.id && p.estado==="entregado" && fechaLocalDe(p.fecha_entrega)===hoy
   );
   const noEntregadosHoy = pedidos.filter(p=>
     p.repartidor_id===repartidor.id && p.estado==="no_entregado" &&
-    p.historial?.some(h=>h.tipo==="estado" && h.timestamp?.startsWith(hoy))
+    p.historial?.some(h=>h.tipo==="estado" && fechaLocalDe(h.timestamp)===hoy)
   );
   const listaActual = filtroLista==="ruta" ? misP : filtroLista==="entregados" ? entregadosHoy : noEntregadosHoy;
 
@@ -1717,7 +1735,7 @@ export default function BoazApp() {
       .eq("repartidor_id", repartidor.id)
       .order("created_at",{ascending:false});
     if (data) setPedidos(data);
-    const hoy = new Date().toISOString().split("T")[0];
+    const hoy = fechaLocalHoy();
     const { data: ruta } = await sb.from("rutas_repartidor").select("*")
       .eq("repartidor_id", repartidor.id).eq("fecha", hoy).is("hora_fin", null)
       .order("created_at",{ascending:false}).limit(1).maybeSingle();
@@ -1775,7 +1793,7 @@ export default function BoazApp() {
     showToast(offline ? "Sin conexión: se sincronizará al recuperar señal ⏳" : `Ruta iniciada con ${ids.length} pedidos ✓`);
 
     if (!rutaActiva) {
-      const hoy = new Date().toISOString().split("T")[0];
+      const hoy = fechaLocalHoy();
       const { data } = await sb.from("rutas_repartidor").insert([{
         repartidor_id: repartidor.id, fecha: hoy, lote_id: loteId||null,
         hora_inicio: new Date().toISOString(), total_pedidos: ids.length,
