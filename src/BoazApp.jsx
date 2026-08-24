@@ -898,16 +898,37 @@ function PantallaFinalRuta({ resumen, repartidor, onCerrar }) {
   const horas = duracionMin!=null ? Math.floor(duracionMin/60) : null;
   const mins = duracionMin!=null ? duracionMin%60 : null;
 
+  // Mensaje cálido que cambia según cómo le fue en la ruta, no siempre el mismo texto.
+  const total = resumen.entregados + resumen.noEntregados;
+  const efectividad = total > 0 ? resumen.entregados / total : 1;
+  let emoji, titulo, subtitulo;
+  if (total === 0) {
+    emoji = "🏁"; titulo = `¡Listo, ${repartidor.nombres}!`;
+    subtitulo = "Ruta finalizada. Nos vemos en la próxima 💪";
+  } else if (resumen.noEntregados === 0) {
+    emoji = "🎉"; titulo = `¡Ruta perfecta, ${repartidor.nombres}!`;
+    subtitulo = `Entregaste el 100% de tus pedidos hoy (${resumen.entregados} de ${total}). ¡Excelente trabajo!`;
+  } else if (efectividad >= 0.8) {
+    emoji = "👏"; titulo = `¡Muy buen trabajo, ${repartidor.nombres}!`;
+    subtitulo = `Terminaste tu ruta con ${resumen.entregados} de ${total} entregas. Descansa, mañana seguimos 💪`;
+  } else if (efectividad >= 0.5) {
+    emoji = "💪"; titulo = `¡Buen esfuerzo hoy, ${repartidor.nombres}!`;
+    subtitulo = `Cerraste el día con ${resumen.entregados} de ${total} entregas. Mañana vamos por más.`;
+  } else {
+    emoji = "🌅"; titulo = `Terminaste tu ruta, ${repartidor.nombres}`;
+    subtitulo = "El día de hoy fue difícil, pero mañana es una nueva oportunidad. ¡Vamos con todo!";
+  }
+
   return (
     <div style={{ minHeight:"100vh", background:`linear-gradient(135deg,${C.navy},${C.navyLt})`,
       display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
       padding:24, textAlign:"center" }}>
-      <div style={{ fontSize:64, marginBottom:16 }}>🎉</div>
+      <div style={{ fontSize:64, marginBottom:16 }}>{emoji}</div>
       <div style={{ fontSize:22, fontWeight:900, color:"#E8EAF0", marginBottom:6 }}>
-        ¡Buen trabajo, {repartidor.nombres}!
+        {titulo}
       </div>
       <div style={{ fontSize:14, color:C.textMut, marginBottom:28, maxWidth:280 }}>
-        Terminaste tu ruta de hoy. Descansa, mañana volvemos 💪
+        {subtitulo}
       </div>
 
       <div style={{ background:C.navyMd, borderRadius:16, padding:24, width:"100%", maxWidth:320,
