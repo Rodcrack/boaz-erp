@@ -437,7 +437,9 @@ function Login({ onLogin }) {
 function CapturaFotos({ fotos, setFotos, minimo = 2, label = "Evidencias" }) {
   const inputCamara = useRef();
   const inputGaleria = useRef();
+  const inputEscaner = useRef();
   const [procesando, setProcesando] = useState(false);
+  const [errorEscaneo, setErrorEscaneo] = useState("");
   const agregarFotos = async (e) => {
     const files = Array.from(e.target.files || []);
     e.target.value = "";
@@ -450,6 +452,25 @@ function CapturaFotos({ fotos, setFotos, minimo = 2, label = "Evidencias" }) {
     setFotos(prev => [...prev, ...archivosFinales.map(archivo => ({
       file: archivo, preview: URL.createObjectURL(archivo), rota:false,
     }))]);
+  };
+  const agregarEscaneados = async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (!files.length) return;
+    setProcesando(true);
+    setErrorEscaneo("");
+    try {
+      const archivosFinales = await Promise.all(files.map(async f => {
+        const convertido = await convertirSiEsHeic(f);
+        return await escanearDocumento(convertido);
+      }));
+      setFotos(prev => [...prev, ...archivosFinales.map(archivo => ({
+        file: archivo, preview: URL.createObjectURL(archivo), rota:false,
+      }))]);
+    } catch (err) {
+      setErrorEscaneo(err.message || "No se pudo escanear el documento. Vuelve a intentarlo.");
+    }
+    setProcesando(false);
   };
   const marcarRota = (i) => setFotos(prev => prev.map((f,idx)=> idx===i ? { ...f, rota:true } : f));
   const quitar = (i) => setFotos(prev => prev.filter((_,idx)=>idx!==i));
@@ -490,23 +511,36 @@ function CapturaFotos({ fotos, setFotos, minimo = 2, label = "Evidencias" }) {
           ⏳ Procesando foto...
         </div>
       )}
-      <div style={{ display:"flex", gap:8, marginBottom:6 }}>
+      {errorEscaneo && (
+        <div style={{ fontSize:11, color:C.red, marginBottom:8, fontWeight:600 }}>
+          ⚠️ {errorEscaneo}
+        </div>
+      )}
+      <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:6 }}>
         <button onClick={()=>inputCamara.current?.click()}
-          style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
-            padding:"12px 10px", borderRadius:10, border:`2px dashed ${C.gold}`,
-            background:"#FFF8EF", color:C.goldDk, fontSize:13, fontWeight:700, cursor:"pointer" }}>
+          style={{ flex:"1 1 30%", minWidth:100, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+            padding:"12px 8px", borderRadius:10, border:`2px dashed ${C.gold}`,
+            background:"#FFF8EF", color:C.goldDk, fontSize:12, fontWeight:700, cursor:"pointer" }}>
           📸 Tomar foto
         </button>
         <button onClick={()=>inputGaleria.current?.click()}
-          style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
-            padding:"12px 10px", borderRadius:10, border:`2px dashed ${C.navyLt}`,
-            background:"#F0F4F8", color:C.navy, fontSize:13, fontWeight:700, cursor:"pointer" }}>
-          🖼️ Subir de galería
+          style={{ flex:"1 1 30%", minWidth:100, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+            padding:"12px 8px", borderRadius:10, border:`2px dashed ${C.navyLt}`,
+            background:"#F0F4F8", color:C.navy, fontSize:12, fontWeight:700, cursor:"pointer" }}>
+          🖼️ Galería
+        </button>
+        <button onClick={()=>inputEscaner.current?.click()}
+          style={{ flex:"1 1 30%", minWidth:100, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+            padding:"12px 8px", borderRadius:10, border:`2px dashed #7C3AED`,
+            background:"#F5F3FF", color:"#6D28D9", fontSize:12, fontWeight:700, cursor:"pointer" }}>
+          📄 Escanear
         </button>
         <input ref={inputCamara} type="file" accept="image/*" capture="environment"
           style={{display:"none"}} onChange={agregarFotos}/>
         <input ref={inputGaleria} type="file" accept="image/*" multiple
           style={{display:"none"}} onChange={agregarFotos}/>
+        <input ref={inputEscaner} type="file" accept="image/*" capture="environment" multiple
+          style={{display:"none"}} onChange={agregarEscaneados}/>
       </div>
       {!completo && (
         <div style={{ fontSize:11, color:C.textMut }}>Toma o sube al menos {minimo} fotos para continuar.</div>
@@ -689,6 +723,55 @@ async function convertirSiEsHeic(file) {
   } catch (e) {
     return file; // si falla la conversión, seguimos con el original
   }
+}
+
+// ── "Modo documento" (estilo escáner) ───────────────────────────
+// No detecta ni recorta bordes automáticamente (eso requeriría una librería
+// de visión por computadora pesada); en cambio, aumenta el contraste y el
+// brillo para que texto y guías se vean más nítidos y legibles, como un
+// documento escaneado, directamente con Canvas (rápido, sin librerías extra).
+function escanearDocumento(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    const limite = setTimeout(() => {
+      URL.revokeObjectURL(url);
+      reject(new Error("La imagen tardó demasiado en procesarse. Vuelve a intentarlo."));
+    }, 20000);
+    img.onload = () => {
+      clearTimeout(limite);
+      URL.revokeObjectURL(url);
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0);
+        const datos = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const px = datos.data;
+        const CONTRASTE = 1.45, BRILLO = 18;
+        for (let i=0; i<px.length; i+=4) {
+          const gris = px[i]*0.299 + px[i+1]*0.587 + px[i+2]*0.114;
+          let v = (gris - 128) * CONTRASTE + 128 + BRILLO;
+          v = v < 0 ? 0 : v > 255 ? 255 : v;
+          px[i] = px[i+1] = px[i+2] = v;
+        }
+        ctx.putImageData(datos, 0, 0);
+        canvas.toBlob((blob) => {
+          if (!blob) { reject(new Error("No se pudo procesar el documento.")); return; }
+          resolve(new File([blob], (file.name||"documento").replace(/\.\w+$/,"")+"_escaneado.jpg", { type:"image/jpeg" }));
+        }, "image/jpeg", 0.85);
+      } catch (e) {
+        reject(new Error("No se pudo procesar el documento."));
+      }
+    };
+    img.onerror = () => {
+      clearTimeout(limite);
+      URL.revokeObjectURL(url);
+      reject(new Error("No se pudo leer la imagen para escanear."));
+    };
+    img.src = url;
+  });
 }
 
 function MapaRuta({ pedidos, onVolver, onVerPedido }) {
