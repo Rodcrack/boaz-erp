@@ -4833,40 +4833,171 @@ function ModalPersonalPlanilla({ persona, onClose, onSaved, toast }) {
 }
 
 function ModalTerceroPlanilla({ tercero, onClose, onSaved, toast }) {
-  const [f, setF] = useState(tercero || { nombre:"", tipo_documento:"recibo_honorarios", ruc_dni:"", servicio:"", activo:true });
+  const [f, setF] = useState(tercero || {
+    nombre:"", tipo_documento:"recibo_honorarios", ruc_dni:"", servicio:"", activo:true,
+    fecha_nacimiento:"", estado_civil:"", direccion:"", telefono:"", email:"",
+    fecha_inicio_servicio:"", fecha_fin_servicio:"",
+    banco:"", numero_cuenta:"", cci:"",
+    conyuge_nombres:"", conyuge_dni:"",
+    contacto_emergencia_nombre:"", contacto_emergencia_telefono:"",
+  });
+  const [hijos, setHijos] = useState([]);
+  const [cargandoHijos, setCargandoHijos] = useState(!!tercero);
   const [guardando, setGuardando] = useState(false);
+
+  useEffect(() => {
+    if (!tercero) return;
+    sb.from("hijos_terceros").select("*").eq("tercero_id", tercero.id).order("fecha_nacimiento")
+      .then(({data}) => { if(data) setHijos(data); setCargandoHijos(false); });
+  }, [tercero]);
+
+  const agregarHijo = () => setHijos(prev => [...prev, { _nuevo:true, nombres:"", fecha_nacimiento:"" }]);
+  const actualizarHijo = (i, campo, valor) => setHijos(prev => prev.map((h,idx)=> idx===i ? {...h,[campo]:valor} : h));
+  const quitarHijo = (i) => setHijos(prev => prev.filter((_,idx)=>idx!==i));
 
   const guardar = async () => {
     if (!f.nombre) { toast("Completa el nombre","error"); return; }
     setGuardando(true);
-    const payload = { nombre:f.nombre, tipo_documento:f.tipo_documento, ruc_dni:f.ruc_dni||null, servicio:f.servicio||null, activo:f.activo??true };
-    let error;
-    if (tercero) ({ error } = await sb.from("terceros_planilla").update(payload).eq("id", tercero.id));
-    else ({ error } = await sb.from("terceros_planilla").insert([payload]));
+    const payload = {
+      nombre:f.nombre, tipo_documento:f.tipo_documento, ruc_dni:f.ruc_dni||null, servicio:f.servicio||null,
+      fecha_nacimiento:f.fecha_nacimiento||null, estado_civil:f.estado_civil||null,
+      direccion:f.direccion||null, telefono:f.telefono||null, email:f.email||null,
+      fecha_inicio_servicio:f.fecha_inicio_servicio||null, fecha_fin_servicio:f.fecha_fin_servicio||null,
+      banco:f.banco||null, numero_cuenta:f.numero_cuenta||null, cci:f.cci||null,
+      conyuge_nombres:f.conyuge_nombres||null, conyuge_dni:f.conyuge_dni||null,
+      contacto_emergencia_nombre:f.contacto_emergencia_nombre||null,
+      contacto_emergencia_telefono:f.contacto_emergencia_telefono||null,
+      activo:f.activo??true,
+    };
+    let error, terceroId = tercero?.id;
+    if (tercero) {
+      ({ error } = await sb.from("terceros_planilla").update(payload).eq("id", tercero.id));
+    } else {
+      const resultado = await sb.from("terceros_planilla").insert([payload]).select().single();
+      error = resultado.error;
+      terceroId = resultado.data?.id;
+    }
+    if (error) { setGuardando(false); toast("Error: "+error.message,"error"); return; }
+
+    for (const h of hijos) {
+      if (!h.nombres) continue;
+      if (h._nuevo) {
+        await sb.from("hijos_terceros").insert([{ tercero_id: terceroId, nombres:h.nombres, fecha_nacimiento:h.fecha_nacimiento||null }]);
+      } else {
+        await sb.from("hijos_terceros").update({ nombres:h.nombres, fecha_nacimiento:h.fecha_nacimiento||null }).eq("id", h.id);
+      }
+    }
+
     setGuardando(false);
-    if (error) { toast("Error: "+error.message,"error"); return; }
     toast(tercero?"Tercero actualizado ✓":"Tercero registrado ✓");
     onSaved();
   };
 
+  const seccion = { fontSize:11, fontWeight:700, color:B.navy, textTransform:"uppercase",
+    letterSpacing:"0.7px", margin:"18px 0 10px", paddingBottom:6, borderBottom:`1px solid ${B.border}` };
+
   return (
     <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
-      <div style={{ background:B.white, borderRadius:16, padding:28, width:460, boxShadow:"0 20px 60px #0003" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:16 }}>
+      <div style={{ background:B.white, borderRadius:16, padding:28, width:620, maxHeight:"88vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
           <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>{tercero?"Editar tercero":"Nuevo tercero"}</div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:18, color:B.textSec, cursor:"pointer" }}>✕</button>
         </div>
-        <label style={lbl}>Nombre / Razón social</label>
-        <input style={{ ...inp, marginBottom:12 }} value={f.nombre} onChange={e=>setF(p=>({...p,nombre:e.target.value}))}/>
-        <label style={lbl}>Tipo de documento que emite</label>
-        <select style={{ ...inp, marginBottom:12 }} value={f.tipo_documento} onChange={e=>setF(p=>({...p,tipo_documento:e.target.value}))}>
-          <option value="recibo_honorarios">Recibo por honorarios</option>
-          <option value="factura">Factura</option>
-        </select>
-        <label style={lbl}>RUC / DNI</label>
-        <input style={{ ...inp, marginBottom:12 }} value={f.ruc_dni||""} onChange={e=>setF(p=>({...p,ruc_dni:e.target.value}))}/>
-        <label style={lbl}>Servicio que presta</label>
-        <input style={{ ...inp, marginBottom:16 }} value={f.servicio||""} onChange={e=>setF(p=>({...p,servicio:e.target.value}))}/>
+
+        {/* Datos personales */}
+        <div style={seccion}>👤 Datos personales</div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+          <div style={{ gridColumn:"span 2" }}><label style={lbl}>Nombre / Razón social</label>
+            <input style={inp} value={f.nombre} onChange={e=>setF(p=>({...p,nombre:e.target.value}))}/></div>
+          <div><label style={lbl}>RUC / DNI</label><input style={inp} value={f.ruc_dni||""} onChange={e=>setF(p=>({...p,ruc_dni:e.target.value}))}/></div>
+          <div><label style={lbl}>Fecha de nacimiento</label><input type="date" style={inp} value={f.fecha_nacimiento||""} onChange={e=>setF(p=>({...p,fecha_nacimiento:e.target.value}))}/></div>
+          <div><label style={lbl}>Estado civil</label>
+            <select style={inp} value={f.estado_civil||""} onChange={e=>setF(p=>({...p,estado_civil:e.target.value}))}>
+              <option value="">— Selecciona —</option>
+              <option value="soltero">Soltero(a)</option>
+              <option value="casado">Casado(a)</option>
+              <option value="conviviente">Conviviente</option>
+              <option value="divorciado">Divorciado(a)</option>
+              <option value="viudo">Viudo(a)</option>
+            </select>
+          </div>
+          <div><label style={lbl}>Teléfono</label><input style={inp} value={f.telefono||""} onChange={e=>setF(p=>({...p,telefono:e.target.value}))}/></div>
+          <div style={{ gridColumn:"span 2" }}><label style={lbl}>Dirección</label><input style={inp} value={f.direccion||""} onChange={e=>setF(p=>({...p,direccion:e.target.value}))}/></div>
+          <div style={{ gridColumn:"span 2" }}><label style={lbl}>Email</label><input style={inp} value={f.email||""} onChange={e=>setF(p=>({...p,email:e.target.value}))}/></div>
+        </div>
+
+        {/* Datos del servicio */}
+        <div style={seccion}>💼 Datos del servicio</div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+          <div><label style={lbl}>Tipo de documento que emite</label>
+            <select style={inp} value={f.tipo_documento} onChange={e=>setF(p=>({...p,tipo_documento:e.target.value}))}>
+              <option value="recibo_honorarios">Recibo por honorarios</option>
+              <option value="factura">Factura</option>
+            </select>
+          </div>
+          <div><label style={lbl}>Servicio que presta</label><input style={inp} value={f.servicio||""} onChange={e=>setF(p=>({...p,servicio:e.target.value}))}/></div>
+          <div><label style={lbl}>Inicio del servicio</label><input type="date" style={inp} value={f.fecha_inicio_servicio||""} onChange={e=>setF(p=>({...p,fecha_inicio_servicio:e.target.value}))}/></div>
+          <div><label style={lbl}>Fin del servicio</label><input type="date" style={inp} value={f.fecha_fin_servicio||""} onChange={e=>setF(p=>({...p,fecha_fin_servicio:e.target.value}))}/></div>
+        </div>
+
+        {/* Datos bancarios */}
+        <div style={seccion}>🏦 Datos bancarios</div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+          <div><label style={lbl}>Banco</label>
+            <select style={inp} value={f.banco||""} onChange={e=>setF(p=>({...p,banco:e.target.value}))}>
+              <option value="">— Selecciona —</option>
+              <option value="BCP">BCP</option>
+              <option value="BBVA">BBVA</option>
+              <option value="Interbank">Interbank</option>
+              <option value="Scotiabank">Scotiabank</option>
+              <option value="Banco de la Nación">Banco de la Nación</option>
+              <option value="Otro">Otro</option>
+            </select>
+          </div>
+          <div><label style={lbl}>N° de cuenta</label><input style={inp} value={f.numero_cuenta||""} onChange={e=>setF(p=>({...p,numero_cuenta:e.target.value}))}/></div>
+          <div style={{ gridColumn:"span 2" }}><label style={lbl}>CCI</label><input style={inp} value={f.cci||""} onChange={e=>setF(p=>({...p,cci:e.target.value}))}/></div>
+        </div>
+
+        {/* Cónyuge */}
+        <div style={seccion}>💍 Cónyuge (opcional)</div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+          <div><label style={lbl}>Nombres y apellidos</label><input style={inp} value={f.conyuge_nombres||""} onChange={e=>setF(p=>({...p,conyuge_nombres:e.target.value}))}/></div>
+          <div><label style={lbl}>DNI</label><input style={inp} value={f.conyuge_dni||""} onChange={e=>setF(p=>({...p,conyuge_dni:e.target.value}))}/></div>
+        </div>
+
+        {/* Hijos */}
+        <div style={{ ...seccion, display:"flex", justifyContent:"space-between", alignItems:"center", border:"none", paddingBottom:0 }}>
+          <span>👶 Hijos</span>
+          <button onClick={agregarHijo} style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer", fontWeight:700, textTransform:"none", letterSpacing:0 }}>+ Agregar hijo</button>
+        </div>
+        {cargandoHijos ? (
+          <div style={{ fontSize:12, color:B.textMut, padding:"8px 0" }}>Cargando...</div>
+        ) : (
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            {hijos.map((h,i)=>(
+              <div key={h.id||`nuevo-${i}`} style={{ display:"flex", gap:8, alignItems:"end" }}>
+                <div style={{ flex:2 }}>
+                  <label style={lbl}>Nombres</label>
+                  <input style={inp} value={h.nombres} onChange={e=>actualizarHijo(i,"nombres",e.target.value)}/>
+                </div>
+                <div style={{ flex:1 }}>
+                  <label style={lbl}>Fecha de nacimiento</label>
+                  <input type="date" style={inp} value={h.fecha_nacimiento||""} onChange={e=>actualizarHijo(i,"fecha_nacimiento",e.target.value)}/>
+                </div>
+                <button onClick={()=>quitarHijo(i)} style={{ background:"none", border:"none", color:B.red, fontSize:16, cursor:"pointer", padding:"0 4px" }}>✕</button>
+              </div>
+            ))}
+            {hijos.length===0 && <div style={{ fontSize:12, color:B.textMut }}>Sin hijos registrados</div>}
+          </div>
+        )}
+
+        {/* Contacto de emergencia */}
+        <div style={seccion}>🚨 Contacto de emergencia</div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16 }}>
+          <div><label style={lbl}>Nombre</label><input style={inp} value={f.contacto_emergencia_nombre||""} onChange={e=>setF(p=>({...p,contacto_emergencia_nombre:e.target.value}))}/></div>
+          <div><label style={lbl}>Teléfono</label><input style={inp} value={f.contacto_emergencia_telefono||""} onChange={e=>setF(p=>({...p,contacto_emergencia_telefono:e.target.value}))}/></div>
+        </div>
+
         {tercero && (
           <label style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16, cursor:"pointer" }}>
             <input type="checkbox" checked={f.activo!==false} onChange={e=>setF(p=>({...p,activo:e.target.checked}))}/>
