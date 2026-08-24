@@ -4611,54 +4611,129 @@ function Planilla({ toast }) {
 
 function ModalPersonalPlanilla({ persona, onClose, onSaved, toast }) {
   const [f, setF] = useState(persona || {
-    nombres:"", apellidos:"", dni:"", cargo:"", fecha_ingreso:"",
+    nombres:"", apellidos:"", dni:"", cargo:"", fecha_ingreso:"", fecha_cese:"",
     sueldo_bruto:"", sistema_pension:"onp", afp_nombre:"", porcentaje_afp:"12.5",
+    fecha_nacimiento:"", estado_civil:"", direccion:"", telefono:"", email:"", tipo_contrato:"",
+    banco:"", numero_cuenta:"", cci:"",
+    conyuge_nombres:"", conyuge_dni:"",
+    contacto_emergencia_nombre:"", contacto_emergencia_telefono:"",
   });
+  const [hijos, setHijos] = useState([]);
+  const [cargandoHijos, setCargandoHijos] = useState(!!persona);
   const [guardando, setGuardando] = useState(false);
   const calc = calcularNetoPlanilla(f.sueldo_bruto, f.sistema_pension, f.porcentaje_afp);
+
+  useEffect(() => {
+    if (!persona) return;
+    sb.from("hijos_planilla").select("*").eq("personal_id", persona.id).order("fecha_nacimiento")
+      .then(({data}) => { if(data) setHijos(data); setCargandoHijos(false); });
+  }, [persona]);
+
+  const agregarHijo = () => setHijos(prev => [...prev, { _nuevo:true, nombres:"", fecha_nacimiento:"" }]);
+  const actualizarHijo = (i, campo, valor) => setHijos(prev => prev.map((h,idx)=> idx===i ? {...h,[campo]:valor} : h));
+  const quitarHijo = (i) => setHijos(prev => prev.filter((_,idx)=>idx!==i));
 
   const guardar = async () => {
     if (!f.nombres || !f.apellidos || !f.sueldo_bruto) { toast("Completa nombres, apellidos y sueldo","error"); return; }
     setGuardando(true);
     const payload = {
       nombres:f.nombres, apellidos:f.apellidos, dni:f.dni||null, cargo:f.cargo||null,
-      fecha_ingreso:f.fecha_ingreso||null, sueldo_bruto:parseFloat(f.sueldo_bruto)||0,
-      sistema_pension:f.sistema_pension,
+      fecha_ingreso:f.fecha_ingreso||null, fecha_cese:f.fecha_cese||null,
+      sueldo_bruto:parseFloat(f.sueldo_bruto)||0, sistema_pension:f.sistema_pension,
       afp_nombre: f.sistema_pension==="afp" ? (f.afp_nombre||null) : null,
       porcentaje_afp: f.sistema_pension==="afp" ? (parseFloat(f.porcentaje_afp)||0) : null,
+      fecha_nacimiento:f.fecha_nacimiento||null, estado_civil:f.estado_civil||null,
+      direccion:f.direccion||null, telefono:f.telefono||null, email:f.email||null,
+      tipo_contrato:f.tipo_contrato||null,
+      banco:f.banco||null, numero_cuenta:f.numero_cuenta||null, cci:f.cci||null,
+      conyuge_nombres:f.conyuge_nombres||null, conyuge_dni:f.conyuge_dni||null,
+      contacto_emergencia_nombre:f.contacto_emergencia_nombre||null,
+      contacto_emergencia_telefono:f.contacto_emergencia_telefono||null,
       activo: f.activo ?? true,
     };
-    let error;
-    if (persona) ({ error } = await sb.from("personal_planilla").update(payload).eq("id", persona.id));
-    else ({ error } = await sb.from("personal_planilla").insert([payload]));
+    let error, personalId = persona?.id;
+    if (persona) {
+      ({ error } = await sb.from("personal_planilla").update(payload).eq("id", persona.id));
+    } else {
+      const resultado = await sb.from("personal_planilla").insert([payload]).select().single();
+      error = resultado.error;
+      personalId = resultado.data?.id;
+    }
+    if (error) { setGuardando(false); toast("Error: "+error.message,"error"); return; }
+
+    // Guarda los hijos: nuevos se insertan, existentes se actualizan
+    for (const h of hijos) {
+      if (!h.nombres) continue;
+      if (h._nuevo) {
+        await sb.from("hijos_planilla").insert([{ personal_id: personalId, nombres:h.nombres, fecha_nacimiento:h.fecha_nacimiento||null }]);
+      } else {
+        await sb.from("hijos_planilla").update({ nombres:h.nombres, fecha_nacimiento:h.fecha_nacimiento||null }).eq("id", h.id);
+      }
+    }
+
     setGuardando(false);
-    if (error) { toast("Error: "+error.message,"error"); return; }
     toast(persona?"Trabajador actualizado ✓":"Trabajador registrado ✓");
     onSaved();
   };
 
+  const seccion = { fontSize:11, fontWeight:700, color:B.navy, textTransform:"uppercase",
+    letterSpacing:"0.7px", margin:"18px 0 10px", paddingBottom:6, borderBottom:`1px solid ${B.border}` };
+
   return (
     <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
-      <div style={{ background:B.white, borderRadius:16, padding:28, width:520, maxHeight:"88vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:16 }}>
+      <div style={{ background:B.white, borderRadius:16, padding:28, width:620, maxHeight:"88vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
           <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>{persona?"Editar trabajador":"Nuevo trabajador en planilla"}</div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:18, color:B.textSec, cursor:"pointer" }}>✕</button>
         </div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12 }}>
+
+        {/* Datos personales */}
+        <div style={seccion}>👤 Datos personales</div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
           <div><label style={lbl}>Nombres</label><input style={inp} value={f.nombres} onChange={e=>setF(p=>({...p,nombres:e.target.value}))}/></div>
           <div><label style={lbl}>Apellidos</label><input style={inp} value={f.apellidos} onChange={e=>setF(p=>({...p,apellidos:e.target.value}))}/></div>
           <div><label style={lbl}>DNI</label><input style={inp} value={f.dni||""} onChange={e=>setF(p=>({...p,dni:e.target.value}))}/></div>
-          <div><label style={lbl}>Cargo</label><input style={inp} value={f.cargo||""} onChange={e=>setF(p=>({...p,cargo:e.target.value}))}/></div>
-          <div><label style={lbl}>Fecha de ingreso</label><input type="date" style={inp} value={f.fecha_ingreso||""} onChange={e=>setF(p=>({...p,fecha_ingreso:e.target.value}))}/></div>
-          <div><label style={lbl}>Sueldo bruto (S/)</label><input type="number" style={inp} value={f.sueldo_bruto} onChange={e=>setF(p=>({...p,sueldo_bruto:e.target.value}))}/></div>
+          <div><label style={lbl}>Fecha de nacimiento</label><input type="date" style={inp} value={f.fecha_nacimiento||""} onChange={e=>setF(p=>({...p,fecha_nacimiento:e.target.value}))}/></div>
+          <div><label style={lbl}>Estado civil</label>
+            <select style={inp} value={f.estado_civil||""} onChange={e=>setF(p=>({...p,estado_civil:e.target.value}))}>
+              <option value="">— Selecciona —</option>
+              <option value="soltero">Soltero(a)</option>
+              <option value="casado">Casado(a)</option>
+              <option value="conviviente">Conviviente</option>
+              <option value="divorciado">Divorciado(a)</option>
+              <option value="viudo">Viudo(a)</option>
+            </select>
+          </div>
+          <div><label style={lbl}>Teléfono</label><input style={inp} value={f.telefono||""} onChange={e=>setF(p=>({...p,telefono:e.target.value}))}/></div>
+          <div style={{ gridColumn:"span 2" }}><label style={lbl}>Dirección</label><input style={inp} value={f.direccion||""} onChange={e=>setF(p=>({...p,direccion:e.target.value}))}/></div>
+          <div style={{ gridColumn:"span 2" }}><label style={lbl}>Email</label><input style={inp} value={f.email||""} onChange={e=>setF(p=>({...p,email:e.target.value}))}/></div>
         </div>
-        <label style={lbl}>Sistema de pensión</label>
-        <select style={{ ...inp, marginBottom:12 }} value={f.sistema_pension} onChange={e=>setF(p=>({...p,sistema_pension:e.target.value}))}>
-          <option value="onp">ONP — 13% fijo</option>
-          <option value="afp">AFP</option>
-        </select>
+
+        {/* Datos laborales */}
+        <div style={seccion}>💼 Datos laborales</div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+          <div><label style={lbl}>Cargo</label><input style={inp} value={f.cargo||""} onChange={e=>setF(p=>({...p,cargo:e.target.value}))}/></div>
+          <div><label style={lbl}>Tipo de contrato</label>
+            <select style={inp} value={f.tipo_contrato||""} onChange={e=>setF(p=>({...p,tipo_contrato:e.target.value}))}>
+              <option value="">— Selecciona —</option>
+              <option value="indeterminado">Plazo indeterminado</option>
+              <option value="plazo_fijo">Plazo fijo</option>
+              <option value="part_time">Part time</option>
+              <option value="practicas">Prácticas</option>
+            </select>
+          </div>
+          <div><label style={lbl}>Fecha de ingreso</label><input type="date" style={inp} value={f.fecha_ingreso||""} onChange={e=>setF(p=>({...p,fecha_ingreso:e.target.value}))}/></div>
+          <div><label style={lbl}>Fecha de cese</label><input type="date" style={inp} value={f.fecha_cese||""} onChange={e=>setF(p=>({...p,fecha_cese:e.target.value}))}/></div>
+          <div><label style={lbl}>Sueldo bruto (S/)</label><input type="number" style={inp} value={f.sueldo_bruto} onChange={e=>setF(p=>({...p,sueldo_bruto:e.target.value}))}/></div>
+          <div><label style={lbl}>Sistema de pensión</label>
+            <select style={inp} value={f.sistema_pension} onChange={e=>setF(p=>({...p,sistema_pension:e.target.value}))}>
+              <option value="onp">ONP — 13% fijo</option>
+              <option value="afp">AFP</option>
+            </select>
+          </div>
+        </div>
         {f.sistema_pension==="afp" && (
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginTop:12 }}>
             <div><label style={lbl}>AFP</label>
               <select style={inp} value={f.afp_nombre||""} onChange={e=>setF(p=>({...p,afp_nombre:e.target.value}))}>
                 <option value="">— Selecciona —</option>
@@ -4674,7 +4749,7 @@ function ModalPersonalPlanilla({ persona, onClose, onSaved, toast }) {
           </div>
         )}
         {f.sueldo_bruto && (
-          <div style={{ background:B.bg, borderRadius:10, padding:14, marginBottom:16, display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
+          <div style={{ background:B.bg, borderRadius:10, padding:14, marginTop:12, display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
             <div><div style={{ fontSize:10, color:B.textMut }}>DESCUENTO PENSIÓN</div>
               <div style={{ fontSize:14, fontWeight:700, color:B.red }}>- {fmt.sol(calc.descuentoPension)}</div></div>
             <div><div style={{ fontSize:10, color:B.textMut }}>ESSALUD (empresa)</div>
@@ -4683,6 +4758,65 @@ function ModalPersonalPlanilla({ persona, onClose, onSaved, toast }) {
               <div style={{ fontSize:16, fontWeight:800, color:B.gold }}>{fmt.sol(calc.neto)}</div></div>
           </div>
         )}
+
+        {/* Datos bancarios */}
+        <div style={seccion}>🏦 Datos bancarios</div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+          <div><label style={lbl}>Banco</label>
+            <select style={inp} value={f.banco||""} onChange={e=>setF(p=>({...p,banco:e.target.value}))}>
+              <option value="">— Selecciona —</option>
+              <option value="BCP">BCP</option>
+              <option value="BBVA">BBVA</option>
+              <option value="Interbank">Interbank</option>
+              <option value="Scotiabank">Scotiabank</option>
+              <option value="Banco de la Nación">Banco de la Nación</option>
+              <option value="Otro">Otro</option>
+            </select>
+          </div>
+          <div><label style={lbl}>N° de cuenta</label><input style={inp} value={f.numero_cuenta||""} onChange={e=>setF(p=>({...p,numero_cuenta:e.target.value}))}/></div>
+          <div style={{ gridColumn:"span 2" }}><label style={lbl}>CCI (para CTS)</label><input style={inp} value={f.cci||""} onChange={e=>setF(p=>({...p,cci:e.target.value}))}/></div>
+        </div>
+
+        {/* Cónyuge */}
+        <div style={seccion}>💍 Cónyuge (opcional)</div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+          <div><label style={lbl}>Nombres y apellidos</label><input style={inp} value={f.conyuge_nombres||""} onChange={e=>setF(p=>({...p,conyuge_nombres:e.target.value}))}/></div>
+          <div><label style={lbl}>DNI</label><input style={inp} value={f.conyuge_dni||""} onChange={e=>setF(p=>({...p,conyuge_dni:e.target.value}))}/></div>
+        </div>
+
+        {/* Hijos */}
+        <div style={{ ...seccion, display:"flex", justifyContent:"space-between", alignItems:"center", border:"none", paddingBottom:0 }}>
+          <span>👶 Hijos (para asignación familiar)</span>
+          <button onClick={agregarHijo} style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer", fontWeight:700, textTransform:"none", letterSpacing:0 }}>+ Agregar hijo</button>
+        </div>
+        {cargandoHijos ? (
+          <div style={{ fontSize:12, color:B.textMut, padding:"8px 0" }}>Cargando...</div>
+        ) : (
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            {hijos.map((h,i)=>(
+              <div key={h.id||`nuevo-${i}`} style={{ display:"flex", gap:8, alignItems:"end" }}>
+                <div style={{ flex:2 }}>
+                  <label style={lbl}>Nombres</label>
+                  <input style={inp} value={h.nombres} onChange={e=>actualizarHijo(i,"nombres",e.target.value)}/>
+                </div>
+                <div style={{ flex:1 }}>
+                  <label style={lbl}>Fecha de nacimiento</label>
+                  <input type="date" style={inp} value={h.fecha_nacimiento||""} onChange={e=>actualizarHijo(i,"fecha_nacimiento",e.target.value)}/>
+                </div>
+                <button onClick={()=>quitarHijo(i)} style={{ background:"none", border:"none", color:B.red, fontSize:16, cursor:"pointer", padding:"0 4px" }}>✕</button>
+              </div>
+            ))}
+            {hijos.length===0 && <div style={{ fontSize:12, color:B.textMut }}>Sin hijos registrados</div>}
+          </div>
+        )}
+
+        {/* Contacto de emergencia */}
+        <div style={seccion}>🚨 Contacto de emergencia</div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16 }}>
+          <div><label style={lbl}>Nombre</label><input style={inp} value={f.contacto_emergencia_nombre||""} onChange={e=>setF(p=>({...p,contacto_emergencia_nombre:e.target.value}))}/></div>
+          <div><label style={lbl}>Teléfono</label><input style={inp} value={f.contacto_emergencia_telefono||""} onChange={e=>setF(p=>({...p,contacto_emergencia_telefono:e.target.value}))}/></div>
+        </div>
+
         {persona && (
           <label style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16, cursor:"pointer" }}>
             <input type="checkbox" checked={f.activo!==false} onChange={e=>setF(p=>({...p,activo:e.target.checked}))}/>
