@@ -722,6 +722,68 @@ function fechaLocalDe(iso) {
   return `${d.getFullYear()}-${f2(d.getMonth()+1)}-${f2(d.getDate())}`;
 }
 
+// ── Escáner de código (cámara) — identifica pedidos escaneando la
+// etiqueta impresa (mismo código de barras que ya usa Boaz) ──
+function cargarHtml5Qrcode() {
+  return new Promise((resolve) => {
+    if (window.Html5Qrcode) { resolve(window.Html5Qrcode); return; }
+    const script = document.createElement("script");
+    script.src = "https://unpkg.com/html5-qrcode@2.3.8/dist/html5-qrcode.min.js";
+    script.onload = () => resolve(window.Html5Qrcode);
+    script.onerror = () => resolve(null);
+    document.head.appendChild(script);
+  });
+}
+
+function EscanerPedido({ onDetectado, onCerrar, toast }) {
+  const [cargando, setCargando] = useState(true);
+  const scannerRef = useRef(null);
+  const detenidoRef = useRef(false);
+
+  useEffect(() => {
+    let scanner;
+    (async () => {
+      const Html5Qrcode = await cargarHtml5Qrcode();
+      if (!Html5Qrcode) { toast("No se pudo cargar el escáner — revisa tu conexión","error"); onCerrar(); return; }
+      scanner = new Html5Qrcode("lector-pedido-boaz");
+      scannerRef.current = scanner;
+      try {
+        await scanner.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: { width: 260, height: 140 } },
+          (texto) => {
+            if (detenidoRef.current) return;
+            detenidoRef.current = true;
+            scanner.stop().catch(()=>{});
+            onDetectado(texto);
+          },
+          () => {}
+        );
+        setCargando(false);
+      } catch (e) {
+        toast("No se pudo acceder a la cámara. Revisa los permisos.","error");
+        onCerrar();
+      }
+    })();
+    return () => {
+      if (scannerRef.current && !detenidoRef.current) scannerRef.current.stop().catch(()=>{});
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"#000", zIndex:2000,
+      display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:20 }}>
+      <button onClick={onCerrar} style={{ position:"absolute", top:16, right:16, background:"none",
+        border:"none", color:"#fff", fontSize:28, cursor:"pointer" }}>✕</button>
+      {cargando && <div style={{ color:"#fff", marginBottom:16, fontSize:13 }}>Iniciando cámara...</div>}
+      <div id="lector-pedido-boaz" style={{ width:"100%", maxWidth:400 }}/>
+      <div style={{ color:"#9CA3AF", fontSize:12, marginTop:16, textAlign:"center" }}>
+        Apunta la cámara al código de la etiqueta del pedido
+      </div>
+    </div>
+  );
+}
+
 function esPosibleHeic(file) {
   const tipo = (file.type || "").toLowerCase();
   const nombre = (file.name || "").toLowerCase();
@@ -980,32 +1042,12 @@ function calcularPedidosActivos(pedidos, repartidorId, rutaActiva) {
   const misAsignados = pedidos.filter(p=>p.repartidor_id===repartidorId && p.estado==="asignado");
   const misEnRuta = pedidos.filter(p=>p.repartidor_id===repartidorId && p.estado==="en_ruta");
 
-  const asignadosPorLote = {};
-  misAsignados.forEach(p => {
-    const key = p.lote_id || "_manual";
-    (asignadosPorLote[key] = asignadosPorLote[key] || []).push(p);
-  });
-  const manuales = asignadosPorLote["_manual"] || [];
-  const lotesReales = Object.keys(asignadosPorLote).filter(k=>k!=="_manual");
-
-  let pedidosIniciables = [];
-  let pedidosEnEspera = [];
-  let loteAIniciar = null;
-  if (!rutaActiva) {
-    if (lotesReales.length > 0) {
-      loteAIniciar = lotesReales.sort((a,b) => {
-        const minA = Math.min(...asignadosPorLote[a].map(p=>new Date(p.created_at).getTime()));
-        const minB = Math.min(...asignadosPorLote[b].map(p=>new Date(p.created_at).getTime()));
-        return minA - minB;
-      })[0];
-      pedidosIniciables = [...manuales, ...asignadosPorLote[loteAIniciar]];
-    } else {
-      pedidosIniciables = manuales;
-    }
-  } else {
-    pedidosIniciables = manuales;
-    pedidosEnEspera = lotesReales.flatMap(k=>asignadosPorLote[k]);
-  }
+  // Ya no se limita a un solo lote (carga) a la vez: todos los pedidos
+  // asignados están disponibles para iniciar/gestionar juntos, sin importar
+  // si ya hay una ruta activa o si vienen de cargas distintas.
+  const pedidosIniciables = misAsignados;
+  const pedidosEnEspera = [];
+  const loteAIniciar = null;
 
   const misP = [...misEnRuta, ...pedidosIniciables].sort((a,b) => {
     const oa = a.orden_ruta ?? 999999, ob = b.orden_ruta ?? 999999;
@@ -1015,11 +1057,28 @@ function calcularPedidosActivos(pedidos, repartidorId, rutaActiva) {
   return { misEnRuta, pedidosIniciables, pedidosEnEspera, loteAIniciar, misP };
 }
 
-function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, iniciando, onOrdenarRuta, onVerMapa, rutaActiva, onFinalizarRuta }) {
+function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, iniciando, onOrdenarRuta, onVerMapa, rutaActiva, onFinalizarRuta, toast }) {
   const [filtroLista, setFiltroLista] = useState("ruta");
+  const [escaneando, setEscaneando] = useState(false);
   const hoy = fechaLocalHoy();
   const { misEnRuta, pedidosIniciables, pedidosEnEspera, loteAIniciar, misP } =
     calcularPedidosActivos(pedidos, repartidor.id, rutaActiva);
+
+  const buscarPorCodigo = (codigo) => {
+    setEscaneando(false);
+    const texto = (codigo||"").trim().toUpperCase();
+    // Primero busca dentro de la ruta activa (lo esperado); si no está ahí,
+    // busca en todos sus pedidos para poder avisar con precisión.
+    const enRuta = misP.find(p => p.omd?.toUpperCase() === texto);
+    if (enRuta) { onVerPedido(enRuta); return; }
+    const enCualquierLado = pedidos.find(p => p.repartidor_id===repartidor.id && p.omd?.toUpperCase() === texto);
+    if (enCualquierLado) {
+      toast("Este pedido no está en tu ruta activa — está " +
+        (enCualquierLado.estado==="asignado" ? "asignado pero aún no iniciado" : `en estado "${enCualquierLado.estado}"`), "error");
+      return;
+    }
+    toast("No se encontró ningún pedido tuyo con ese código","error");
+  };
   const entregadosHoy = pedidos.filter(p=>
     p.repartidor_id===repartidor.id && p.estado==="entregado" && fechaLocalDe(p.fecha_entrega)===hoy
   );
@@ -1048,11 +1107,17 @@ function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, ini
             <span style={{ color:C.green }}>● </span>En línea · {fmt.fecha(new Date().toISOString())}
           </div>
         </div>
+        <button onClick={()=>setEscaneando(true)}
+          style={{ background:"#FFFFFF18", border:"none", color:"#fff",
+            width:38, height:38, borderRadius:10, fontSize:18, cursor:"pointer",
+            display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}
+          title="Escanear pedido">📷</button>
         <button onClick={onLogout}
           style={{ background:"none", border:"1px solid #1E3560",
             color:C.textMut, padding:"6px 12px", borderRadius:8,
             fontSize:11, cursor:"pointer" }}>Salir</button>
       </div>
+      {escaneando && <EscanerPedido onDetectado={buscarPorCodigo} onCerrar={()=>setEscaneando(false)} toast={toast}/>}
 
       {pedidosIniciables.length > 0 && (
         <button onClick={()=>onIniciarRuta(pedidosIniciables, loteAIniciar)}
@@ -1183,7 +1248,7 @@ function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, ini
 }
 
 // ── PANTALLA DETALLE PEDIDO ───────────────────────────────────
-function DetallePedido({ pedido: p, onVolver, onActualizar, onActualizarLocal, toast }) {
+function DetallePedido({ pedido: p, posicionRuta, onVolver, onActualizar, onActualizarLocal, toast }) {
   const [vista, setVista] = useState("detalle"); // detalle | entrega | no_entrega
   const [guardando, setGuardando] = useState(false);
   const [fotos, setFotos] = useState([]);
@@ -1905,6 +1970,11 @@ export default function BoazApp() {
         {pedidoSel ? (
           <DetallePedido
             pedido={pedidos.find(p=>p.id===pedidoSel.id) || pedidoSel}
+            posicionRuta={(() => {
+              const { misP } = calcularPedidosActivos(pedidos, repartidor.id, rutaActiva);
+              const idx = misP.findIndex(p=>p.id===pedidoSel.id);
+              return idx>=0 ? { numero: idx+1, total: misP.length } : null;
+            })()}
             onVolver={()=>setPedidoSel(null)}
             onActualizar={cargar}
             onActualizarLocal={actualizarLocal}
@@ -1934,7 +2004,7 @@ export default function BoazApp() {
           />
         ) : (
           <>
-            {tab==="inicio"      && <Inicio repartidor={repartidor} pedidos={pedidos} onVerPedido={setPedidoSel} onLogout={()=>setRepartidor(null)} onIniciarRuta={iniciarRuta} iniciando={iniciandoRuta} onOrdenarRuta={()=>setOrdenandoRuta(true)} onVerMapa={()=>setViendoMapa(true)} rutaActiva={rutaActiva} onFinalizarRuta={finalizarRuta}/>}
+            {tab==="inicio"      && <Inicio repartidor={repartidor} pedidos={pedidos} onVerPedido={setPedidoSel} onLogout={()=>setRepartidor(null)} onIniciarRuta={iniciarRuta} iniciando={iniciandoRuta} onOrdenarRuta={()=>setOrdenandoRuta(true)} onVerMapa={()=>setViendoMapa(true)} rutaActiva={rutaActiva} onFinalizarRuta={finalizarRuta} toast={showToast}/>}
             {tab==="liquidacion" && <MiLiquidacion repartidor={repartidor} pedidos={pedidos} onMarcarLiquidado={marcarLiquidado} liquidando={liquidando}/>}
             {tab==="perfil"      && <MiPerfil repartidor={repartidor} pedidos={pedidos} onLogout={()=>setRepartidor(null)}/>}
           </>

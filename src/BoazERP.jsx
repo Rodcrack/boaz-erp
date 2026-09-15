@@ -876,7 +876,7 @@ function escapeHtmlEtiqueta(str) {
 }
 
 function generarHtmlEtiquetas(pedidosSel, empresas) {
-  const filas = pedidosSel.map(p => {
+  const filas = pedidosSel.map((p,idx) => {
     const empresa = empresas.find(e=>e.id===p.empresa_id);
     const tipoServicio = p.tipo_servicio==="same_day" ? "Same Day"
       : p.tipo_servicio==="next_day" ? "Next Day" : "—";
@@ -920,8 +920,13 @@ function generarHtmlEtiquetas(pedidosSel, empresas) {
           </div>
         </div>
         <div class="barcode-bottom">
-          <svg data-code="${codigo}" style="height:60px;width:90%;"></svg>
-          <div style="font-weight:bold;letter-spacing:3px;font-size:13px;margin-top:4px;">${codigo}</div>
+          <div style="display:flex; align-items:center; justify-content:center; gap:14px;">
+            <div style="flex:1; max-width:70%;">
+              <svg data-code="${codigo}" style="height:60px;width:100%;"></svg>
+              <div style="font-weight:bold;letter-spacing:3px;font-size:13px;margin-top:4px;text-align:center;">${codigo}</div>
+            </div>
+            <div id="qr-${idx}" data-qr-code="${codigo}" style="flex-shrink:0;"></div>
+          </div>
         </div>
       </div>`;
   }).join("");
@@ -932,6 +937,7 @@ function generarHtmlEtiquetas(pedidosSel, empresas) {
 <meta charset="utf-8">
 <title>Etiquetas Boaz</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.12.3/JsBarcode.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs/qrcode.min.js"></script>
 <style>
   @page { size: 10cm 15cm; margin: 0.3cm; }
   * { box-sizing: border-box; }
@@ -965,6 +971,16 @@ function generarHtmlEtiquetas(pedidosSel, empresas) {
         try {
           JsBarcode(el, el.getAttribute("data-code"), { format:"CODE128", width:2, height:44, displayValue:false, margin:0 });
         } catch(e) { console.error("Error generando código de barras:", e); }
+      });
+      if (typeof QRCode === "undefined") {
+        console.error("No se pudo cargar la librería de QR");
+        return;
+      }
+      document.querySelectorAll("[data-qr-code]").forEach(function(el){
+        try {
+          new QRCode(el, { text: el.getAttribute("data-qr-code"), width:70, height:70,
+            colorDark:"#000000", colorLight:"#ffffff", correctLevel: QRCode.CorrectLevel.M });
+        } catch(e) { console.error("Error generando QR:", e); }
       });
     });
   </script>
@@ -1729,7 +1745,8 @@ function Repartidores({ repartidores, pedidos, onRefresh, toast }) {
   const [editando, setEditando] = useState(null);
   const [vista, setVista] = useState("cards");
   const emptyForm = { nombres:"", apellidos:"", dni:"", telefono:"",
-    email:"", vehiculo:"moto", placa:"", zona_default:"urbano", usuario:"", password_hash:"" };
+    email:"", vehiculo:"moto", placa:"", zona_default:"urbano", usuario:"", password_hash:"",
+    modo_pago:"por_pedido", tarifa_variable:"", sueldo_fijo_mensual:"", tipo_sueldo_fijo:"planilla" };
   const [f, setF] = useState(emptyForm);
 
   const guardar = async () => {
@@ -1737,6 +1754,9 @@ function Repartidores({ repartidores, pedidos, onRefresh, toast }) {
     const payload = { ...f, email: f.email?.trim() ? f.email.trim() : null,
       usuario: f.usuario?.trim() ? f.usuario.trim().toLowerCase() : null,
       password_hash: f.password_hash?.trim() ? f.password_hash.trim() : null,
+      tarifa_variable: f.modo_pago==="por_pedido" ? (parseFloat(f.tarifa_variable)||0) : 0,
+      sueldo_fijo_mensual: f.modo_pago==="sueldo_fijo" ? (parseFloat(f.sueldo_fijo_mensual)||0) : 0,
+      tipo_sueldo_fijo: f.modo_pago==="sueldo_fijo" ? f.tipo_sueldo_fijo : null,
       activo:true };
     let error;
     if (editando) {
@@ -1942,6 +1962,34 @@ function Repartidores({ repartidores, pedidos, onRefresh, toast }) {
                 Con estos dos datos el repartidor inicia sesión en la app móvil. Déjalos vacíos si aún no debe tener acceso.
               </div>
             </div>
+
+            <div style={{ marginTop:12, padding:"12px 14px", background:B.bg, borderRadius:10 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:B.navy, textTransform:"uppercase",
+                letterSpacing:"0.7px", marginBottom:10 }}>💰 Costo de reparto (para el modelo de rentabilidad)</div>
+              <label style={lbl}>¿Cómo se le paga?</label>
+              <select style={{ ...inp, marginBottom:12 }} value={f.modo_pago} onChange={e=>setF(p=>({...p,modo_pago:e.target.value}))}>
+                <option value="por_pedido">Tarifa fija por pedido/día entregado</option>
+                <option value="sueldo_fijo">Sueldo fijo mensual (no varía por volumen)</option>
+              </select>
+              {f.modo_pago==="por_pedido" ? (
+                <div><label style={lbl}>Tarifa por pedido/día (S/)</label>
+                  <input type="number" style={inp} value={f.tarifa_variable||""} onChange={e=>setF(p=>({...p,tarifa_variable:e.target.value}))}/>
+                  <div style={{ fontSize:10, color:B.textMut, marginTop:4 }}>Si conduce una unidad de transporte, esto se interpreta como tarifa por día trabajado.</div>
+                </div>
+              ) : (
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                  <div><label style={lbl}>Sueldo mensual (S/)</label>
+                    <input type="number" style={inp} value={f.sueldo_fijo_mensual||""} onChange={e=>setF(p=>({...p,sueldo_fijo_mensual:e.target.value}))}/></div>
+                  <div><label style={lbl}>Tipo (solo referencia)</label>
+                    <select style={inp} value={f.tipo_sueldo_fijo||"planilla"} onChange={e=>setF(p=>({...p,tipo_sueldo_fijo:e.target.value}))}>
+                      <option value="planilla">Planilla</option>
+                      <option value="honorarios">Recibo por honorarios (RxH)</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div style={{ display:"flex", gap:10, marginTop:20, justifyContent:"flex-end" }}>
               <BtnSec onClick={()=>setModal(false)}>Cancelar</BtnSec>
               <BtnPri onClick={guardar}>{editando?"Guardar cambios":"Registrar"}</BtnPri>
@@ -3075,10 +3123,10 @@ function ModalCalendarioServicio({ asignacion, diasServicio, unidad, empresa, re
 }
 
 function ModalUnidad({ unidad, repartidores, onClose, onSaved, toast }) {
-  const [f, setF] = useState(unidad || { placa:"", tipo_vehiculo:"moto", repartidor_id:"" });
+  const [f, setF] = useState(unidad || { placa:"", tipo_vehiculo:"moto", repartidor_id:"", auxiliar_id:"" });
   const guardar = async () => {
     if (!f.placa) { toast("La placa es obligatoria","error"); return; }
-    const payload = { placa:f.placa, tipo_vehiculo:f.tipo_vehiculo, repartidor_id:f.repartidor_id||null };
+    const payload = { placa:f.placa, tipo_vehiculo:f.tipo_vehiculo, repartidor_id:f.repartidor_id||null, auxiliar_id:f.auxiliar_id||null };
     let error;
     if (unidad) {
       ({ error } = await sb.from("unidades_transporte").update(payload).eq("id", unidad.id));
@@ -3114,14 +3162,21 @@ function ModalUnidad({ unidad, repartidores, onClose, onSaved, toast }) {
           <option value="porter">Porter</option>
         </select>
         <label style={lbl}>Conductor (elige de Repartidores)</label>
-        <select style={{ ...inp, marginBottom:6 }} value={f.repartidor_id||""} onChange={e=>setF(p=>({...p,repartidor_id:e.target.value}))}>
+        <select style={{ ...inp, marginBottom:12 }} value={f.repartidor_id||""} onChange={e=>setF(p=>({...p,repartidor_id:e.target.value}))}>
           <option value="">— Sin asignar —</option>
           {repartidores.filter(r=>r.activo).map(r=>(
             <option key={r.id} value={r.id}>{r.nombres} {r.apellidos}{r.telefono?` — ${r.telefono}`:""}</option>
           ))}
         </select>
+        <label style={lbl}>Auxiliar (opcional)</label>
+        <select style={{ ...inp, marginBottom:6 }} value={f.auxiliar_id||""} onChange={e=>setF(p=>({...p,auxiliar_id:e.target.value}))}>
+          <option value="">— Sin auxiliar —</option>
+          {repartidores.filter(r=>r.activo).map(r=>(
+            <option key={r.id} value={r.id}>{r.nombres} {r.apellidos}{r.telefono?` — ${r.telefono}`:""}</option>
+          ))}
+        </select>
         <div style={{ fontSize:11, color:B.textMut, marginBottom:20 }}>
-          ¿El conductor todavía no está registrado? Créalo primero en el módulo <strong>Repartidores</strong> — así puede usarse tanto para pedidos de última milla como para unidades de transporte.
+          ¿El conductor todavía no está registrado? Créalo primero en el módulo <strong>Repartidores</strong> — así puede usarse tanto para pedidos de última milla como para unidades de transporte. Ahí mismo configuras cómo se le paga a cada uno, para que el modelo de rentabilidad calcule el costo real.
         </div>
         <div style={{ display:"flex", gap:10, justifyContent:"space-between" }}>
           {unidad && <BtnSec onClick={toggleActivo}>{f.activo?"Desactivar":"Activar"}</BtnSec>}
@@ -5201,6 +5256,7 @@ function Inventario({ empresas, toast }) {
   const [editandoProducto, setEditandoProducto] = useState(null);
   const [modalMovimiento, setModalMovimiento] = useState(false);
   const [modalOrden, setModalOrden] = useState(false);
+  const [modalCargaProductos, setModalCargaProductos] = useState(false);
   const [ordenDetalle, setOrdenDetalle] = useState(null);
 
   const cargar = async () => {
@@ -5269,7 +5325,8 @@ function Inventario({ empresas, toast }) {
               ⚠️ {stockBajo.length} variante{stockBajo.length===1?"":"s"} con stock bajo o agotado: {stockBajo.slice(0,5).map(v=>v.sku).join(", ")}{stockBajo.length>5?"...":""}
             </div>
           )}
-          <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:12 }}>
+          <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginBottom:12 }}>
+            <BtnSec onClick={()=>setModalCargaProductos(true)}>📤 Carga masiva</BtnSec>
             <BtnPri onClick={()=>{setEditandoProducto(null); setModalProducto(true);}}>+ Nuevo producto</BtnPri>
           </div>
           <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden" }}>
@@ -5408,11 +5465,216 @@ function Inventario({ empresas, toast }) {
         <ModalNuevaOrden variantes={variantesConProducto}
           onClose={()=>setModalOrden(false)} onSaved={()=>{setModalOrden(false); cargar();}} toast={toast}/>
       )}
+      {modalCargaProductos && (
+        <ModalCargaMasivaProductos productosExistentes={productos}
+          onClose={()=>setModalCargaProductos(false)} onSaved={()=>{setModalCargaProductos(false); cargar();}} toast={toast}/>
+      )}
       {ordenDetalle && (
         <ModalOrdenDetalle orden={ordenDetalle} items={itemsOrden.filter(it=>it.orden_id===ordenDetalle.id)}
           variantes={variantesConProducto}
           onClose={()=>setOrdenDetalle(null)} onCambio={()=>{cargar(); setOrdenDetalle(o=>ordenes.find(x=>x.id===o?.id)||o);}} toast={toast}/>
       )}
+    </div>
+  );
+}
+
+const COLUMNAS_PLANTILLA_PRODUCTOS = [
+  "Nombre del Producto", "Categoria", "Marca", "Precio de Venta", "Costo",
+  "SKU", "Codigo de Barras", "Talla", "Color", "Atributo Extra",
+  "Stock Inicial", "Stock Minimo", "Ubicacion",
+];
+
+function mapearFilaProducto(fila) {
+  const out = {};
+  for (const key of Object.keys(fila)) {
+    const k = normalizarTextoAdmin(key);
+    const v = fila[key];
+    if (k.includes("nombre")) out.nombre_producto = (v||"").toString().trim();
+    else if (k.includes("categoria")) out.categoria = (v||"").toString().trim();
+    else if (k.includes("marca")) out.marca = (v||"").toString().trim();
+    else if (k.includes("precio")) out.precio_venta = parseFloat(v) || 0;
+    else if (k.includes("costo")) out.costo = parseFloat(v) || 0;
+    else if (k === "sku" || (k.includes("sku") && !k.includes("codigo"))) out.sku = (v||"").toString().trim();
+    else if (k.includes("codigo") && k.includes("barra")) out.codigo_barras = (v||"").toString().trim();
+    else if (k.includes("talla")) out.talla = (v||"").toString().trim();
+    else if (k.includes("color")) out.color = (v||"").toString().trim();
+    else if (k.includes("atributo")) out.atributo_extra = (v||"").toString().trim();
+    else if (k.includes("stock") && k.includes("inicial")) out.stock_actual = parseInt(v) || 0;
+    else if (k.includes("stock") && k.includes("minimo")) out.stock_minimo = parseInt(v) || 0;
+    else if (k.includes("ubicacion")) out.ubicacion = (v||"").toString().trim();
+  }
+  return out;
+}
+
+function validarFilaProducto(fila) {
+  const errores = [];
+  if (!fila.nombre_producto) errores.push("falta nombre del producto");
+  if (!fila.sku) errores.push("falta SKU");
+  return errores;
+}
+
+function generarPlantillaProductos() {
+  const ejemplo = [
+    "Polo Boaz", "Ropa", "Boaz Wear", "45.00", "22.00",
+    "POLO-BOAZ-M-AZUL", "7750182001234", "M", "Azul", "",
+    "20", "5", "Estante A-3",
+  ];
+  const ws = XLSX.utils.aoa_to_sheet([COLUMNAS_PLANTILLA_PRODUCTOS, ejemplo]);
+  ws["!cols"] = COLUMNAS_PLANTILLA_PRODUCTOS.map(()=>({ wch:20 }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Productos");
+  XLSX.writeFile(wb, "plantilla_productos_boaz.xlsx");
+}
+
+function ModalCargaMasivaProductos({ productosExistentes, onClose, onSaved, toast }) {
+  const [archivo, setArchivo] = useState(null);
+  const [filas, setFilas] = useState([]);
+  const [procesando, setProcesando] = useState(false);
+  const [resultado, setResultado] = useState(null);
+  const inputRef = useRef();
+
+  const validas = filas.filter(f=>f.ok);
+  const conError = filas.filter(f=>!f.ok);
+
+  const manejarArchivo = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setArchivo(file);
+    setResultado(null);
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const wb = XLSX.read(evt.target.result, { type:"binary" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const filasCrudas = XLSX.utils.sheet_to_json(ws, { defval:"" });
+        const procesadas = filasCrudas.map((fila) => {
+          const mapeada = mapearFilaProducto(fila);
+          const errores = validarFilaProducto(mapeada);
+          return { ...mapeada, ok: errores.length===0, errores };
+        });
+        setFilas(procesadas);
+      } catch (err) {
+        toast("No se pudo leer el archivo: "+err.message,"error");
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const confirmarCarga = async () => {
+    if (validas.length===0) return;
+    setProcesando(true);
+    const generados = [];
+    // Cachea productos por nombre (normalizado) para no duplicar el producto
+    // si ya existe o si varias filas del archivo son variantes del mismo.
+    const cacheProductos = {};
+    productosExistentes.forEach(p => { cacheProductos[normalizarTextoAdmin(p.nombre)] = p.id; });
+
+    for (const fila of validas) {
+      try {
+        const claveProducto = normalizarTextoAdmin(fila.nombre_producto);
+        let productoId = cacheProductos[claveProducto];
+        if (!productoId) {
+          const { data: nuevoProducto, error: errProd } = await sb.from("inv_productos").insert([{
+            nombre: fila.nombre_producto, categoria: fila.categoria||null, marca: fila.marca||null,
+            precio_venta: fila.precio_venta||0, costo: fila.costo||0, activo:true,
+          }]).select().single();
+          if (errProd) { generados.push({ ...fila, ok:false, error:"producto: "+errProd.message }); continue; }
+          productoId = nuevoProducto.id;
+          cacheProductos[claveProducto] = productoId;
+        }
+        const { error: errVar } = await sb.from("inv_variantes").insert([{
+          producto_id: productoId, sku: fila.sku, codigo_barras: fila.codigo_barras||null,
+          talla: fila.talla||null, color: fila.color||null, atributo_extra: fila.atributo_extra||null,
+          stock_actual: fila.stock_actual||0, stock_minimo: fila.stock_minimo||0,
+          ubicacion: fila.ubicacion||null, activo:true,
+        }]);
+        if (errVar) generados.push({ ...fila, ok:false, error: errVar.message.includes("duplicate")?"ese SKU ya existe":errVar.message });
+        else generados.push({ ...fila, ok:true });
+      } catch (err) {
+        generados.push({ ...fila, ok:false, error: err.message||"error inesperado" });
+      }
+    }
+    setProcesando(false);
+    setResultado(generados);
+  };
+
+  if (resultado) {
+    const exitosos = resultado.filter(r=>r.ok).length;
+    const fallidos = resultado.filter(r=>!r.ok);
+    return (
+      <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+        <div style={{ background:B.white, borderRadius:16, padding:28, width:600, maxHeight:"85vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
+          <div style={{ fontSize:15, fontWeight:800, color:B.navy, marginBottom:16 }}>Resultado de la carga</div>
+          <div style={{ background:"#ECFDF5", border:`1px solid ${B.green}`, borderRadius:10, padding:14, marginBottom:12, fontSize:13, color:"#065F46" }}>
+            ✅ {exitosos} de {resultado.length} variantes cargadas correctamente
+          </div>
+          {fallidos.length>0 && (
+            <div style={{ background:"#FEF2F2", border:`1px solid ${B.red}`, borderRadius:10, padding:14, marginBottom:16 }}>
+              <div style={{ fontSize:12, fontWeight:700, color:"#991B1B", marginBottom:8 }}>⚠️ {fallidos.length} con error:</div>
+              {fallidos.map((f,i)=>(
+                <div key={i} style={{ fontSize:11, color:"#991B1B", marginBottom:4 }}>
+                  {f.sku||"(sin SKU)"} — {f.error || (f.errores||[]).join(", ")}
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ display:"flex", justifyContent:"flex-end" }}>
+            <BtnPri onClick={onSaved}>Listo</BtnPri>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+      <div style={{ background:B.white, borderRadius:16, padding:28, width:640, maxHeight:"85vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+          <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>📤 Carga masiva de productos</div>
+          <button onClick={onClose} style={{ background:"none", border:"none", fontSize:18, color:B.textSec, cursor:"pointer" }}>✕</button>
+        </div>
+        <div style={{ fontSize:12, color:B.textMut, marginBottom:16 }}>
+          Cada fila es una <strong>variante</strong> (un SKU). Si varias filas comparten el mismo "Nombre del Producto",
+          se agrupan automáticamente bajo un solo producto — así puedes cargar varias tallas/colores de la misma prenda de una vez.
+        </div>
+
+        <button onClick={generarPlantillaProductos}
+          style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 16px", borderRadius:10,
+            border:`1px dashed ${B.gold}`, background:"#FFF8EF", color:B.goldDk, fontSize:13, fontWeight:700,
+            cursor:"pointer", marginBottom:16 }}>
+          📥 Descargar plantilla Excel
+        </button>
+
+        <div onClick={()=>inputRef.current?.click()}
+          style={{ border:`2px dashed ${B.border}`, borderRadius:12, padding:24, textAlign:"center",
+            cursor:"pointer", marginBottom:16, background:B.bg }}>
+          <div style={{ fontSize:24, marginBottom:6 }}>📎</div>
+          <div style={{ fontSize:13, color:B.textSec }}>{archivo ? archivo.name : "Haz clic para elegir el archivo Excel completado"}</div>
+          <input ref={inputRef} type="file" accept=".xlsx,.xls" style={{display:"none"}} onChange={manejarArchivo}/>
+        </div>
+
+        {filas.length>0 && (
+          <>
+            <div style={{ display:"flex", gap:10, marginBottom:12 }}>
+              <div style={{ fontSize:12, color:B.green, fontWeight:700 }}>✓ {validas.length} listas</div>
+              {conError.length>0 && <div style={{ fontSize:12, color:B.red, fontWeight:700 }}>⚠️ {conError.length} con error</div>}
+            </div>
+            {conError.length>0 && (
+              <div style={{ background:"#FEF2F2", borderRadius:8, padding:10, marginBottom:16, maxHeight:120, overflowY:"auto" }}>
+                {conError.map((f,i)=>(
+                  <div key={i} style={{ fontSize:11, color:"#991B1B" }}>Fila {i+1} ({f.sku||f.nombre_producto||"—"}): {f.errores.join(", ")}</div>
+                ))}
+              </div>
+            )}
+            <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+              <BtnSec onClick={onClose}>Cancelar</BtnSec>
+              <BtnPri onClick={confirmarCarga} disabled={procesando || validas.length===0}>
+                {procesando ? "Cargando..." : `Cargar ${validas.length} variante${validas.length===1?"":"s"}`}
+              </BtnPri>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
