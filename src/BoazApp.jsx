@@ -1060,6 +1060,9 @@ function calcularPedidosActivos(pedidos, repartidorId, rutaActiva) {
 function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, iniciando, onOrdenarRuta, onVerMapa, rutaActiva, onFinalizarRuta, toast }) {
   const [filtroLista, setFiltroLista] = useState("ruta");
   const [escaneando, setEscaneando] = useState(false);
+  const [busqueda, setBusqueda] = useState("");
+  const [escuchando, setEscuchando] = useState(false);
+  const recRef = useRef(null);
   const hoy = fechaLocalHoy();
   const { misEnRuta, pedidosIniciables, pedidosEnEspera, loteAIniciar, misP } =
     calcularPedidosActivos(pedidos, repartidor.id, rutaActiva);
@@ -1086,7 +1089,34 @@ function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, ini
     p.repartidor_id===repartidor.id && p.estado==="no_entregado" &&
     p.historial?.some(h=>h.tipo==="estado" && fechaLocalDe(h.timestamp)===hoy)
   );
-  const listaActual = filtroLista==="ruta" ? misP : filtroLista==="entregados" ? entregadosHoy : noEntregadosHoy;
+  const norm = (t) => (t||"").toString().normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+  const q = norm(busqueda).trim();
+  const buscando = q.length > 0;
+  const resultadosBusqueda = buscando
+    ? pedidos.filter(p => p.repartidor_id===repartidor.id && q.split(/\s+/).every(w =>
+        norm([p.omd, p.cliente_referencia, p.dest_nombre, p.dest_direccion, p.dest_distrito,
+              p.dest_telefono, p.dest_referencia, p.descripcion].join(" ")).includes(w)))
+    : [];
+  const listaActual = buscando ? resultadosBusqueda
+    : filtroLista==="ruta" ? misP : filtroLista==="entregados" ? entregadosHoy : noEntregadosHoy;
+  const SR = typeof window!=="undefined" ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null;
+  const dictar = () => {
+    if (!SR) { toast("Tu navegador no permite dictado. Usa Chrome en Android o el micrófono del teclado.","error"); return; }
+    if (escuchando) { try{ recRef.current?.stop(); }catch(e){} return; }
+    try {
+      const rec = new SR();
+      rec.lang = "es-PE"; rec.interimResults = false; rec.maxAlternatives = 1;
+      rec.onresult = (e) => {
+        let t = e.results[0][0].transcript.replace(/[.,;]+$/,"").trim();
+        // "B Z 0 0 0 ..." dictado con espacios: si parece código, juntarlo
+        if (/^[a-zA-Z]{1,3}(\s?\d){3,}$/.test(t)) t = t.replace(/\s+/g,"");
+        setBusqueda(t);
+      };
+      rec.onerror = (e) => { setEscuchando(false); toast(e.error==="not-allowed" ? "Permite el micrófono en el navegador" : "No se pudo dictar, intenta de nuevo","error"); };
+      rec.onend = () => setEscuchando(false);
+      recRef.current = rec; setEscuchando(true); rec.start();
+    } catch(e) { setEscuchando(false); toast("No se pudo activar el micrófono","error"); }
+  };
 
   return (
     <div style={{ padding:16 }}>
@@ -1165,7 +1195,30 @@ function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, ini
         </button>
       )}
 
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:16 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:8, background:C.white,
+        border:`1px solid ${C.border}`, borderRadius:12, padding:"4px 6px 4px 12px", marginBottom:12 }}>
+        <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }`}</style>
+        <span style={{ fontSize:16 }}>🔍</span>
+        <input value={busqueda} onChange={e=>setBusqueda(e.target.value)}
+          placeholder={escuchando ? "Escuchando…" : "Buscar pedido, cliente, dirección, teléfono"}
+          style={{ flex:1, border:"none", outline:"none", fontSize:14, padding:"10px 0",
+            background:"transparent", color:C.textPri, minWidth:0 }}/>
+        {busqueda && (
+          <button onClick={()=>setBusqueda("")}
+            style={{ background:"none", border:"none", fontSize:16, color:C.textMut, cursor:"pointer", padding:6 }}>✕</button>
+        )}
+        <button onClick={dictar} title="Dictar"
+          style={{ width:38, height:38, borderRadius:10, border:"none", fontSize:18, cursor:"pointer",
+            background: escuchando ? C.red : "#F1F5F9", color: escuchando ? "#fff" : C.textPri,
+            animation: escuchando ? "pulse 1s infinite" : "none" }}>🎤</button>
+      </div>
+      {buscando && (
+        <div style={{ fontSize:12, color:C.textMut, marginBottom:10 }}>
+          {resultadosBusqueda.length} resultado(s) en todos tus pedidos
+        </div>
+      )}
+
+      <div style={{ display: buscando ? "none" : "grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:16 }}>
         {[
           { id:"ruta", label:"En ruta", value: misP.length, color:"#7C3AED", icon:"🛵" },
           { id:"entregados", label:"Entregados", value: entregadosHoy.length, color:C.green, icon:"✅" },
@@ -1189,10 +1242,10 @@ function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, ini
         <div style={{ background:C.white, borderRadius:14, padding:32,
           textAlign:"center", color:C.textMut, border:`1px solid #E2E8F0` }}>
           <div style={{ fontSize:36, marginBottom:8 }}>
-            {filtroLista==="ruta" ? "🎉" : filtroLista==="entregados" ? "📦" : "✅"}
+            {buscando ? "🔍" : filtroLista==="ruta" ? "🎉" : filtroLista==="entregados" ? "📦" : "✅"}
           </div>
           <div style={{ fontSize:14, fontWeight:600 }}>
-            {filtroLista==="ruta" ? "¡Sin pedidos pendientes!" : filtroLista==="entregados" ? "Aún no hay entregas hoy" : "Sin pedidos no entregados"}
+            {buscando ? "Sin resultados para tu búsqueda" : filtroLista==="ruta" ? "¡Sin pedidos pendientes!" : filtroLista==="entregados" ? "Aún no hay entregas hoy" : "Sin pedidos no entregados"}
           </div>
         </div>
       ) : (
@@ -1202,9 +1255,9 @@ function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, ini
               style={{ background:C.white, borderRadius:14, padding:16,
                 border:`1px solid #E2E8F0`, cursor:"pointer",
                 boxShadow:"0 2px 8px #0D1E3D0A", position:"relative",
-                paddingLeft: filtroLista==="ruta" ? 44 : 16,
+                paddingLeft: (filtroLista==="ruta" && !buscando) ? 44 : 16,
                 borderLeft:`4px solid ${ESTADOS[p.estado]?.color||C.gold}` }}>
-              {filtroLista==="ruta" && (
+              {filtroLista==="ruta" && !buscando && (
                 <div style={{ position:"absolute", left:14, top:16, width:24, height:24,
                   borderRadius:"50%", background:C.gold, color:C.navy, fontWeight:800,
                   fontSize:12, display:"flex", alignItems:"center", justifyContent:"center" }}>
