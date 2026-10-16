@@ -433,11 +433,62 @@ function Login({ onLogin }) {
   );
 }
 
+// ── CÁMARA EN VIVO (no depende del selector del teléfono) ──────
+function CamaraEnVivo({ onFoto, onCerrar, onFallback }) {
+  const videoRef = useRef();
+  const streamRef = useRef(null);
+  const [listo, setListo] = useState(false);
+  const [fotosTomadas, setFotosTomadas] = useState(0);
+  useEffect(() => {
+    let cancelado = false;
+    (async () => {
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) throw new Error("sin soporte");
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" }, width: { ideal: 1600 }, height: { ideal: 1200 } }, audio: false });
+        if (cancelado) { stream.getTracks().forEach(t=>t.stop()); return; }
+        streamRef.current = stream;
+        if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play().catch(()=>{}); }
+        setListo(true);
+      } catch (e) { onFallback(e); }
+    })();
+    return () => { cancelado = true; streamRef.current?.getTracks().forEach(t=>t.stop()); };
+  }, []);
+  const tomar = () => {
+    const v = videoRef.current;
+    if (!v || !v.videoWidth) return;
+    const c = document.createElement("canvas");
+    c.width = v.videoWidth; c.height = v.videoHeight;
+    c.getContext("2d").drawImage(v, 0, 0);
+    c.toBlob(b => {
+      if (!b) return;
+      onFoto(new File([b], `foto_${Date.now()}.jpg`, { type:"image/jpeg" }));
+      setFotosTomadas(n=>n+1);
+    }, "image/jpeg", 0.85);
+  };
+  return (
+    <div style={{ position:"fixed", inset:0, zIndex:10000, background:"#000", display:"flex", flexDirection:"column" }}>
+      <video ref={videoRef} playsInline muted style={{ flex:1, width:"100%", objectFit:"cover", minHeight:0 }}/>
+      {!listo && <div style={{ position:"absolute", top:"45%", width:"100%", textAlign:"center", color:"#fff", fontSize:14 }}>Abriendo cámara…</div>}
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-around", padding:"16px 12px 28px", background:"#000" }}>
+        <div style={{ color:"#fff", fontSize:13, width:80 }}>{fotosTomadas>0 ? `📷 ${fotosTomadas} foto(s)` : ""}</div>
+        <button onClick={tomar} disabled={!listo} aria-label="Tomar foto"
+          style={{ width:70, height:70, borderRadius:"50%", border:"5px solid #fff", background:"#ffffff55", cursor:"pointer" }}/>
+        <button onClick={onCerrar}
+          style={{ width:80, background:"none", border:"1px solid #fff", color:"#fff", borderRadius:10, padding:"10px 0", fontSize:13, fontWeight:700 }}>
+          {fotosTomadas>0 ? "Listo ✓" : "Cerrar"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── COMPONENTE: CAPTURA DE FOTOS ───────────────────────────────
 function CapturaFotos({ fotos, setFotos, minimo = 2, label = "Evidencias" }) {
   const inputCamara = useRef();
   const inputGaleria = useRef();
   const inputEscaner = useRef();
+  const [camaraVivo, setCamaraVivo] = useState(false);
   const [procesando, setProcesando] = useState(false);
   const [errorEscaneo, setErrorEscaneo] = useState("");
   const agregarFotos = async (e) => {
@@ -517,7 +568,7 @@ function CapturaFotos({ fotos, setFotos, minimo = 2, label = "Evidencias" }) {
         </div>
       )}
       <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:6 }}>
-        <button onClick={()=>inputCamara.current?.click()}
+        <button onClick={()=>setCamaraVivo(true)}
           style={{ flex:"1 1 30%", minWidth:100, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
             padding:"12px 8px", borderRadius:10, border:`2px dashed ${C.gold}`,
             background:"#FFF8EF", color:C.goldDk, fontSize:12, fontWeight:700, cursor:"pointer" }}>
@@ -535,6 +586,10 @@ function CapturaFotos({ fotos, setFotos, minimo = 2, label = "Evidencias" }) {
             background:"#F5F3FF", color:"#6D28D9", fontSize:12, fontWeight:700, cursor:"pointer" }}>
           📄 Escanear
         </button>
+        {camaraVivo && <CamaraEnVivo
+          onFoto={(f)=>agregarFotos({ target:{ files:[f], value:"" } })}
+          onCerrar={()=>setCamaraVivo(false)}
+          onFallback={()=>{ setCamaraVivo(false); setErrorEscaneo("No se pudo abrir la cámara dentro de la app. Revisa el permiso de cámara del navegador o usa Galería."); setTimeout(()=>inputCamara.current?.click(),50); }}/>}
         <input ref={inputCamara} type="file" accept="image/*" capture="environment"
           style={{display:"none"}} onChange={agregarFotos}/>
         <input ref={inputGaleria} type="file" accept="image/*" multiple
