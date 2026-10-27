@@ -498,8 +498,15 @@ function CapturaFotos({ fotos, setFotos, minimo = 2, label = "Evidencias" }) {
     setProcesando(true);
     // Convierte todas las fotos elegidas (HEIC → JPEG si hace falta) en paralelo
     // y las agrega todas juntas, en vez de una por una.
-    const archivosFinales = await Promise.all(files.map(f => convertirSiEsHeic(f)));
+    setErrorEscaneo("");
+    let fallidas = 0;
+    const resultados = await Promise.all(files.map(async f => {
+      try { return await copiarEnMemoria(await convertirSiEsHeic(f)); }
+      catch (err) { fallidas++; return null; }
+    }));
+    const archivosFinales = resultados.filter(Boolean);
     setProcesando(false);
+    if (fallidas) setErrorEscaneo(`${fallidas} foto(s) no se pudieron leer. Vuelve a elegirlas o tómalas con la cámara.`);
     setFotos(prev => [...prev, ...archivosFinales.map(archivo => ({
       file: archivo, preview: URL.createObjectURL(archivo), rota:false,
     }))]);
@@ -512,7 +519,7 @@ function CapturaFotos({ fotos, setFotos, minimo = 2, label = "Evidencias" }) {
     setErrorEscaneo("");
     try {
       const archivosFinales = await Promise.all(files.map(async f => {
-        const convertido = await convertirSiEsHeic(f);
+        const convertido = await copiarEnMemoria(await convertirSiEsHeic(f));
         return await escanearDocumento(convertido);
       }));
       setFotos(prev => [...prev, ...archivosFinales.map(archivo => ({
@@ -847,6 +854,14 @@ function esPosibleHeic(file) {
 }
 
 // Si el archivo es HEIC/HEIF, lo convierte a JPEG. Si no, lo devuelve tal cual.
+// Copia el archivo a memoria apenas se elige. En Android (galería / APK) el archivo
+// original es una referencia temporal que puede dejar de ser legible más tarde
+// (al confirmar la entrega), y ahí fallaba con "No se pudo leer el archivo".
+async function copiarEnMemoria(file) {
+  const buf = await file.arrayBuffer();
+  return new File([buf], file.name || `foto_${Date.now()}.jpg`, { type: file.type || "image/jpeg" });
+}
+
 async function convertirSiEsHeic(file) {
   if (!esPosibleHeic(file)) return file;
   const heic2any = await cargarHeic2Any();
