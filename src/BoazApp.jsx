@@ -1155,7 +1155,24 @@ function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, ini
   const listaActual = buscando ? resultadosBusqueda
     : filtroLista==="ruta" ? misP : filtroLista==="entregados" ? entregadosHoy : noEntregadosHoy;
   const SR = typeof window!=="undefined" ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null;
-  const dictar = () => {
+  const dictar = async () => {
+    // APK (Capacitor): el WebView de Android no trae Web Speech; se usa el plugin nativo
+    const nativo = window.Capacitor?.isNativePlatform?.() && window.Capacitor?.Plugins?.SpeechRecognition;
+    if (nativo) {
+      try {
+        const disp = await nativo.available();
+        if (!disp?.available) { toast("Este celular no tiene reconocimiento de voz. Usa el micrófono del teclado.","error"); return; }
+        const perm = await nativo.requestPermissions();
+        if (perm?.speechRecognition && perm.speechRecognition !== "granted") { toast("Permite el micrófono para dictar","error"); return; }
+        setEscuchando(true);
+        const r = await nativo.start({ language:"es-PE", maxResults:1, prompt:"Di el pedido, nombre o dirección", partialResults:false, popup:true });
+        let t = (r?.matches?.[0] || "").replace(/[.,;]+$/,"").trim();
+        if (/^[a-zA-Z]{1,3}(\s?\d){3,}$/.test(t)) t = t.replace(/\s+/g,"");
+        if (t) setBusqueda(t);
+      } catch(e) { toast("No se pudo dictar, intenta de nuevo o usa el micrófono del teclado","error"); }
+      finally { setEscuchando(false); }
+      return;
+    }
     if (!SR) { toast("Tu navegador no permite dictado. Usa Chrome en Android o el micrófono del teclado.","error"); return; }
     if (escuchando) { try{ recRef.current?.stop(); }catch(e){} return; }
     try {
