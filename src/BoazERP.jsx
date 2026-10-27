@@ -142,9 +142,9 @@ async function geocodificarDireccion(direccion, distrito) {
 const esperar = (ms) => new Promise(r => setTimeout(r, ms));
 
 const ROLES_ACCESO = {
-  admin: ["dashboard","pedidos","repartidores","clientes","unidades","inventario","catalogo","liquidaciones","liquidacion-transporte","liquidacion-clientes","facturacion","planilla","reportes","configuracion"],
-  operaciones: ["dashboard","pedidos","repartidores","clientes","unidades","inventario","catalogo"],
-  finanzas: ["dashboard","clientes","catalogo","liquidaciones","liquidacion-transporte","liquidacion-clientes","facturacion","planilla","reportes"],
+  admin: ["dashboard","pedidos","repartidores","clientes","cotizaciones","unidades","inventario","catalogo","liquidaciones","liquidacion-transporte","liquidacion-clientes","facturacion","planilla","reportes","configuracion"],
+  operaciones: ["dashboard","pedidos","repartidores","clientes","cotizaciones","unidades","inventario","catalogo"],
+  finanzas: ["dashboard","clientes","cotizaciones","catalogo","liquidaciones","liquidacion-transporte","liquidacion-clientes","facturacion","planilla","reportes"],
 };
 const Chip = ({ estado, size="sm" }) => {
   const s = ESTADOS_PEDIDO[estado] || { bg:"#F3F4F6", color:"#374151", label: estado };
@@ -4431,6 +4431,137 @@ function calcularNetoPlanilla(sueldoBruto, sistemaPension, porcentajeAfp) {
   return { descuentoPension, essalud, neto, pctPension };
 }
 
+// ══════════════════════════════════════════════════════════════
+// COTIZACIONES — solicitudes que llegan del formulario "Cotizar ahora" de boaz.com.pe
+// ══════════════════════════════════════════════════════════════
+const ESTADOS_COTIZ = {
+  nueva:      { label:"Nueva",      color:"#2563EB", bg:"#EFF6FF" },
+  contactada: { label:"Contactada", color:"#D97706", bg:"#FFFBEB" },
+  ganada:     { label:"Ganada",     color:"#059669", bg:"#ECFDF5" },
+  perdida:    { label:"Perdida",    color:"#DC2626", bg:"#FEF2F2" },
+};
+function linkWhatsApp(num, texto) {
+  let d = (num||"").replace(/\D/g,"");
+  if (d.length === 9) d = "51" + d;
+  return `https://wa.me/${d}${texto ? `?text=${encodeURIComponent(texto)}` : ""}`;
+}
+function Cotizaciones({ toast, onCambio }) {
+  const [lista, setLista] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [filtro, setFiltro] = useState("todas");
+  const [busq, setBusq] = useState("");
+  const [abierta, setAbierta] = useState(null);
+  const [notas, setNotas] = useState({});
+
+  const cargar = async () => {
+    setCargando(true);
+    const { data, error } = await sb.from("cotizaciones").select("*").order("created_at", { ascending:false });
+    if (error) toast("Error al cargar cotizaciones: " + error.message, "error");
+    else { setLista(data||[]); onCambio && onCambio((data||[]).filter(c=>c.estado==="nueva").length); }
+    setCargando(false);
+  };
+  useEffect(() => { cargar(); }, []);
+
+  const cambiarEstado = async (c, estado) => {
+    const { error } = await sb.from("cotizaciones").update({ estado }).eq("id", c.id);
+    if (error) { toast("No se pudo actualizar: " + error.message, "error"); return; }
+    const nueva = lista.map(x => x.id===c.id ? { ...x, estado } : x);
+    setLista(nueva);
+    onCambio && onCambio(nueva.filter(x=>x.estado==="nueva").length);
+  };
+  const guardarNotas = async (c) => {
+    const { error } = await sb.from("cotizaciones").update({ notas: notas[c.id] ?? c.notas ?? "" }).eq("id", c.id);
+    if (error) toast("No se pudo guardar la nota: " + error.message, "error");
+    else { toast("Nota guardada"); setLista(lista.map(x => x.id===c.id ? { ...x, notas: notas[c.id] ?? x.notas } : x)); }
+  };
+
+  const q = busq.trim().toLowerCase();
+  const filtradas = lista.filter(c =>
+    (filtro==="todas" || c.estado===filtro) &&
+    (!q || [c.nombre,c.empresa,c.email,c.whatsapp,c.servicio,c.mensaje].join(" ").toLowerCase().includes(q))
+  );
+  const cuenta = (e) => lista.filter(c=>c.estado===e).length;
+
+  return (
+    <div>
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center", marginBottom:16 }}>
+        {[["todas","Todas",lista.length], ...Object.entries(ESTADOS_COTIZ).map(([k,v])=>[k,v.label,cuenta(k)])].map(([k,l,n])=>(
+          <button key={k} onClick={()=>setFiltro(k)}
+            style={{ padding:"7px 14px", borderRadius:20, fontSize:12, fontWeight:700, cursor:"pointer",
+              border:`1px solid ${filtro===k?B.gold:B.border}`,
+              background: filtro===k?B.gold:B.white, color: filtro===k?B.navy:B.textSec }}>
+            {l} ({n})
+          </button>
+        ))}
+        <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="🔍 Buscar nombre, empresa, correo, WhatsApp..."
+          style={{ ...inp, maxWidth:340, marginLeft:"auto" }}/>
+        <BtnSec onClick={cargar}>↻ Actualizar</BtnSec>
+      </div>
+
+      {cargando ? (
+        <div style={{ padding:40, textAlign:"center", color:B.textMut }}>Cargando cotizaciones…</div>
+      ) : filtradas.length===0 ? (
+        <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:40,
+          textAlign:"center", color:B.textMut }}>
+          {lista.length===0 ? "Aún no hay cotizaciones. Aparecerán aquí cuando alguien use «Cotizar ahora» en boaz.com.pe." : "Sin resultados con ese filtro."}
+        </div>
+      ) : (
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {filtradas.map(c => {
+            const est = ESTADOS_COTIZ[c.estado] || ESTADOS_COTIZ.nueva;
+            const open = abierta===c.id;
+            return (
+              <div key={c.id} style={{ background:B.white, border:`1px solid ${B.border}`, borderLeft:`4px solid ${est.color}`,
+                borderRadius:12, padding:"14px 18px" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:14, flexWrap:"wrap", cursor:"pointer" }}
+                  onClick={()=>setAbierta(open?null:c.id)}>
+                  <div style={{ flex:"1 1 220px", minWidth:0 }}>
+                    <div style={{ fontSize:15, fontWeight:800, color:B.textPri }}>{c.nombre}</div>
+                    <div style={{ fontSize:12, color:B.textSec }}>{c.empresa}</div>
+                  </div>
+                  <div style={{ flex:"1 1 180px", fontSize:12, color:B.textSec }}>
+                    <div><b>{c.servicio||"—"}</b></div>
+                    <div>{c.volumen||"—"}</div>
+                  </div>
+                  <div style={{ fontSize:12, color:B.textMut }}>{fmt.fecha(c.created_at)} {fmt.hora(c.created_at)}</div>
+                  <span style={{ background:est.bg, color:est.color, padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:700 }}>{est.label}</span>
+                  <span style={{ color:B.textMut }}>{open?"▲":"▼"}</span>
+                </div>
+                {open && (
+                  <div style={{ marginTop:14, paddingTop:14, borderTop:`1px solid ${B.border}` }}>
+                    <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginBottom:12 }}>
+                      <a href={linkWhatsApp(c.whatsapp, `Hola ${c.nombre}, te escribimos de Boaz por tu solicitud de cotización de ${c.servicio||"nuestros servicios"}.`)}
+                        target="_blank" rel="noreferrer" onClick={()=>c.estado==="nueva" && cambiarEstado(c,"contactada")}
+                        style={{ background:"#25D366", color:"#fff", padding:"8px 14px", borderRadius:8, fontSize:12, fontWeight:700, textDecoration:"none" }}>
+                        💬 WhatsApp {c.whatsapp}
+                      </a>
+                      <a href={`mailto:${c.email}?subject=${encodeURIComponent("Cotización Boaz")}`}
+                        style={{ background:B.navy, color:"#fff", padding:"8px 14px", borderRadius:8, fontSize:12, fontWeight:700, textDecoration:"none" }}>
+                        ✉️ {c.email}
+                      </a>
+                      <select value={c.estado} onChange={e=>cambiarEstado(c, e.target.value)} style={{ ...inp, width:"auto" }}>
+                        {Object.entries(ESTADOS_COTIZ).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+                      </select>
+                    </div>
+                    <div style={lbl}>Mensaje del cliente</div>
+                    <div style={{ background:B.bg, borderRadius:8, padding:"10px 12px", fontSize:13, color:B.textPri, marginBottom:12, whiteSpace:"pre-wrap" }}>
+                      {c.mensaje || "— sin mensaje —"}
+                    </div>
+                    <div style={lbl}>Notas internas</div>
+                    <textarea rows={2} style={{ ...inp, resize:"vertical" }} placeholder="Seguimiento, precio cotizado, próxima acción…"
+                      value={notas[c.id] ?? c.notas ?? ""} onChange={e=>setNotas({ ...notas, [c.id]: e.target.value })}/>
+                    <div style={{ marginTop:8 }}><BtnPri onClick={()=>guardarNotas(c)}>Guardar nota</BtnPri></div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Planilla({ toast }) {
   const [tab, setTab] = useState("planilla");
   const [personal, setPersonal] = useState([]);
@@ -7164,6 +7295,7 @@ export default function BoazERP() {
   const [repartidores, setRepartidores] = useState([]);
   const [empresas, setEmpresas] = useState([]);
   const [liquidaciones, setLiquidaciones] = useState([]);
+  const [cotizNuevas, setCotizNuevas] = useState(0);
   const [lineasNegocio, setLineasNegocio] = useState([]);
   const [tiposServicio, setTiposServicio] = useState([]);
   const [unidades, setUnidades] = useState([]);
@@ -7219,6 +7351,18 @@ export default function BoazERP() {
 
   const cargarSilencioso = useCallback(() => cargar({ silencioso:true }), [cargar]);
 
+  // Contador de cotizaciones nuevas (formulario de la web) para la insignia del menú
+  useEffect(() => {
+    let vivo = true;
+    const contar = async () => {
+      const { count } = await sb.from("cotizaciones").select("id", { count:"exact", head:true }).eq("estado","nueva");
+      if (vivo && count != null) setCotizNuevas(count);
+    };
+    contar();
+    const t = setInterval(contar, 60000);
+    return () => { vivo = false; clearInterval(t); };
+  }, []);
+
   useEffect(() => { cargar(); }, [cargar]);
 
   // Realtime
@@ -7240,6 +7384,7 @@ export default function BoazERP() {
     { id:"inventario",   icon:"📦", label:"Inventario" },
     { section:"COMERCIAL" },
     { id:"clientes",     icon:"🏢", label:"Clientes" },
+    { id:"cotizaciones", icon:"📨", label:"Cotizaciones", badge: cotizNuevas || null },
     { id:"catalogo",     icon:"🗂️", label:"Catálogo" },
     { section:"FINANZAS" },
     { id:"liquidaciones",icon:"💰", label:"Liq. Repartidores",
@@ -7406,6 +7551,7 @@ if (verificando) {
               {seccion==="unidades"      && <Unidades unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} repartidores={repartidores} tarifarioVehiculoCliente={tarifarioVehiculoCliente} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="inventario"    && <Inventario empresas={empresas} toast={showToast}/>}
               {seccion==="clientes"      && <Clientes empresas={empresas} pedidos={pedidos} lineasNegocio={lineasNegocio} tarifariosCliente={tarifariosCliente} tarifarioVehiculoCliente={tarifarioVehiculoCliente} tarifarioEstandar={tarifarioEstandar} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccion==="cotizaciones"  && <Cotizaciones toast={showToast} onCambio={setCotizNuevas}/>}
               {seccion==="catalogo"      && <Catalogo lineasNegocio={lineasNegocio} tiposServicio={tiposServicio} tarifarioEstandar={tarifarioEstandar} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} recargoFeriadoPct={recargoFeriadoPct} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="liquidaciones" && <Liquidaciones repartidores={repartidores} pedidos={pedidos} liquidaciones={liquidaciones} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="liquidacion-transporte" && <LiquidacionTransporte unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} diasServicio={diasServicio} recargoFeriadoPct={recargoFeriadoPct} onRefresh={cargarSilencioso} toast={showToast}/>}
