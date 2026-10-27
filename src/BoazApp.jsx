@@ -947,8 +947,8 @@ function MapaRuta({ pedidos, onVolver, onVerPedido }) {
       const centro = gps ? [gps.lat, gps.lng] : primero ? [primero.dest_lat, primero.dest_lng] : [-12.0464, -77.0428];
       const mapa = L.map(contenedorRef.current, { zoomControl:false }).setView(centro, 13);
       mapaRef.current = mapa;
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-        attribution: "© OpenStreetMap © CARTO", subdomains:"abcd", maxZoom:19,
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "© OpenStreetMap", maxZoom:19,
       }).addTo(mapa);
       if (gps) {
         gpsMarkerRef.current = L.circleMarker([gps.lat, gps.lng], { radius:9, color:"#fff", weight:3,
