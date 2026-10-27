@@ -909,16 +909,32 @@ function escanearDocumento(file) {
   });
 }
 
+const COLOR_MAPA = { en_ruta:"#2563EB", asignado:"#2563EB", entregado:"#10B981", no_entregado:"#EF4444" };
+const ETIQUETA_MAPA = { en_ruta:"En ruta", asignado:"En ruta", entregado:"Entregado", no_entregado:"No entregado" };
+
 function MapaRuta({ pedidos, onVolver, onVerPedido }) {
   const mapaRef = useRef(null);
   const contenedorRef = useRef(null);
+  const marcadoresRef = useRef([]);
+  const gpsMarkerRef = useRef(null);
   const [cargando, setCargando] = useState(true);
   const [errorMapa, setErrorMapa] = useState("");
+  const [soloActiva, setSoloActiva] = useState(false);
+  const [seleccion, setSeleccion] = useState(null);
+  const [listo, setListo] = useState(false);
+  const gpsRef = useRef(null);
 
-  const pedidosNumerados = pedidos.map((p,i) => ({ ...p, _num: i+1 }));
-  const conCoords = pedidosNumerados.filter(p => p.dest_lat && p.dest_lng);
-  const sinCoords = pedidos.length - conCoords.length;
+  // Número de parada = posición en el orden de la ruta (se mantiene aunque ya esté entregado)
+  const numerados = [...pedidos]
+    .sort((a,b) => (a.orden_ruta ?? 999999) - (b.orden_ruta ?? 999999))
+    .map((p,i) => ({ ...p, _num: i+1 }));
+  const visibles = numerados.filter(p => !soloActiva || p.estado==="en_ruta" || p.estado==="asignado");
+  const conCoords = visibles.filter(p => p.dest_lat && p.dest_lng);
+  const sinCoords = visibles.length - conCoords.length;
+  const firma = conCoords.map(p => p.id+p.estado+p._num).join(",");
+  const cuenta = (est) => numerados.filter(p => est.includes(p.estado)).length;
 
+  // 1) Crear el mapa una sola vez
   useEffect(() => {
     let activo = true;
     (async () => {
@@ -926,85 +942,126 @@ function MapaRuta({ pedidos, onVolver, onVerPedido }) {
       if (!L) { setErrorMapa("No se pudo cargar el mapa. Verifica tu conexión a internet."); setCargando(false); return; }
       const gps = await obtenerGPS();
       if (!activo || !contenedorRef.current) return;
-
-      const centro = gps ? [gps.lat, gps.lng]
-        : conCoords.length ? [conCoords[0].dest_lat, conCoords[0].dest_lng]
-        : [-12.0464, -77.0428]; // Lima, por defecto
-
-      const mapa = L.map(contenedorRef.current).setView(centro, 13);
+      gpsRef.current = gps;
+      const primero = numerados.find(p => p.dest_lat && p.dest_lng);
+      const centro = gps ? [gps.lat, gps.lng] : primero ? [primero.dest_lat, primero.dest_lng] : [-12.0464, -77.0428];
+      const mapa = L.map(contenedorRef.current, { zoomControl:false }).setView(centro, 13);
       mapaRef.current = mapa;
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "© OpenStreetMap",
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+        attribution: "© OpenStreetMap © CARTO", subdomains:"abcd", maxZoom:19,
       }).addTo(mapa);
-
       if (gps) {
-        L.circleMarker([gps.lat, gps.lng], { radius:9, color:"#fff", weight:3,
-          fillColor:"#7C3AED", fillOpacity:1 }).addTo(mapa).bindPopup("📍 Tú estás aquí");
+        gpsMarkerRef.current = L.circleMarker([gps.lat, gps.lng], { radius:9, color:"#fff", weight:3,
+          fillColor:"#4285F4", fillOpacity:1 }).addTo(mapa);
       }
-
-      const bounds = [];
-      if (gps) bounds.push([gps.lat, gps.lng]);
-      conCoords.forEach((p) => {
-        const color = p.estado==="entregado" ? "#10B981" : p.estado==="no_entregado" ? "#EF4444" : "#E87722";
-        const icono = L.divIcon({
-          html: `<div style="background:${color};color:#fff;border-radius:50%;width:26px;height:26px;
-            display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;
-            border:2px solid #fff;box-shadow:0 2px 6px #0004;">${p._num}</div>`,
-          className: "", iconSize:[26,26], iconAnchor:[13,13],
-        });
-        L.marker([p.dest_lat, p.dest_lng], { icon: icono }).addTo(mapa)
-          .on("click", () => onVerPedido(p));
-        bounds.push([p.dest_lat, p.dest_lng]);
-      });
-
-      if (bounds.length > 1) mapa.fitBounds(bounds, { padding:[40,40] });
+      mapa.on("click", () => setSeleccion(null));
+      setListo(true);
       setCargando(false);
     })();
-    return () => { if (mapaRef.current) { mapaRef.current.remove(); mapaRef.current = null; } activo = false; };
+    return () => { activo = false; if (mapaRef.current) { mapaRef.current.remove(); mapaRef.current = null; } };
   }, []);
 
-  return (
-    <div style={{ padding:16 }}>
-      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14 }}>
-        <button onClick={onVolver}
-          style={{ background:C.white, border:`1px solid #E2E8F0`,
-            color:C.textSec, padding:"8px 14px", borderRadius:10,
-            fontSize:13, cursor:"pointer", fontWeight:600 }}>← Volver</button>
-        <div style={{ fontSize:16, fontWeight:800, color:C.navy }}>🗺️ Mapa de mi ruta</div>
-      </div>
+  // 2) Dibujar/actualizar los globos cuando cambia el filtro o la selección
+  useEffect(() => {
+    const L = window.L; const mapa = mapaRef.current;
+    if (!listo || !L || !mapa) return;
+    marcadoresRef.current.forEach(m => m.remove());
+    marcadoresRef.current = [];
+    const bounds = [];
+    conCoords.forEach((p) => {
+      const color = COLOR_MAPA[p.estado] || "#2563EB";
+      const sel = seleccion?.id === p.id;
+      const t = sel ? 38 : 30;
+      const icono = L.divIcon({
+        html: `<div style="width:${t}px;height:${t}px;background:${color};border:2.5px solid #fff;
+          border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 3px 8px #0006;
+          display:flex;align-items:center;justify-content:center;">
+          <span style="transform:rotate(45deg);color:#fff;font-weight:800;font-size:${sel?15:12}px;">${p._num}</span></div>`,
+        className:"", iconSize:[t,t], iconAnchor:[t/2, t*1.15],
+      });
+      const m = L.marker([p.dest_lat, p.dest_lng], { icon: icono, zIndexOffset: sel ? 1000 : 0 }).addTo(mapa)
+        .on("click", (e) => { L.DomEvent.stopPropagation(e); setSeleccion(p); });
+      marcadoresRef.current.push(m);
+      bounds.push([p.dest_lat, p.dest_lng]);
+    });
+    if (!seleccion && bounds.length > 0) {
+      if (gpsRef.current) bounds.push([gpsRef.current.lat, gpsRef.current.lng]);
+      if (bounds.length > 1) mapa.fitBounds(bounds, { padding:[50,50] });
+      else mapa.setView(bounds[0], 15);
+    }
+  }, [listo, soloActiva, seleccion, firma]);
 
+  const recentrar = async () => {
+    const mapa = mapaRef.current; if (!mapa) return;
+    const gps = await obtenerGPS();
+    if (gps) { gpsRef.current = gps; mapa.setView([gps.lat, gps.lng], 16);
+      gpsMarkerRef.current?.setLatLng([gps.lat, gps.lng]); }
+  };
+
+  const sel = seleccion;
+  return (
+    <div style={{ position:"fixed", inset:0, zIndex:200, background:C.white, display:"flex", flexDirection:"column",
+      maxWidth:430, margin:"0 auto" }}>
+      <div style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 14px", background:"#F5F3FF" }}>
+        <button onClick={onVolver}
+          style={{ background:"none", border:"none", fontSize:22, color:"#4F46E5", cursor:"pointer", padding:"0 6px" }}>←</button>
+        <div style={{ fontSize:18, fontWeight:700, color:C.navy, flex:1 }}>Mapa</div>
+        <div style={{ display:"flex", gap:8, fontSize:11, fontWeight:800 }}>
+          <span style={{ background:"#2563EB", color:"#fff", padding:"3px 8px", borderRadius:10 }}>{cuenta(["en_ruta","asignado"])}</span>
+          <span style={{ background:"#10B981", color:"#fff", padding:"3px 8px", borderRadius:10 }}>{cuenta(["entregado"])}</span>
+          <span style={{ background:"#EF4444", color:"#fff", padding:"3px 8px", borderRadius:10 }}>{cuenta(["no_entregado"])}</span>
+        </div>
+      </div>
+      <label style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 16px", background:"#F5F3FF",
+        fontSize:14, fontWeight:600, color:C.navy, cursor:"pointer" }}>
+        <input type="checkbox" checked={soloActiva} onChange={e=>{ setSoloActiva(e.target.checked); setSeleccion(null); }}
+          style={{ width:20, height:20, accentColor:"#4F46E5" }}/>
+        Ver sólo ruta activa
+      </label>
       {sinCoords > 0 && (
-        <div style={{ background:"#FFFBEB", border:"1px solid #FDE68A", borderRadius:10,
-          padding:"10px 14px", marginBottom:12, fontSize:12, color:"#92400E", fontWeight:600 }}>
+        <div style={{ background:"#FFFBEB", padding:"6px 14px", fontSize:11, color:"#92400E", fontWeight:600 }}>
           ⚠️ {sinCoords} pedido{sinCoords===1?"":"s"} sin coordenadas — no se muestra{sinCoords===1?"":"n"} en el mapa.
         </div>
       )}
-      {conCoords.length > 0 && (
-        <div style={{ fontSize:11, color:C.textMut, marginBottom:10 }}>
-          👆 Toca un punto en el mapa para ver el detalle de ese pedido.
-        </div>
-      )}
-
-      <div style={{ position:"relative", borderRadius:14, overflow:"hidden",
-        border:"1px solid #E2E8F0", height:420 }}>
+      <div style={{ position:"relative", flex:1, minHeight:0 }}>
         {cargando && (
-          <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center",
-            justifyContent:"center", background:C.bg, zIndex:10, fontSize:13, color:C.textMut }}>
-            Cargando mapa...
-          </div>
+          <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center",
+            background:C.bg, zIndex:1000, fontSize:13, color:C.textMut }}>Cargando mapa...</div>
         )}
         {errorMapa && (
-          <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center",
-            justifyContent:"center", background:C.bg, zIndex:10, fontSize:13, color:C.red,
-            textAlign:"center", padding:20 }}>
-            {errorMapa}
-          </div>
+          <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center",
+            background:C.bg, zIndex:1000, fontSize:13, color:C.red, textAlign:"center", padding:20 }}>{errorMapa}</div>
         )}
         <div ref={contenedorRef} style={{ width:"100%", height:"100%" }}/>
+        <button onClick={recentrar} title="Mi ubicación"
+          style={{ position:"absolute", top:12, right:12, zIndex:1000, width:44, height:44, borderRadius:8,
+            background:"#fff", border:"none", boxShadow:"0 2px 8px #0003", fontSize:22, cursor:"pointer" }}>🎯</button>
+        {sel && (
+          <div style={{ position:"absolute", left:10, right:10, bottom:12, zIndex:1000, background:"#fff",
+            borderRadius:14, padding:"14px 16px", boxShadow:"0 4px 20px #0004", border:"1px solid #C7D2FE" }}>
+            <div style={{ fontSize:16, fontWeight:800, color:C.navy, marginBottom:8,
+              overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+              {(sel.dest_nombre||"Sin nombre")} - {sel.omd}
+            </div>
+            <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, color:C.textSec, marginBottom:4 }}>
+              <span>Parada: <b>{sel._num}</b></span>
+              {sel.cliente_referencia && <span>N° Orden: <b>{sel.cliente_referencia}</b></span>}
+            </div>
+            <div style={{ fontSize:13, color:C.textSec, marginBottom:4 }}>Dirección: {sel.dest_direccion}{sel.dest_distrito ? `, ${sel.dest_distrito}` : ""}</div>
+            <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, color:C.textSec, marginBottom:10 }}>
+              <span>Estado: <b style={{ color: COLOR_MAPA[sel.estado] }}>● {ETIQUETA_MAPA[sel.estado] || sel.estado}</b></span>
+              {sel.estado==="entregado" && sel.fecha_entrega && <span>Hora: {fmt.hora(sel.fecha_entrega)}</span>}
+            </div>
+            <button onClick={()=>onVerPedido(sel)}
+              style={{ width:"100%", background:"#4F46E5", color:"#fff", border:"none", borderRadius:10,
+                padding:12, fontSize:15, fontWeight:700, cursor:"pointer" }}>Ver detalles</button>
+          </div>
+        )}
       </div>
     </div>
   );
 }
+
 
 // ── PANTALLA: RUTA FINALIZADA (mensaje de cierre del día) ──────
 function PantallaFinalRuta({ resumen, repartidor, onCerrar }) {
@@ -2123,7 +2180,11 @@ export default function BoazApp() {
             onCerrar={()=>setPantallaFinal(null)}/>
         ) : viendoMapa ? (
           <MapaRuta
-            pedidos={calcularPedidosActivos(pedidos, repartidor.id, rutaActiva).misP}
+            pedidos={pedidos.filter(p => p.repartidor_id===repartidor.id && (
+              p.estado==="asignado" || p.estado==="en_ruta" ||
+              (p.estado==="entregado" && fechaLocalDe(p.fecha_entrega)===fechaLocalHoy()) ||
+              (p.estado==="no_entregado" && p.historial?.some(h=>h.tipo==="estado" && fechaLocalDe(h.timestamp)===fechaLocalHoy()))
+            ))}
             onVolver={()=>setViendoMapa(false)}
             onVerPedido={setPedidoSel}
           />
