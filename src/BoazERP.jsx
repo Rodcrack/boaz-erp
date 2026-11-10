@@ -7715,20 +7715,21 @@ if (verificando) {
     );
   }
 
+  const [secAbiertas, setSecAbiertas] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("boaz_nav_abiertas")||"{}"); } catch { return {}; }
+  });
+  const toggleSec = (nombre) => setSecAbiertas(prev => {
+    const nuevo = { ...prev, [nombre]: !prev[nombre] };
+    try { localStorage.setItem("boaz_nav_abiertas", JSON.stringify(nuevo)); } catch {}
+    return nuevo;
+  });
   if (!sesion || !usuario) {
     return <Login onLogin={cargarUsuario}/>;
   }
 
   const navVisible = NAV.filter(n => n.section || (ROLES_ACCESO[usuario.rol]||[]).includes(n.id));
-  const [secCerradas, setSecCerradas] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("boaz_nav_cerradas")||"{}"); } catch { return {}; }
-  });
-  const toggleSec = (nombre) => setSecCerradas(prev => {
-    const nuevo = { ...prev, [nombre]: !prev[nombre] };
-    try { localStorage.setItem("boaz_nav_cerradas", JSON.stringify(nuevo)); } catch {}
-    return nuevo;
-  });
   const navConSeccion = (() => { let act = null; return navVisible.map(n => { if (n.section) act = n.section; return { ...n, _sec: act }; }); })();
+  const contieneActiva = (nombre) => navConSeccion.some(x => !x.section && x._sec===nombre && x.id===seccion);
   const badgeSec = (nombre) => navConSeccion.filter(x => !x.section && x._sec===nombre).reduce((t,x)=>t+(x.badge||0),0);
   
   return (
@@ -7771,7 +7772,7 @@ if (verificando) {
   {navConSeccion.map((n,i) => {
             if (n.section) {
               if (!sidebarOpen) return <div key={i} style={{ margin:"8px 0", height:1, background:"#1E3560" }}/>;
-              const cerrada = !!secCerradas[n.section];
+              const cerrada = !secAbiertas[n.section] && !contieneActiva(n.section);
               const bs = cerrada ? badgeSec(n.section) : 0;
               return (
                 <div key={i} onClick={()=>toggleSec(n.section)}
@@ -7786,7 +7787,7 @@ if (verificando) {
                 </div>
               );
             }
-            if (sidebarOpen && secCerradas[n._sec] && seccion!==n.id) return null;
+            if (sidebarOpen && !secAbiertas[n._sec] && !contieneActiva(n._sec)) return null;
             const active = seccion===n.id;
             return (
               <div key={n.id} onClick={()=>setSeccion(n.id)}
