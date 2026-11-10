@@ -142,9 +142,9 @@ async function geocodificarDireccion(direccion, distrito) {
 const esperar = (ms) => new Promise(r => setTimeout(r, ms));
 
 const ROLES_ACCESO = {
-  admin: ["dashboard","pedidos","repartidores","clientes","cotizaciones","unidades","inventario","catalogo","liquidaciones","liquidacion-transporte","liquidacion-clientes","facturacion","planilla","reportes","configuracion"],
+  admin: ["dashboard","pedidos","repartidores","clientes","cotizaciones","unidades","inventario","catalogo","liquidaciones","liquidacion-transporte","liquidacion-clientes","facturacion","gastos","planilla","reportes","configuracion"],
   operaciones: ["dashboard","pedidos","repartidores","clientes","cotizaciones","unidades","inventario","catalogo"],
-  finanzas: ["dashboard","clientes","cotizaciones","catalogo","liquidaciones","liquidacion-transporte","liquidacion-clientes","facturacion","planilla","reportes"],
+  finanzas: ["dashboard","clientes","cotizaciones","catalogo","liquidaciones","liquidacion-transporte","liquidacion-clientes","facturacion","gastos","planilla","reportes"],
 };
 const Chip = ({ estado, size="sm" }) => {
   const s = ESTADOS_PEDIDO[estado] || { bg:"#F3F4F6", color:"#374151", label: estado };
@@ -4562,6 +4562,310 @@ function Cotizaciones({ toast, onCambio }) {
   );
 }
 
+// ── GASTOS / INGRESOS ─────────────────────────────────────────
+const CAT_EGRESO = ["Combustible","Mantenimiento","Reparación","Repuestos y llantas","Peajes y estacionamiento","Lavado","Seguro y SOAT","Revisión técnica","Multas","Viáticos","Servicios","Alquiler","Impuestos","Otros"];
+const CAT_INGRESO = ["Otros ingresos","Reembolso de gasto","Venta de activo","Aporte de socio"];
+const METODOS_PAGO = ["Efectivo","Transferencia","Tarjeta","Yape/Plin","Crédito"];
+const hoyLocal = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
+const inicioMes = () => hoyLocal().slice(0,8)+"01";
+const sumar = (arr, f) => arr.reduce((s,x)=>s+(parseFloat(f(x))||0),0);
+const solN = (n) => `S/ ${(n||0).toLocaleString("es-PE",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+
+function Gastos({ unidades, repartidores, toast, usuario }) {
+  const [lista, setLista] = useState([]);
+  const [facturas, setFacturas] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [desde, setDesde] = useState(inicioMes());
+  const [hasta, setHasta] = useState(hoyLocal());
+  const [fTipo, setFTipo] = useState("todos");
+  const [fCat, setFCat] = useState("");
+  const [fPlaca, setFPlaca] = useState("");
+  const [busq, setBusq] = useState("");
+  const [tab, setTab] = useState("mov");
+  const [form, setForm] = useState(null);
+  const [subiendo, setSubiendo] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(null);
+  const [alertas, setAlertas] = useState([]);
+
+  const placas = useMemo(() => {
+    const s = new Set();
+    (unidades||[]).forEach(u => u.placa && s.add(u.placa.toUpperCase()));
+    (repartidores||[]).forEach(r => r.placa && s.add(r.placa.toUpperCase()));
+    lista.forEach(g => g.placa && s.add(g.placa.toUpperCase()));
+    return [...s].sort();
+  }, [unidades, repartidores, lista]);
+
+  const cargar = async () => {
+    setCargando(true);
+    const [g, f, a] = await Promise.all([
+      sb.from("gastos").select("*").gte("fecha", desde).lte("fecha", hasta).order("fecha", { ascending:false }).order("created_at", { ascending:false }),
+      sb.from("facturas").select("id,serie,numero,descripcion,fecha_emision,total_s,igv_s,estado").gte("fecha_emision", desde).lte("fecha_emision", hasta),
+      sb.from("gastos").select("placa,categoria,fecha,proximo_mant_km,proximo_mant_fecha,km").not("placa","is",null).order("fecha",{ascending:false}).limit(2000),
+    ]);
+    if (g.error) toast("Error al cargar gastos: " + g.error.message + " (¿ejecutaste el SQL gastos_boaz.sql?)", "error");
+    else setLista(g.data||[]);
+    setFacturas((f.data||[]).filter(x => x.estado !== "anulada" && x.estado !== "anulado"));
+    // alertas de mantenimiento: último registro con próximo mant. por placa
+    if (!a.error) {
+      const ultKm = {}, vistos = {}, out = [];
+      (a.data||[]).forEach(r => { if (r.km && !(r.placa in ultKm)) ultKm[r.placa] = r.km; });
+      const hoy = hoyLocal(); const lim = new Date(); lim.setDate(lim.getDate()+15);
+      const limS = `${lim.getFullYear()}-${String(lim.getMonth()+1).padStart(2,"0")}-${String(lim.getDate()).padStart(2,"0")}`;
+      (a.data||[]).forEach(r => {
+        if (!["Mantenimiento","Reparación"].includes(r.categoria) || vistos[r.placa]) return;
+        vistos[r.placa] = true;
+        if (r.proximo_mant_fecha && r.proximo_mant_fecha <= limS)
+          out.push({ placa:r.placa, msg: r.proximo_mant_fecha < hoy ? `Mantenimiento VENCIDO desde ${fmt.fecha(r.proximo_mant_fecha)}` : `Mantenimiento programado el ${fmt.fecha(r.proximo_mant_fecha)}`, rojo: r.proximo_mant_fecha < hoy });
+        if (r.proximo_mant_km && ultKm[r.placa] && ultKm[r.placa] >= r.proximo_mant_km - 500)
+          out.push({ placa:r.placa, msg:`Cerca del km de mantenimiento (${r.proximo_mant_km.toLocaleString()} km; actual ${ultKm[r.placa].toLocaleString()})`, rojo: ultKm[r.placa] >= r.proximo_mant_km });
+      });
+      setAlertas(out);
+    }
+    setCargando(false);
+  };
+  useEffect(() => { cargar(); }, [desde, hasta]);
+
+  // ingresos automáticos desde facturas (base sin IGV)
+  const ingFact = useMemo(() => facturas.map(f => ({
+    id:"f-"+f.id, auto:true, tipo:"ingreso", categoria:"Facturación", fecha:f.fecha_emision, placa:null,
+    descripcion:`Factura ${f.serie||""}-${f.numero||""} ${f.descripcion||""}`.trim(),
+    proveedor:null, monto:(parseFloat(f.total_s)||0)-(parseFloat(f.igv_s)||0), igv:parseFloat(f.igv_s)||0,
+  })), [facturas]);
+
+  const todos = useMemo(() => [...lista, ...ingFact].sort((a,b)=> (b.fecha||"").localeCompare(a.fecha||"")), [lista, ingFact]);
+  const filtrados = useMemo(() => {
+    const q = busq.trim().toLowerCase();
+    return todos.filter(g =>
+      (fTipo==="todos" || g.tipo===fTipo) && (!fCat || g.categoria===fCat) && (!fPlaca || (g.placa||"").toUpperCase()===fPlaca) &&
+      (!q || [g.descripcion,g.proveedor,g.categoria,g.placa,g.comprobante_numero].some(v => (v||"").toLowerCase().includes(q))));
+  }, [todos, fTipo, fCat, fPlaca, busq]);
+
+  const ingresos = sumar(filtrados.filter(g=>g.tipo==="ingreso"), g=>g.monto);
+  const egresos = sumar(filtrados.filter(g=>g.tipo==="egreso"), g=>g.monto);
+  const combustible = sumar(filtrados.filter(g=>g.tipo==="egreso"&&g.categoria==="Combustible"), g=>g.monto);
+  const mant = sumar(filtrados.filter(g=>g.tipo==="egreso"&&["Mantenimiento","Reparación","Repuestos y llantas"].includes(g.categoria)), g=>g.monto);
+
+  const porCategoria = useMemo(() => {
+    const m = {};
+    filtrados.filter(g=>g.tipo==="egreso").forEach(g => { m[g.categoria] = (m[g.categoria]||0) + (parseFloat(g.monto)||0); });
+    return Object.entries(m).sort((a,b)=>b[1]-a[1]);
+  }, [filtrados]);
+
+  const porVehiculo = useMemo(() => {
+    const m = {};
+    filtrados.filter(g=>g.tipo==="egreso" && g.placa).forEach(g => {
+      const p = g.placa.toUpperCase();
+      const o = m[p] || (m[p] = { placa:p, comb:0, mant:0, otros:0, total:0, gal:0, kms:[] });
+      const v = parseFloat(g.monto)||0;
+      if (g.categoria==="Combustible") { o.comb += v; o.gal += parseFloat(g.galones)||0; }
+      else if (["Mantenimiento","Reparación","Repuestos y llantas"].includes(g.categoria)) o.mant += v;
+      else o.otros += v;
+      o.total += v;
+      if (g.km) o.kms.push(g.km);
+    });
+    return Object.values(m).map(o => {
+      const rec = o.kms.length>1 ? Math.max(...o.kms)-Math.min(...o.kms) : 0;
+      return { ...o, rec, ckm: rec>0 ? o.total/rec : null };
+    }).sort((a,b)=>b.total-a.total);
+  }, [filtrados]);
+
+  const nuevo = (tipo="egreso") => setForm({ tipo, fecha:hoyLocal(), categoria: tipo==="egreso"?"Combustible":"Otros ingresos", placa:"", descripcion:"", proveedor:"", monto:"", conIgv:false, metodo_pago:"Efectivo", comprobante_tipo:"", comprobante_numero:"", comprobante_url:"", km:"", galones:"", proximo_mant_km:"", proximo_mant_fecha:"", notas:"" });
+  const editar = (g) => setForm({ ...g, placa:g.placa||"", monto:g.monto, conIgv:false, km:g.km??"", galones:g.galones??"", proximo_mant_km:g.proximo_mant_km??"", proximo_mant_fecha:g.proximo_mant_fecha||"", descripcion:g.descripcion||"", proveedor:g.proveedor||"", metodo_pago:g.metodo_pago||"", comprobante_tipo:g.comprobante_tipo||"", comprobante_numero:g.comprobante_numero||"", comprobante_url:g.comprobante_url||"", notas:g.notas||"" });
+  const set = (k,v) => setForm(f => ({ ...f, [k]:v }));
+
+  const subirComprobante = async (file) => {
+    if (!file) return;
+    setSubiendo(true);
+    try {
+      const ext = (file.name.split(".").pop()||"jpg").toLowerCase();
+      const ruta = `gastos/${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
+      const { error } = await sb.storage.from("evidencias").upload(ruta, file, { contentType:file.type||undefined });
+      if (error) throw error;
+      const { data } = sb.storage.from("evidencias").getPublicUrl(ruta);
+      set("comprobante_url", data.publicUrl);
+    } catch (e) { toast("No se pudo subir el comprobante: " + (e.message||e), "error"); }
+    setSubiendo(false);
+  };
+
+  const guardar = async () => {
+    const monto = parseFloat(form.monto);
+    if (!monto || monto <= 0) { toast("Ingresa un monto válido", "error"); return; }
+    const igv = form.conIgv ? +(monto - monto/1.18).toFixed(2) : (parseFloat(form.igv)||0);
+    const num = (v) => v === "" || v == null ? null : Number(v);
+    const reg = {
+      fecha: form.fecha, tipo: form.tipo, categoria: form.categoria,
+      placa: form.placa ? form.placa.toUpperCase().trim() : null,
+      descripcion: form.descripcion||null, proveedor: form.proveedor||null,
+      monto, igv, metodo_pago: form.metodo_pago||null,
+      comprobante_tipo: form.comprobante_tipo||null, comprobante_numero: form.comprobante_numero||null, comprobante_url: form.comprobante_url||null,
+      km: num(form.km), galones: num(form.galones),
+      proximo_mant_km: num(form.proximo_mant_km), proximo_mant_fecha: form.proximo_mant_fecha||null,
+      notas: form.notas||null,
+    };
+    const r = form.id
+      ? await sb.from("gastos").update(reg).eq("id", form.id)
+      : await sb.from("gastos").insert({ ...reg, created_by: usuario?.nombre || usuario?.email || null });
+    if (r.error) { toast("Error al guardar: " + r.error.message, "error"); return; }
+    toast(form.id ? "Registro actualizado" : "Registro guardado");
+    setForm(null); cargar();
+  };
+  const eliminar = async () => {
+    const { error } = await sb.from("gastos").delete().eq("id", confirmDel.id);
+    if (error) toast("No se pudo eliminar: " + error.message, "error"); else { toast("Registro eliminado"); cargar(); }
+    setConfirmDel(null);
+  };
+
+  const exportar = () => {
+    const filas = filtrados.map(g => ({ Fecha:g.fecha, Tipo:g.tipo, Categoría:g.categoria, Placa:g.placa||"", Descripción:g.descripcion||"", Proveedor:g.proveedor||"", Monto:parseFloat(g.monto)||0, IGV:parseFloat(g.igv)||0, "Método de pago":g.metodo_pago||"", Comprobante:`${g.comprobante_tipo||""} ${g.comprobante_numero||""}`.trim(), Km:g.km||"", Galones:g.galones||"", Origen:g.auto?"Factura (automático)":"Manual" }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filas), "Movimientos");
+    if (porVehiculo.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(porVehiculo.map(v=>({ Placa:v.placa, Combustible:v.comb, Mantenimiento:v.mant, Otros:v.otros, Total:v.total, Galones:v.gal, "Km recorridos":v.rec, "Costo por km":v.ckm?+v.ckm.toFixed(2):"" }))), "Por vehículo");
+    XLSX.writeFile(wb, `gastos_boaz_${desde}_a_${hasta}.xlsx`);
+  };
+
+  const Kpi = ({ t, v, c }) => (
+    <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:"14px 16px", flex:"1 1 150px" }}>
+      <div style={{ fontSize:11, color:B.textSec, fontWeight:700, textTransform:"uppercase", letterSpacing:".6px" }}>{t}</div>
+      <div style={{ fontSize:20, fontWeight:800, color:c||B.textPri, marginTop:4 }}>{v}</div>
+    </div>
+  );
+  const TabBtn = ({ id, children }) => (
+    <button onClick={()=>setTab(id)} style={{ padding:"8px 16px", borderRadius:8, border:"none", cursor:"pointer", fontSize:13, fontWeight:700,
+      background: tab===id ? B.navy : "transparent", color: tab===id ? "#fff" : B.textSec }}>{children}</button>
+  );
+  const esComb = form && form.tipo==="egreso" && form.categoria==="Combustible";
+  const esMant = form && form.tipo==="egreso" && ["Mantenimiento","Reparación"].includes(form.categoria);
+  const th = { textAlign:"left", padding:"10px 12px", fontSize:11, color:B.textSec, textTransform:"uppercase", letterSpacing:".6px", borderBottom:`1px solid ${B.border}`, whiteSpace:"nowrap" };
+  const td = { padding:"10px 12px", fontSize:13, borderBottom:`1px solid ${B.border}`, color:B.textPri, verticalAlign:"top" };
+
+  return (
+    <div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:16 }}>
+        <div>
+          <div style={{ fontSize:22, fontWeight:800, color:B.navy }}>💸 Control de gastos e ingresos</div>
+          <div style={{ fontSize:12, color:B.textSec }}>Combustible, mantenimiento, reparaciones y otros movimientos. Los ingresos por facturas se suman automáticamente.</div>
+        </div>
+        <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+          <BtnSec onClick={exportar}>⬇ Excel</BtnSec>
+          <BtnSec onClick={()=>nuevo("ingreso")}>+ Ingreso</BtnSec>
+          <BtnPri onClick={()=>nuevo("egreso")}>+ Gasto</BtnPri>
+        </div>
+      </div>
+
+      {alertas.length>0 && (
+        <div style={{ background:"#FFF7ED", border:"1px solid #FDBA74", borderRadius:12, padding:"10px 14px", marginBottom:14 }}>
+          <div style={{ fontWeight:800, fontSize:13, color:"#9A3412", marginBottom:4 }}>🔧 Alertas de mantenimiento</div>
+          {alertas.map((a,i)=><div key={i} style={{ fontSize:13, color:a.rojo?B.red:"#9A3412" }}>• <b>{a.placa}</b>: {a.msg}</div>)}
+        </div>
+      )}
+
+      <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginBottom:14, alignItems:"flex-end" }}>
+        <div><label style={lbl}>Desde</label><input type="date" style={{...inp,width:150}} value={desde} onChange={e=>setDesde(e.target.value)}/></div>
+        <div><label style={lbl}>Hasta</label><input type="date" style={{...inp,width:150}} value={hasta} onChange={e=>setHasta(e.target.value)}/></div>
+        <div><label style={lbl}>Tipo</label>
+          <select style={{...inp,width:130}} value={fTipo} onChange={e=>setFTipo(e.target.value)}><option value="todos">Todos</option><option value="egreso">Egresos</option><option value="ingreso">Ingresos</option></select></div>
+        <div><label style={lbl}>Categoría</label>
+          <select style={{...inp,width:180}} value={fCat} onChange={e=>setFCat(e.target.value)}><option value="">Todas</option>{[...CAT_EGRESO,...CAT_INGRESO,"Facturación"].map(c=><option key={c}>{c}</option>)}</select></div>
+        <div><label style={lbl}>Vehículo</label>
+          <select style={{...inp,width:130}} value={fPlaca} onChange={e=>setFPlaca(e.target.value)}><option value="">Todos</option>{placas.map(p=><option key={p}>{p}</option>)}</select></div>
+        <div style={{ flex:"1 1 180px" }}><label style={lbl}>Buscar</label><input style={inp} placeholder="Proveedor, descripción…" value={busq} onChange={e=>setBusq(e.target.value)}/></div>
+      </div>
+
+      <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginBottom:16 }}>
+        <Kpi t="Ingresos" v={solN(ingresos)} c={B.green}/>
+        <Kpi t="Egresos" v={solN(egresos)} c={B.red}/>
+        <Kpi t="Resultado" v={solN(ingresos-egresos)} c={ingresos-egresos>=0?B.green:B.red}/>
+        <Kpi t="Combustible" v={solN(combustible)}/>
+        <Kpi t="Mant. y reparaciones" v={solN(mant)}/>
+      </div>
+
+      <div style={{ display:"flex", gap:6, marginBottom:12 }}>
+        <TabBtn id="mov">Movimientos</TabBtn><TabBtn id="veh">Por vehículo</TabBtn><TabBtn id="cat">Por categoría</TabBtn>
+      </div>
+
+      <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflowX:"auto" }}>
+        {cargando ? <div style={{ padding:30, textAlign:"center", color:B.textSec }}>Cargando…</div> :
+        tab==="mov" ? (
+          filtrados.length===0 ? <div style={{ padding:30, textAlign:"center", color:B.textSec }}>Sin movimientos en este período.</div> :
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead><tr><th style={th}>Fecha</th><th style={th}>Categoría</th><th style={th}>Vehículo</th><th style={th}>Detalle</th><th style={{...th,textAlign:"right"}}>Monto</th><th style={th}></th></tr></thead>
+            <tbody>{filtrados.map(g => (
+              <tr key={g.id}>
+                <td style={td}>{fmt.fecha(g.fecha)}</td>
+                <td style={td}><span style={{ background:g.tipo==="ingreso"?"#D1FAE5":"#FEE2E2", color:g.tipo==="ingreso"?"#065F46":"#991B1B", padding:"2px 9px", borderRadius:20, fontSize:11, fontWeight:700 }}>{g.categoria}</span></td>
+                <td style={td}>{g.placa||"—"}</td>
+                <td style={td}>{g.descripcion||"—"}{g.proveedor && <div style={{ fontSize:11, color:B.textSec }}>{g.proveedor}</div>}
+                  {g.galones ? <div style={{ fontSize:11, color:B.textSec }}>{g.galones} gal{g.km?` · ${Number(g.km).toLocaleString()} km`:""}</div> : (g.km ? <div style={{ fontSize:11, color:B.textSec }}>{Number(g.km).toLocaleString()} km</div> : null)}
+                  {g.comprobante_url && <a href={g.comprobante_url} target="_blank" rel="noreferrer" style={{ fontSize:11, color:B.blue }}>📎 comprobante</a>}</td>
+                <td style={{...td,textAlign:"right",fontWeight:800,color:g.tipo==="ingreso"?B.green:B.red,whiteSpace:"nowrap"}}>{g.tipo==="ingreso"?"+":"−"} {solN(parseFloat(g.monto))}</td>
+                <td style={{...td,whiteSpace:"nowrap"}}>{g.auto ? <span style={{ fontSize:11, color:B.textMut }}>automático</span> : <>
+                  <button onClick={()=>editar(g)} style={{ background:"none", border:"none", cursor:"pointer", fontSize:15 }} title="Editar">✏️</button>
+                  <button onClick={()=>setConfirmDel(g)} style={{ background:"none", border:"none", cursor:"pointer", fontSize:15 }} title="Eliminar">🗑️</button></>}</td>
+              </tr>))}</tbody>
+          </table>
+        ) : tab==="veh" ? (
+          porVehiculo.length===0 ? <div style={{ padding:30, textAlign:"center", color:B.textSec }}>Registra gastos con placa para ver el costo por vehículo.</div> :
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead><tr><th style={th}>Placa</th>{["Combustible","Mantenimiento","Otros","Total","Galones","Km recorr.","Costo/km"].map(h=><th key={h} style={{...th,textAlign:"right"}}>{h}</th>)}</tr></thead>
+            <tbody>{porVehiculo.map(v=>(
+              <tr key={v.placa}><td style={{...td,fontWeight:800}}>{v.placa}</td>
+                <td style={{...td,textAlign:"right"}}>{solN(v.comb)}</td><td style={{...td,textAlign:"right"}}>{solN(v.mant)}</td><td style={{...td,textAlign:"right"}}>{solN(v.otros)}</td>
+                <td style={{...td,textAlign:"right",fontWeight:800}}>{solN(v.total)}</td>
+                <td style={{...td,textAlign:"right"}}>{v.gal?v.gal.toFixed(1):"—"}</td><td style={{...td,textAlign:"right"}}>{v.rec?v.rec.toLocaleString():"—"}</td>
+                <td style={{...td,textAlign:"right"}}>{v.ckm?`S/ ${v.ckm.toFixed(2)}`:"—"}</td></tr>))}</tbody>
+          </table>
+        ) : (
+          porCategoria.length===0 ? <div style={{ padding:30, textAlign:"center", color:B.textSec }}>Sin egresos en el período.</div> :
+          <div style={{ padding:16 }}>{porCategoria.map(([c,v])=>(
+            <div key={c} style={{ marginBottom:12 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, marginBottom:4 }}><span style={{ fontWeight:700 }}>{c}</span><span>{solN(v)} · {egresos?Math.round(v/egresos*100):0}%</span></div>
+              <div style={{ background:B.bg, borderRadius:6, height:10 }}><div style={{ width:`${egresos?v/egresos*100:0}%`, height:10, borderRadius:6, background:B.gold }}/></div>
+            </div>))}</div>
+        )}
+      </div>
+
+      {form && (
+        <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1500, display:"flex", alignItems:"center", justifyContent:"center", padding:12 }}>
+          <div style={{ background:B.white, borderRadius:16, padding:24, width:560, maxWidth:"100%", maxHeight:"92vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
+            <div style={{ fontSize:17, fontWeight:800, color:B.navy, marginBottom:14 }}>{form.id?"Editar":"Nuevo"} {form.tipo==="ingreso"?"ingreso":"gasto"}</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <div><label style={lbl}>Fecha</label><input type="date" style={inp} value={form.fecha} onChange={e=>set("fecha",e.target.value)}/></div>
+              <div><label style={lbl}>Categoría</label>
+                <select style={inp} value={form.categoria} onChange={e=>set("categoria",e.target.value)}>{(form.tipo==="egreso"?CAT_EGRESO:CAT_INGRESO).map(c=><option key={c}>{c}</option>)}</select></div>
+              <div><label style={lbl}>Vehículo (placa)</label>
+                <input style={inp} list="placas-gastos" placeholder="Opcional" value={form.placa} onChange={e=>set("placa",e.target.value.toUpperCase())}/>
+                <datalist id="placas-gastos">{placas.map(p=><option key={p} value={p}/>)}</datalist></div>
+              <div><label style={lbl}>Monto total (S/)</label><input type="number" step="0.01" style={inp} value={form.monto} onChange={e=>set("monto",e.target.value)}/>
+                <label style={{ fontSize:12, color:B.textSec, display:"flex", gap:6, alignItems:"center", marginTop:4 }}><input type="checkbox" checked={form.conIgv} onChange={e=>set("conIgv",e.target.checked)}/> Incluye IGV 18%{form.conIgv && parseFloat(form.monto)>0 ? ` (IGV ${solN(parseFloat(form.monto)-parseFloat(form.monto)/1.18)})` : ""}</label></div>
+              <div style={{ gridColumn:"1/-1" }}><label style={lbl}>Descripción</label><input style={inp} value={form.descripcion} onChange={e=>set("descripcion",e.target.value)} placeholder="Ej. Cambio de aceite y filtros"/></div>
+              <div><label style={lbl}>{form.tipo==="egreso"?"Proveedor / grifo / taller":"Origen / cliente"}</label><input style={inp} value={form.proveedor} onChange={e=>set("proveedor",e.target.value)}/></div>
+              <div><label style={lbl}>Método de pago</label>
+                <select style={inp} value={form.metodo_pago} onChange={e=>set("metodo_pago",e.target.value)}><option value="">—</option>{METODOS_PAGO.map(m=><option key={m}>{m}</option>)}</select></div>
+              <div><label style={lbl}>Comprobante</label>
+                <select style={inp} value={form.comprobante_tipo} onChange={e=>set("comprobante_tipo",e.target.value)}><option value="">Sin comprobante</option><option>Factura</option><option>Boleta</option><option>Ticket</option><option>Recibo</option></select></div>
+              <div><label style={lbl}>N° comprobante</label><input style={inp} value={form.comprobante_numero} onChange={e=>set("comprobante_numero",e.target.value)}/></div>
+              {(form.tipo==="egreso" && form.placa) && <div><label style={lbl}>Kilometraje (odómetro)</label><input type="number" style={inp} value={form.km} onChange={e=>set("km",e.target.value)}/></div>}
+              {esComb && <div><label style={lbl}>Galones</label><input type="number" step="0.01" style={inp} value={form.galones} onChange={e=>set("galones",e.target.value)}/></div>}
+              {esMant && <><div><label style={lbl}>Próx. mantenimiento (km)</label><input type="number" style={inp} value={form.proximo_mant_km} onChange={e=>set("proximo_mant_km",e.target.value)}/></div>
+                <div><label style={lbl}>Próx. mantenimiento (fecha)</label><input type="date" style={inp} value={form.proximo_mant_fecha} onChange={e=>set("proximo_mant_fecha",e.target.value)}/></div></>}
+              <div style={{ gridColumn:"1/-1" }}><label style={lbl}>Foto / PDF del comprobante</label>
+                <input type="file" accept="image/*,application/pdf" onChange={e=>subirComprobante(e.target.files[0])} style={{ fontSize:12 }}/>
+                {subiendo && <span style={{ fontSize:12, color:B.textSec }}> Subiendo…</span>}
+                {form.comprobante_url && <div><a href={form.comprobante_url} target="_blank" rel="noreferrer" style={{ fontSize:12, color:B.blue }}>📎 Ver comprobante adjunto</a></div>}</div>
+              <div style={{ gridColumn:"1/-1" }}><label style={lbl}>Notas</label><textarea style={{...inp,minHeight:50}} value={form.notas} onChange={e=>set("notas",e.target.value)}/></div>
+            </div>
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:18 }}>
+              <BtnSec onClick={()=>setForm(null)}>Cancelar</BtnSec>
+              <BtnPri onClick={guardar} disabled={subiendo}>Guardar</BtnPri>
+            </div>
+          </div>
+        </div>
+      )}
+      {confirmDel && <Confirm msg={`Se eliminará "${confirmDel.categoria}" por ${solN(parseFloat(confirmDel.monto))}. No se puede deshacer.`} onOk={eliminar} onCancel={()=>setConfirmDel(null)}/>}
+    </div>
+  );
+}
+
 function Planilla({ toast }) {
   const [tab, setTab] = useState("planilla");
   const [personal, setPersonal] = useState([]);
@@ -7392,6 +7696,7 @@ export default function BoazERP() {
     { id:"liquidacion-transporte", icon:"📅", label:"Liq. Transporte" },
     { id:"liquidacion-clientes", icon:"💼", label:"Liq. Clientes" },
     { id:"facturacion",  icon:"🧾", label:"Facturación" },
+    { id:"gastos",       icon:"💸", label:"Gastos" },
     { id:"planilla",     icon:"👥", label:"Planilla" },
     { section:"ANÁLISIS" },
     { id:"reportes",     icon:"📊", label:"Reportes" },
@@ -7557,6 +7862,7 @@ if (verificando) {
               {seccion==="liquidacion-transporte" && <LiquidacionTransporte unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} diasServicio={diasServicio} recargoFeriadoPct={recargoFeriadoPct} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="liquidacion-clientes" && <LiquidacionClientes pedidos={pedidos} empresas={empresas} unidades={unidades} asignacionesUnidad={asignacionesUnidad} diasServicio={diasServicio} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} recargoFeriadoPct={recargoFeriadoPct} toast={showToast}/>}
               {seccion==="facturacion"   && <Facturacion empresas={empresas} pedidos={pedidos} tiposServicio={tiposServicio} usuario={usuario} toast={showToast}/>}
+              {seccion==="gastos"        && <Gastos unidades={unidades} repartidores={repartidores} usuario={usuario} toast={showToast}/>}
               {seccion==="planilla"      && <Planilla toast={showToast}/>}
               {seccion==="reportes"      && <Reportes pedidos={pedidos} repartidores={repartidores} empresas={empresas} toast={showToast}/>}
               {seccion==="configuracion" && <Configuracion onRefresh={cargarSilencioso} toast={showToast}/>}
