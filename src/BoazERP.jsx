@@ -7720,6 +7720,16 @@ if (verificando) {
   }
 
   const navVisible = NAV.filter(n => n.section || (ROLES_ACCESO[usuario.rol]||[]).includes(n.id));
+  const [secCerradas, setSecCerradas] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("boaz_nav_cerradas")||"{}"); } catch { return {}; }
+  });
+  const toggleSec = (nombre) => setSecCerradas(prev => {
+    const nuevo = { ...prev, [nombre]: !prev[nombre] };
+    try { localStorage.setItem("boaz_nav_cerradas", JSON.stringify(nuevo)); } catch {}
+    return nuevo;
+  });
+  const navConSeccion = (() => { let act = null; return navVisible.map(n => { if (n.section) act = n.section; return { ...n, _sec: act }; }); })();
+  const badgeSec = (nombre) => navConSeccion.filter(x => !x.section && x._sec===nombre).reduce((t,x)=>t+(x.badge||0),0);
   
   return (
     <div style={{ display:"flex", height:"100vh", background:B.bg,
@@ -7758,12 +7768,25 @@ if (verificando) {
         {/* Nav */}
         <nav style={{ flex:1, padding:"12px 8px", overflowY:"auto" }}>
           
-  {navVisible.map((n,i) => {
-            if (n.section) return sidebarOpen ? (
-              <div key={i} style={{ fontSize:9, fontWeight:700, color:"#4A6080",
-                letterSpacing:"1.2px", textTransform:"uppercase",
-                padding:"12px 8px 4px" }}>{n.section}</div>
-            ) : <div key={i} style={{ margin:"8px 0", height:1, background:"#1E3560" }}/>;
+  {navConSeccion.map((n,i) => {
+            if (n.section) {
+              if (!sidebarOpen) return <div key={i} style={{ margin:"8px 0", height:1, background:"#1E3560" }}/>;
+              const cerrada = !!secCerradas[n.section];
+              const bs = cerrada ? badgeSec(n.section) : 0;
+              return (
+                <div key={i} onClick={()=>toggleSec(n.section)}
+                  style={{ display:"flex", alignItems:"center", justifyContent:"space-between", cursor:"pointer",
+                    fontSize:10, fontWeight:700, color:"#8FA3BA", letterSpacing:"1.2px",
+                    textTransform:"uppercase", padding:"10px 8px 6px", userSelect:"none" }}>
+                  <span>{n.section}</span>
+                  <span style={{ display:"flex", alignItems:"center", gap:6 }}>
+                    {bs ? <span style={{ background:B.red, color:"#fff", fontSize:9, fontWeight:700, padding:"2px 6px", borderRadius:10 }}>{bs}</span> : null}
+                    <span style={{ fontSize:9, display:"inline-block", transition:"transform .15s", transform: cerrada?"rotate(-90deg)":"none" }}>▼</span>
+                  </span>
+                </div>
+              );
+            }
+            if (sidebarOpen && secCerradas[n._sec] && seccion!==n.id) return null;
             const active = seccion===n.id;
             return (
               <div key={n.id} onClick={()=>setSeccion(n.id)}
