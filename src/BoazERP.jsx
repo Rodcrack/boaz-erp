@@ -142,9 +142,9 @@ async function geocodificarDireccion(direccion, distrito) {
 const esperar = (ms) => new Promise(r => setTimeout(r, ms));
 
 const ROLES_ACCESO = {
-  admin: ["dashboard","pedidos","repartidores","clientes","cotizaciones","unidades","inventario","catalogo","liquidaciones","liquidacion-transporte","liquidacion-clientes","facturacion","cobranza","gastos","planilla","reportes","rentabilidad","configuracion"],
-  operaciones: ["dashboard","pedidos","repartidores","clientes","cotizaciones","unidades","inventario","catalogo"],
-  finanzas: ["dashboard","clientes","cotizaciones","catalogo","liquidaciones","liquidacion-transporte","liquidacion-clientes","facturacion","cobranza","gastos","planilla","reportes","rentabilidad"],
+  admin: ["dashboard","pedidos","repartidores","unidades","incidencias","inventario","clientes","cotizaciones","catalogo","liquidacion-clientes","facturacion","cobranza","liquidaciones","liquidacion-transporte","planilla","gastos","reportes","rentabilidad","usuarios","configuracion"],
+  operaciones: ["dashboard","pedidos","repartidores","unidades","incidencias","inventario","clientes","cotizaciones","catalogo"],
+  finanzas: ["dashboard","clientes","cotizaciones","catalogo","liquidacion-clientes","facturacion","cobranza","liquidaciones","liquidacion-transporte","planilla","gastos","reportes","rentabilidad"],
 };
 const Chip = ({ estado, size="sm" }) => {
   const s = ESTADOS_PEDIDO[estado] || { bg:"#F3F4F6", color:"#374151", label: estado };
@@ -246,6 +246,7 @@ const ICONOS = {
   dollar:'<path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
   x:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   arrow:'<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
+  shield:'<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
   inbox:'<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
 };
 const diaLocal = (d=new Date()) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
@@ -266,6 +267,7 @@ if (typeof document !== "undefined" && !document.getElementById("bz-css")) {
     st.id = "bz-css";
     st.textContent = `
       body, button, input, select, textarea { font-family:'Inter','Segoe UI',sans-serif; font-variant-numeric:tabular-nums; }
+      input, select, textarea { box-sizing:border-box; max-width:100%; }
       @keyframes spin { to { transform:rotate(360deg); } }
       @keyframes bz-shimmer { 0%{background-position:-400px 0} 100%{background-position:400px 0} }
       @keyframes bz-pop { from{opacity:0; transform:translateY(-6px) scale(.98)} to{opacity:1; transform:none} }
@@ -418,10 +420,16 @@ function generarInsights(pedidos, hoyP, ayerP, entregados, efectividad, ingresoH
   return frases.slice(0, 4);
 }
 
-function Dashboard({ pedidos, repartidores, liquidaciones, cotizNuevas=0, rol, onIr }) {
+function Dashboard({ pedidos, repartidores, liquidaciones, cotizNuevas=0, modulos=[], onIr }) {
   const [alertasFin, setAlertasFin] = useState({ facturas:null, mant:[] });
   const [docsFlota, setDocsFlota] = useState({ venc:0, pronto:0 });
-  const veFlota = rol==='admin' || rol==='operaciones';
+  const [incAbiertas, setIncAbiertas] = useState(0);
+  const veInc = modulos.includes('incidencias');
+  useEffect(() => {
+    if (!veInc) return;
+    (async () => { try { const { count } = await sb.from('incidencias').select('id', { count:'exact', head:true }).neq('estado','resuelta'); if (count!=null) setIncAbiertas(count); } catch {} })();
+  }, [veInc]);
+  const veFlota = modulos.includes('unidades');
   useEffect(() => {
     if (!veFlota) return;
     let vivo = true;
@@ -438,7 +446,7 @@ function Dashboard({ pedidos, repartidores, liquidaciones, cotizNuevas=0, rol, o
     })();
     return () => { vivo = false; };
   }, [veFlota]);
-  const veFinanzas = rol==='admin' || rol==='finanzas';
+  const veFinanzas = modulos.includes('cobranza');
   useEffect(() => {
     if (!veFinanzas) return;
     let vivo = true;
@@ -536,6 +544,7 @@ function Dashboard({ pedidos, repartidores, liquidaciones, cotizNuevas=0, rol, o
         if (veFinanzas && alertasFin.facturas && alertasFin.facturas.n>0) items.push({ ico:"receipt", c:B.orange, t:`${alertasFin.facturas.n} factura${alertasFin.facturas.n===1?"":"s"} con más de 30 días sin cobrar (${fmt.sol(alertasFin.facturas.total)})`, ir:"cobranza" });
         const codSin = pedidos.filter(p => p.cobro_destino && p.estado==="entregado" && !p.cod_rendido);
         if (veFinanzas && codSin.length>0) items.push({ ico:"banknote", c:B.orange, t:`${codSin.length} cobro${codSin.length===1?"":"s"} contraentrega sin rendir (${fmt.sol(codSin.reduce((t,p)=>t+(parseFloat(p.monto_cobrar)||0),0))})`, ir:"cobranza" });
+        if (veInc && incAbiertas>0) items.push({ ico:"alert", c:B.red, t:`${incAbiertas} incidencia${incAbiertas===1?"":"s"} sin resolver`, ir:"incidencias" });
         if (veFlota && docsFlota.venc>0) items.push({ ico:"truck", c:B.red, t:`${docsFlota.venc} documento${docsFlota.venc===1?"":"s"} de flota vencido${docsFlota.venc===1?"":"s"}`, ir:"unidades" });
         if (veFlota && docsFlota.pronto>0) items.push({ ico:"truck", c:B.orange, t:`${docsFlota.pronto} documento${docsFlota.pronto===1?"":"s"} de flota vence${docsFlota.pronto===1?"":"n"} en 30 días`, ir:"unidades" });
         if (veFinanzas && alertasFin.mant.length>0) items.push({ ico:"wrench", c:B.red, t:`Mantenimiento vencido: ${alertasFin.mant.slice(0,4).join(", ")}${alertasFin.mant.length>4?"…":""}`, ir:"gastos" });
@@ -5297,6 +5306,7 @@ function Rentabilidad({ pedidos, empresas, repartidores, unidades, asignaciones,
   const [desde, setDesde] = useState(diaLocal().slice(0,8)+"01");
   const [hasta, setHasta] = useState(diaLocal());
   const [gastos, setGastos] = useState([]);
+  const [incs, setIncs] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [orden, setOrden] = useState("margen");
 
@@ -5305,8 +5315,10 @@ function Rentabilidad({ pedidos, empresas, repartidores, unidades, asignaciones,
     (async () => {
       setCargando(true);
       const { data, error } = await sb.from("gastos").select("placa,monto,categoria,tipo,fecha").eq("tipo","egreso").gte("fecha", desde).lte("fecha", hasta);
+      const inc = await sb.from("incidencias").select("empresa_id,costo_s,created_at").gt("costo_s", 0).gte("created_at", desde+"T00:00:00").lte("created_at", hasta+"T23:59:59");
       if (!vivo) return;
       if (error) { toast("No se pudieron leer los gastos: " + error.message, "error"); setGastos([]); } else setGastos(data||[]);
+      setIncs(inc.error ? [] : (inc.data||[]));
       setCargando(false);
     })();
     return () => { vivo = false; };
@@ -5315,7 +5327,7 @@ function Rentabilidad({ pedidos, empresas, repartidores, unidades, asignaciones,
   const modelo = useMemo(() => {
     const dPeriodo = Math.max(1, Math.round((new Date(hasta+"T00:00:00")-new Date(desde+"T00:00:00"))/86400000)+1);
     const filas = {};
-    const fila = (id) => filas[id] || (filas[id] = { id, nombre:(empresas.find(e=>e.id===id)||{}).nombre||"Sin cliente", ingUM:0, ingTR:0, pedidos:0, diasTR:0, cPers:0, cVeh:0 });
+    const fila = (id) => filas[id] || (filas[id] = { id, nombre:(empresas.find(e=>e.id===id)||{}).nombre||"Sin cliente", ingUM:0, ingTR:0, pedidos:0, diasTR:0, cPers:0, cVeh:0, cInc:0 });
     const rep = (id) => repartidores.find(r=>r.id===id);
     const repsAdv = new Set();
 
@@ -5386,13 +5398,14 @@ function Rentabilidad({ pedidos, empresas, repartidores, unidades, asignaciones,
       gastosGenerales += monto;
     });
 
+    incs.forEach(i => { fila(i.empresa_id||"—").cInc += parseFloat(i.costo_s)||0; });
     const lista = Object.values(filas).map(f => {
-      const ing = f.ingUM + f.ingTR, cost = f.cPers + f.cVeh, margen = ing - cost;
+      const ing = f.ingUM + f.ingTR, cost = f.cPers + f.cVeh + f.cInc, margen = ing - cost;
       return { ...f, ing, cost, margen, pct: ing>0 ? margen/ing*100 : null };
     });
-    const tot = lista.reduce((t,f)=>({ ing:t.ing+f.ing, cost:t.cost+f.cost, margen:t.margen+f.margen, pers:t.pers+f.cPers, veh:t.veh+f.cVeh }), { ing:0, cost:0, margen:0, pers:0, veh:0 });
+    const tot = lista.reduce((t,f)=>({ ing:t.ing+f.ing, cost:t.cost+f.cost, margen:t.margen+f.margen, pers:t.pers+f.cPers, veh:t.veh+f.cVeh, inc:t.inc+f.cInc }), { ing:0, cost:0, margen:0, pers:0, veh:0, inc:0 });
     return { lista, tot, gastosGenerales, sueldosSinAsignar, sinCosto:[...repsAdv].map(id => { const r = rep(id); return r ? `${r.nombres||""} ${r.apellidos||""}`.trim() : ""; }).filter(Boolean) };
-  }, [pedidos, empresas, repartidores, unidades, asignaciones, diasServicio, recargoFeriadoPct, gastos, desde, hasta]);
+  }, [pedidos, empresas, repartidores, unidades, asignaciones, diasServicio, recargoFeriadoPct, gastos, incs, desde, hasta]);
 
   const lista = [...modelo.lista].sort((a,b) => orden==="pct" ? (b.pct??-999)-(a.pct??-999) : orden==="ing" ? b.ing-a.ing : b.margen-a.margen);
   const resultadoOp = modelo.tot.margen - modelo.gastosGenerales - modelo.sueldosSinAsignar;
@@ -5400,7 +5413,7 @@ function Rentabilidad({ pedidos, empresas, repartidores, unidades, asignaciones,
   const mes = (delta) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth()+delta); const ini = diaLocal(d); const fin = new Date(d.getFullYear(), d.getMonth()+1, 0); setDesde(ini); setHasta(delta===0 ? diaLocal() : diaLocal(fin)); };
   const exportar = () => {
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(lista.map(f => ({ Cliente:f.nombre, "Ingreso última milla":+f.ingUM.toFixed(2), "Ingreso transporte":+f.ingTR.toFixed(2), "Ingreso total":+f.ing.toFixed(2), "Costo personal":+f.cPers.toFixed(2), "Gasto vehículos":+f.cVeh.toFixed(2), "Margen":+f.margen.toFixed(2), "Margen %":f.pct==null?"":+f.pct.toFixed(1), Pedidos:f.pedidos, "Días transporte":f.diasTR }))), "Rentabilidad");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(lista.map(f => ({ Cliente:f.nombre, "Ingreso última milla":+f.ingUM.toFixed(2), "Ingreso transporte":+f.ingTR.toFixed(2), "Ingreso total":+f.ing.toFixed(2), "Costo personal":+f.cPers.toFixed(2), "Gasto vehículos":+f.cVeh.toFixed(2), "Incidencias":+f.cInc.toFixed(2), "Margen":+f.margen.toFixed(2), "Margen %":f.pct==null?"":+f.pct.toFixed(1), Pedidos:f.pedidos, "Días transporte":f.diasTR }))), "Rentabilidad");
     XLSX.writeFile(wb, `rentabilidad_boaz_${desde}_a_${hasta}.xlsx`);
   };
 
@@ -5420,7 +5433,7 @@ function Rentabilidad({ pedidos, empresas, repartidores, unidades, asignaciones,
 
       <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:14 }}>
         <Kpi t="Ingresos" v={solN(modelo.tot.ing)} c={B.navy} s="última milla + transporte, sin IGV"/>
-        <Kpi t="Costos directos" v={solN(modelo.tot.cost)} c={B.orange} s={`personal ${solN(modelo.tot.pers)} · vehículos ${solN(modelo.tot.veh)}`}/>
+        <Kpi t="Costos directos" v={solN(modelo.tot.cost)} c={B.orange} s={`personal ${solN(modelo.tot.pers)} · vehículos ${solN(modelo.tot.veh)} · incidencias ${solN(modelo.tot.inc)}`}/>
         <Kpi t="Margen directo" v={solN(modelo.tot.margen)} c={modelo.tot.margen>=0?B.green:B.red} s={modelo.tot.ing>0?`${(modelo.tot.margen/modelo.tot.ing*100).toFixed(1)}% de los ingresos`:""}/>
         <Kpi t="Resultado operativo" v={solN(resultadoOp)} c={resultadoOp>=0?B.green:B.red} s={`tras gastos generales ${solN(modelo.gastosGenerales)} y sueldos sin asignar ${solN(modelo.sueldosSinAsignar)}`}/>
       </div>
@@ -5435,13 +5448,13 @@ function Rentabilidad({ pedidos, empresas, repartidores, unidades, asignaciones,
           <EstadoVacio icono="chart" titulo="Sin actividad en el período" texto="No hay pedidos entregados ni días de transporte entre estas fechas."/> :
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead><tr>
-              <th style={{...th,textAlign:"left"}}>Cliente</th><th style={th}>Ing. última milla</th><th style={th}>Ing. transporte</th><th style={th}>Costo personal</th><th style={th}>Gasto vehículos</th>
+              <th style={{...th,textAlign:"left"}}>Cliente</th><th style={th}>Ing. última milla</th><th style={th}>Ing. transporte</th><th style={th}>Costo personal</th><th style={th}>Gasto vehículos</th><th style={th}>Incidencias</th>
               <th style={{...th,cursor:"pointer",color:orden==="margen"?B.navy:B.textSec}} onClick={()=>setOrden("margen")}>Margen {orden==="margen"?"▼":""}</th>
               <th style={{...th,cursor:"pointer",color:orden==="pct"?B.navy:B.textSec}} onClick={()=>setOrden("pct")}>Margen % {orden==="pct"?"▼":""}</th></tr></thead>
             <tbody>{lista.map(f => (
               <tr key={f.id}>
                 <td style={{...td,textAlign:"left",fontWeight:600}}>{f.nombre}<div style={{ fontSize:11, color:B.textMut, fontWeight:400 }}>{f.pedidos} pedido{f.pedidos===1?"":"s"}{f.diasTR?` · ${f.diasTR} día${f.diasTR===1?"":"s"} de transporte`:""}</div></td>
-                <td style={td}>{solN(f.ingUM)}</td><td style={td}>{solN(f.ingTR)}</td><td style={td}>{solN(f.cPers)}</td><td style={td}>{solN(f.cVeh)}</td>
+                <td style={td}>{solN(f.ingUM)}</td><td style={td}>{solN(f.ingTR)}</td><td style={td}>{solN(f.cPers)}</td><td style={td}>{solN(f.cVeh)}</td><td style={td}>{solN(f.cInc)}</td>
                 <td style={{...td,fontWeight:800,color:f.margen>=0?B.green:B.red}}>{solN(f.margen)}</td>
                 <td style={td}>{f.pct==null?"—":<span style={{ background:f.pct>=30?"#ECFDF5":f.pct>=10?"#FFF7ED":"#FEF2F2", color:f.pct>=30?B.green:f.pct>=10?"#B45309":B.red, fontWeight:800, fontSize:12, padding:"2px 9px", borderRadius:20 }}>{f.pct.toFixed(1)}%</span>}</td>
               </tr>))}</tbody>
@@ -5453,6 +5466,7 @@ function Rentabilidad({ pedidos, empresas, repartidores, unidades, asignaciones,
         • <b>Ingresos:</b> tarifa de pedidos entregados en el período, más los días de transporte prestados por cada asignación (con recargo de feriado).<br/>
         • <b>Costo de personal:</b> repartidores por pedido = su tarifa por pedido; con sueldo fijo = sueldo del período repartido entre sus pedidos. Choferes y auxiliares de unidades = costo diario por cada día asignado al cliente.<br/>
         • <b>Gastos de vehículos:</b> los gastos con placa se reparten entre los clientes de esa unidad según los días asignados, o entre los pedidos del repartidor dueño de la placa. Los gastos sin placa son generales y no se reparten.<br/>
+        • <b>Incidencias:</b> el costo registrado en el módulo Incidencias (reposiciones y compensaciones) se carga al cliente del pedido.<br/>
         • Es una estimación operativa: no incluye planilla administrativa ni impuestos.
       </div>
     </div>
@@ -5502,6 +5516,342 @@ function DirectorioPersonas({ personal, terceros, repartidores }) {
         {vis.length===0 && <EstadoVacio icono="users" titulo="Sin resultados"/>}
       </div>
       <div style={{ fontSize:11, color:B.textMut, marginTop:8 }}>Una misma persona puede estar legítimamente en dos lugares (por ejemplo, un repartidor con recibo por honorarios que también figura como tercero). Revisa los casos marcados y deja un solo registro de pago para evitar pagar dos veces.</div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// FASE 4: Usuarios y roles, auditoría, incidencias
+// ══════════════════════════════════════════════════════════════
+const TIPOS_INCIDENCIA = ["Daño del producto","Extravío","Cliente ausente","Dirección errónea","Rechazo del destinatario","Retraso","Reclamo del cliente","Otro"];
+const ESTADOS_INC = { abierta:{ label:"Abierta", c:"#B91C1C", bg:"#FEF2F2" }, en_proceso:{ label:"En proceso", c:"#B45309", bg:"#FFF7ED" }, resuelta:{ label:"Resuelta", c:"#047857", bg:"#ECFDF5" } };
+
+function Incidencias({ pedidos, empresas, repartidores, usuario, toast }) {
+  const [lista, setLista] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [fEstado, setFEstado] = useState("");
+  const [fTipo, setFTipo] = useState("");
+  const [busq, setBusq] = useState("");
+  const [form, setForm] = useState(null);
+  const [qPedido, setQPedido] = useState("");
+  const [subiendo, setSubiendo] = useState(false);
+
+  const cargar = async () => {
+    setCargando(true);
+    const { data, error } = await sb.from("incidencias").select("*").order("created_at", { ascending:false });
+    if (error) toast("Error al cargar incidencias: " + error.message + " (¿ejecutaste el SQL de la Fase 4?)", "error"); else setLista(data||[]);
+    setCargando(false);
+  };
+  useEffect(() => { cargar(); }, []);
+
+  const nombreEmp = (id) => (empresas.find(e=>e.id===id)||{}).nombre || "—";
+  const nombreRep = (id) => { const r = repartidores.find(x=>x.id===id); return r ? `${r.nombres||""} ${r.apellidos||""}`.trim() : "—"; };
+
+  const filtradas = useMemo(() => {
+    const q = busq.trim().toLowerCase();
+    return lista.filter(i => (!fEstado || i.estado===fEstado) && (!fTipo || i.tipo===fTipo) &&
+      (!q || `${i.omd||""} ${i.descripcion||""} ${nombreEmp(i.empresa_id)}`.toLowerCase().includes(q)));
+  }, [lista, fEstado, fTipo, busq, empresas]);
+
+  const mesActual = diaLocal().slice(0,7);
+  const abiertas = lista.filter(i=>i.estado==="abierta").length;
+  const enProceso = lista.filter(i=>i.estado==="en_proceso").length;
+  const resueltasMes = lista.filter(i=>i.estado==="resuelta" && (i.resuelta_at||"").slice(0,7)===mesActual).length;
+  const costoMes = lista.filter(i=>diaLocal(new Date(i.created_at)).slice(0,7)===mesActual).reduce((t,i)=>t+(parseFloat(i.costo_s)||0),0);
+  const resueltas = lista.filter(i=>i.estado==="resuelta" && i.resuelta_at);
+  const tMedio = resueltas.length ? resueltas.reduce((t,i)=>t+(new Date(i.resuelta_at)-new Date(i.created_at))/86400000,0)/resueltas.length : null;
+
+  const nueva = () => { setQPedido(""); setForm({ tipo:TIPOS_INCIDENCIA[0], descripcion:"", estado:"abierta", resolucion:"", responsable:"", costo_s:"", evidencia_url:"", pedido_id:null, omd:"", empresa_id:null, repartidor_id:null }); };
+  const editar = (i) => { setQPedido(""); setForm({ ...i, descripcion:i.descripcion||"", resolucion:i.resolucion||"", responsable:i.responsable||"", costo_s:i.costo_s||"", evidencia_url:i.evidencia_url||"" }); };
+  const set = (k,v) => setForm(f => ({ ...f, [k]:v }));
+  const sugerencias = useMemo(() => {
+    const q = qPedido.trim().toLowerCase();
+    if (q.length<2) return [];
+    return pedidos.filter(p => `${p.omd||""} ${p.cliente_referencia||""} ${p.dest_nombre||""}`.toLowerCase().includes(q)).slice(0,6);
+  }, [qPedido, pedidos]);
+  const elegirPedido = (p) => { setForm(f => ({ ...f, pedido_id:p.id, omd:p.omd, empresa_id:p.empresa_id||null, repartidor_id:p.repartidor_id||null })); setQPedido(""); };
+
+  const subir = async (file) => {
+    if (!file) return; setSubiendo(true);
+    try {
+      const ext = (file.name.split(".").pop()||"jpg").toLowerCase();
+      const ruta = `incidencias/${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
+      const { error } = await sb.storage.from("evidencias").upload(ruta, file, { contentType:file.type||undefined });
+      if (error) throw error;
+      set("evidencia_url", sb.storage.from("evidencias").getPublicUrl(ruta).data.publicUrl);
+    } catch (e) { toast("No se pudo subir la evidencia: " + (e.message||e), "error"); }
+    setSubiendo(false);
+  };
+
+  const guardar = async () => {
+    if (!form.tipo) { toast("Indica el tipo", "error"); return; }
+    if (!form.descripcion.trim()) { toast("Describe qué pasó", "error"); return; }
+    const reg = { pedido_id:form.pedido_id||null, omd:form.omd||null, empresa_id:form.empresa_id||null, repartidor_id:form.repartidor_id||null,
+      tipo:form.tipo, descripcion:form.descripcion.trim(), estado:form.estado, resolucion:form.resolucion||null, responsable:form.responsable||null,
+      costo_s:parseFloat(form.costo_s)||0, evidencia_url:form.evidencia_url||null,
+      resuelta_at: form.estado==="resuelta" ? (form.resuelta_at || new Date().toISOString()) : null };
+    const r = form.id ? await sb.from("incidencias").update(reg).eq("id", form.id)
+                      : await sb.from("incidencias").insert({ ...reg, created_by: usuario?.nombre || null });
+    if (r.error) { toast("Error al guardar: " + r.error.message, "error"); return; }
+    toast("Incidencia guardada ✓"); setForm(null); cargar();
+  };
+
+  const card = { background:B.white, border:`1px solid ${B.border}`, borderRadius:12, boxShadow:"0 2px 8px #0D1E3D0A" };
+  const th = { textAlign:"left", padding:"10px 12px", fontSize:11, color:B.textSec, textTransform:"uppercase", letterSpacing:".6px", borderBottom:`1px solid ${B.border}`, whiteSpace:"nowrap" };
+  const td = { padding:"10px 12px", fontSize:13, borderBottom:`1px solid ${B.border}`, verticalAlign:"top" };
+  const Kpi = ({ t, v, c, s }) => (<div style={{ ...card, padding:"12px 16px", flex:"1 1 150px", borderTop:`3px solid ${c}` }}><div style={{ fontSize:11, color:B.textSec, fontWeight:700, textTransform:"uppercase" }}>{t}</div><div style={{ fontSize:22, fontWeight:800, color:c, marginTop:2 }}>{v}</div>{s && <div style={{ fontSize:11, color:B.textMut }}>{s}</div>}</div>);
+
+  return (
+    <div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:14 }}>
+        <div style={{ fontSize:12, color:B.textSec }}>Daños, extravíos, reclamos y otros problemas de entrega, con evidencia, responsable y costo.</div>
+        <BtnPri onClick={nueva}>+ Nueva incidencia</BtnPri>
+      </div>
+      <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:14 }}>
+        <Kpi t="Abiertas" v={abiertas} c={B.red}/><Kpi t="En proceso" v={enProceso} c={B.orange}/>
+        <Kpi t="Resueltas este mes" v={resueltasMes} c={B.green} s={tMedio!=null?`tiempo medio ${tMedio.toFixed(1)} días`:""}/>
+        <Kpi t="Costo este mes" v={solN(costoMes)} c={B.navy} s="compensaciones y reposiciones"/>
+      </div>
+      <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginBottom:12, alignItems:"flex-end" }}>
+        <div><label style={lbl}>Estado</label><select style={{...inp,width:150}} value={fEstado} onChange={e=>setFEstado(e.target.value)}><option value="">Todos</option>{Object.entries(ESTADOS_INC).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}</select></div>
+        <div><label style={lbl}>Tipo</label><select style={{...inp,width:210}} value={fTipo} onChange={e=>setFTipo(e.target.value)}><option value="">Todos</option>{TIPOS_INCIDENCIA.map(t=><option key={t}>{t}</option>)}</select></div>
+        <div style={{ flex:"1 1 200px", minWidth:0 }}><label style={lbl}>Buscar</label><input style={inp} placeholder="Tracking, cliente o descripción…" value={busq} onChange={e=>setBusq(e.target.value)}/></div>
+      </div>
+      <div style={{ ...card, overflowX:"auto" }}>
+        {cargando ? <Cargando filas={5}/> : filtradas.length===0 ?
+          <EstadoVacio icono="check" titulo="Sin incidencias" texto="No hay incidencias con estos filtros."><BtnPri onClick={nueva}>Registrar una</BtnPri></EstadoVacio> :
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead><tr><th style={th}>Fecha</th><th style={th}>Pedido</th><th style={th}>Cliente</th><th style={th}>Tipo</th><th style={th}>Detalle</th><th style={th}>Estado</th><th style={{...th,textAlign:"right"}}>Costo</th></tr></thead>
+            <tbody>{filtradas.map(i => { const e = ESTADOS_INC[i.estado]; return (
+              <tr key={i.id} onClick={()=>editar(i)} style={{ cursor:"pointer" }}>
+                <td style={td}>{fmt.fecha(i.created_at)}</td>
+                <td style={{...td,fontWeight:700,color:B.navy}}>{i.omd||"—"}<div style={{ fontSize:11, color:B.textMut, fontWeight:400 }}>{i.repartidor_id?nombreRep(i.repartidor_id):""}</div></td>
+                <td style={td}>{nombreEmp(i.empresa_id)}</td>
+                <td style={td}>{i.tipo}</td>
+                <td style={{...td,maxWidth:320}}>{i.descripcion}{i.evidencia_url && <a href={i.evidencia_url} target="_blank" rel="noreferrer" onClick={ev=>ev.stopPropagation()} style={{ fontSize:11, color:B.blue, marginLeft:8 }}>📎</a>}</td>
+                <td style={td}><span style={{ background:e.bg, color:e.c, fontSize:11, fontWeight:700, padding:"2px 10px", borderRadius:20 }}>{e.label}</span></td>
+                <td style={{...td,textAlign:"right"}}>{parseFloat(i.costo_s)>0?solN(parseFloat(i.costo_s)):"—"}</td>
+              </tr>); })}</tbody>
+          </table>}
+      </div>
+
+      {form && (
+        <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1500, display:"flex", alignItems:"center", justifyContent:"center", padding:12 }}>
+          <div style={{ background:B.white, borderRadius:16, padding:24, width:560, maxWidth:"100%", maxHeight:"92vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
+            <div style={{ fontSize:17, fontWeight:800, color:B.navy, marginBottom:14 }}>{form.id?"Incidencia":"Nueva incidencia"}</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <div style={{ gridColumn:"1/-1", position:"relative" }}>
+                <label style={lbl}>Pedido</label>
+                {form.omd ? (
+                  <div style={{ display:"flex", alignItems:"center", gap:10, background:B.bg, border:`1px solid ${B.border}`, borderRadius:8, padding:"8px 12px", fontSize:13 }}>
+                    <b style={{ color:B.navy }}>{form.omd}</b><span style={{ color:B.textSec }}>{nombreEmp(form.empresa_id)}</span>
+                    <button onClick={()=>setForm(f=>({...f,pedido_id:null,omd:"",empresa_id:null,repartidor_id:null}))} style={{ marginLeft:"auto", background:"none", border:"none", cursor:"pointer", color:B.textSec }}><Ico n="x" size={14}/></button>
+                  </div>
+                ) : (<>
+                  <input style={inp} placeholder="Busca por tracking, N° de orden o destinatario (opcional)" value={qPedido} onChange={e=>setQPedido(e.target.value)}/>
+                  {sugerencias.length>0 && <div style={{ position:"absolute", left:0, right:0, top:"100%", zIndex:5, background:B.white, border:`1px solid ${B.border}`, borderRadius:8, boxShadow:"0 8px 24px #0003", marginTop:2 }}>
+                    {sugerencias.map(p => <div key={p.id} onClick={()=>elegirPedido(p)} style={{ padding:"8px 12px", cursor:"pointer", fontSize:13, borderBottom:`1px solid ${B.border}` }}><b>{p.omd}</b> · {p.dest_nombre||""} <span style={{ color:B.textMut }}>{nombreEmp(p.empresa_id)}</span></div>)}
+                  </div>}
+                </>)}
+              </div>
+              <div><label style={lbl}>Tipo</label><select style={inp} value={form.tipo} onChange={e=>set("tipo",e.target.value)}>{TIPOS_INCIDENCIA.map(t=><option key={t}>{t}</option>)}</select></div>
+              <div><label style={lbl}>Estado</label><select style={inp} value={form.estado} onChange={e=>set("estado",e.target.value)}>{Object.entries(ESTADOS_INC).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}</select></div>
+              <div style={{ gridColumn:"1/-1" }}><label style={lbl}>¿Qué pasó?</label><textarea style={{...inp,minHeight:64}} value={form.descripcion} onChange={e=>set("descripcion",e.target.value)}/></div>
+              <div><label style={lbl}>Responsable del seguimiento</label><input style={inp} value={form.responsable} onChange={e=>set("responsable",e.target.value)}/></div>
+              <div><label style={lbl}>Costo para Boaz (S/)</label><input type="number" step="0.01" style={inp} value={form.costo_s} onChange={e=>set("costo_s",e.target.value)}/></div>
+              <div style={{ gridColumn:"1/-1" }}><label style={lbl}>Resolución / acuerdo con el cliente</label><textarea style={{...inp,minHeight:50}} value={form.resolucion} onChange={e=>set("resolucion",e.target.value)}/></div>
+              <div style={{ gridColumn:"1/-1" }}><label style={lbl}>Evidencia (foto o PDF)</label><input type="file" accept="image/*,application/pdf" onChange={e=>subir(e.target.files[0])} style={{ fontSize:12 }}/>{subiendo && <span style={{ fontSize:12, color:B.textSec }}> Subiendo…</span>}{form.evidencia_url && <div><a href={form.evidencia_url} target="_blank" rel="noreferrer" style={{ fontSize:12, color:B.blue }}>📎 Ver evidencia</a></div>}</div>
+            </div>
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:16 }}><BtnSec onClick={()=>setForm(null)}>Cancelar</BtnSec><BtnPri onClick={guardar} disabled={subiendo}>Guardar</BtnPri></div>
+          </div>
+        </div>)}
+    </div>
+  );
+}
+
+// ── USUARIOS, ROLES Y AUDITORÍA ───────────────────────────────
+const ETIQ_TABLA = { facturas:"Facturas", gastos:"Gastos", liquidaciones:"Liq. repartidores", repartidores:"Repartidores", empresas:"Clientes", vehiculo_documentos:"Doc. de flota", pagos_planilla:"Pagos planilla", pagos_terceros:"Pagos terceros", tarifarios_cliente:"Tarifas cliente", tarifarios_vehiculo_cliente:"Tarifas vehículo", tarifario_estandar:"Tarifa estándar", unidades_transporte:"Unidades", asignaciones_unidad:"Asignaciones", usuarios:"Usuarios", roles_permisos:"Roles y permisos", incidencias:"Incidencias", cotizaciones:"Cotizaciones", pedidos:"Pedidos" };
+const ETIQ_OP = { INSERT:["Creó","#047857","#ECFDF5"], UPDATE:["Modificó","#B45309","#FFF7ED"], DELETE:["Eliminó","#B91C1C","#FEF2F2"] };
+
+function UsuariosAuditoria({ usuario, navModulos, onPermisosCambio, toast }) {
+  const [tab, setTab] = useState("usuarios");
+  const [usuarios, setUsuarios] = useState([]);
+  const [pendientes, setPendientes] = useState([]);
+  const [roles, setRoles] = useState({});
+  const [rolSel, setRolSel] = useState("operaciones");
+  const [nuevoRol, setNuevoRol] = useState("");
+  const [cargando, setCargando] = useState(true);
+  const [activar, setActivar] = useState(null);
+  const [audit, setAudit] = useState([]);
+  const [fTabla, setFTabla] = useState("");
+  const [fOp, setFOp] = useState("");
+  const [fDesde, setFDesde] = useState(diaLocal().slice(0,8)+"01");
+  const [fBusq, setFBusq] = useState("");
+  const [cargandoAud, setCargandoAud] = useState(false);
+
+  const cargar = async () => {
+    setCargando(true);
+    const [u, r, p] = await Promise.all([
+      sb.from("usuarios").select("*").order("nombre"),
+      sb.from("roles_permisos").select("*"),
+      sb.rpc("usuarios_auth_pendientes"),
+    ]);
+    if (u.error) toast("No se pudieron leer los usuarios: " + u.error.message + " (¿ejecutaste el SQL de la Fase 4?)", "error"); else setUsuarios(u.data||[]);
+    if (!r.error) { const m = {}; (r.data||[]).forEach(x => m[x.rol] = x.modulos||[]); setRoles(m); }
+    setPendientes(p.error ? [] : (p.data||[]));
+    setCargando(false);
+  };
+  useEffect(() => { cargar(); }, []);
+
+  const cargarAud = async () => {
+    setCargandoAud(true);
+    let q = sb.from("auditoria").select("*").order("created_at", { ascending:false }).limit(300).gte("created_at", fDesde+"T00:00:00");
+    if (fTabla) q = q.eq("tabla", fTabla);
+    if (fOp) q = q.eq("operacion", fOp);
+    const { data, error } = await q;
+    if (error) toast("No se pudo leer la auditoría: " + error.message, "error"); else setAudit(data||[]);
+    setCargandoAud(false);
+  };
+  useEffect(() => { if (tab==="auditoria") cargarAud(); }, [tab, fTabla, fOp, fDesde]);
+
+  const nombresRol = [...new Set(["admin","operaciones","finanzas",...Object.keys(roles)])];
+  const cambiarUsuario = async (u, cambios) => {
+    if (u.id===usuario.id) { toast("No puedes cambiar tu propio rol ni desactivarte", "error"); return; }
+    const { error } = await sb.from("usuarios").update(cambios).eq("id", u.id);
+    if (error) { toast("Error: " + error.message, "error"); return; }
+    toast("Usuario actualizado ✓"); cargar();
+  };
+  const confirmarActivar = async () => {
+    if (!activar.nombre.trim()) { toast("Escribe el nombre", "error"); return; }
+    const { error } = await sb.from("usuarios").insert({ id:activar.id, nombre:activar.nombre.trim(), rol:activar.rol, activo:true, ...(activar.email?{ email:activar.email }:{}) });
+    if (error) {
+      const r2 = await sb.from("usuarios").insert({ id:activar.id, nombre:activar.nombre.trim(), rol:activar.rol, activo:true });
+      if (r2.error) { toast("Error: " + r2.error.message, "error"); return; }
+    }
+    toast("Usuario activado ✓"); setActivar(null); cargar();
+  };
+
+  const modulosPorSeccion = useMemo(() => { const m = {}; navModulos.forEach(x => { (m[x.grupo] = m[x.grupo] || []).push(x); }); return m; }, [navModulos]);
+  const permisosRol = roles[rolSel] || [];
+  const togglePermiso = async (id) => {
+    if (rolSel==="admin") return;
+    const nuevos = permisosRol.includes(id) ? permisosRol.filter(x=>x!==id) : [...permisosRol, id];
+    if (!nuevos.includes("dashboard")) nuevos.push("dashboard");
+    const { error } = await sb.from("roles_permisos").upsert({ rol:rolSel, modulos:nuevos, updated_at:new Date().toISOString() });
+    if (error) { toast("Error: " + error.message, "error"); return; }
+    setRoles(r => ({ ...r, [rolSel]:nuevos })); onPermisosCambio && onPermisosCambio();
+  };
+  const crearRol = async () => {
+    const n = nuevoRol.trim().toLowerCase().replace(/\s+/g,"_");
+    if (!n || roles[n]) { toast("Escribe un nombre de rol nuevo", "error"); return; }
+    const { error } = await sb.from("roles_permisos").insert({ rol:n, modulos:["dashboard"], descripcion:"Rol personalizado" });
+    if (error) { toast("Error: " + error.message, "error"); return; }
+    setNuevoRol(""); setRolSel(n); cargar();
+  };
+
+  const nombreDe = (a) => a.email || (usuarios.find(u=>u.id===a.usuario_id)||{}).nombre || (a.usuario_id ? a.usuario_id.slice(0,8) : "Sistema / web");
+  const resumen = (a) => {
+    const o = a.despues || a.antes || {};
+    if (a.operacion==="UPDATE") return Object.keys(a.despues||{}).slice(0,4).map(k => `${k}: ${fmtVal(a.antes?.[k])} → ${fmtVal(a.despues?.[k])}`).join(" · ");
+    const ref = o.omd || o.nombre || o.descripcion || o.numero || o.placa || o.tipo || "";
+    return String(ref).slice(0,80);
+  };
+  const fmtVal = (v) => v==null ? "∅" : typeof v==="object" ? JSON.stringify(v).slice(0,24) : String(v).slice(0,28);
+  const audFilt = audit.filter(a => { const q = fBusq.trim().toLowerCase(); return !q || `${nombreDe(a)} ${ETIQ_TABLA[a.tabla]||a.tabla} ${resumen(a)}`.toLowerCase().includes(q); });
+
+  const card = { background:B.white, border:`1px solid ${B.border}`, borderRadius:12, boxShadow:"0 2px 8px #0D1E3D0A" };
+  const th = { textAlign:"left", padding:"10px 12px", fontSize:11, color:B.textSec, textTransform:"uppercase", letterSpacing:".6px", borderBottom:`1px solid ${B.border}`, whiteSpace:"nowrap" };
+  const td = { padding:"10px 12px", fontSize:13, borderBottom:`1px solid ${B.border}`, verticalAlign:"top" };
+  const TabBtn = ({ id, children }) => (<button onClick={()=>setTab(id)} style={{ padding:"8px 16px", borderRadius:8, border:"none", cursor:"pointer", fontSize:13, fontWeight:700, background:tab===id?B.navy:"transparent", color:tab===id?"#fff":B.textSec }}>{children}</button>);
+
+  return (
+    <div>
+      <div style={{ display:"flex", gap:6, marginBottom:14 }}>
+        <TabBtn id="usuarios">Usuarios{pendientes.length>0 && <span style={{ marginLeft:8, background:B.red, color:"#fff", fontSize:10, padding:"1px 7px", borderRadius:10 }}>{pendientes.length}</span>}</TabBtn>
+        <TabBtn id="roles">Roles y permisos</TabBtn><TabBtn id="auditoria">Auditoría</TabBtn>
+      </div>
+
+      {tab==="usuarios" && (<>
+        {pendientes.length>0 && (
+          <div style={{ background:"#FFF7ED", border:"1px solid #FDBA74", borderRadius:12, padding:"12px 16px", marginBottom:14 }}>
+            <div style={{ fontWeight:800, fontSize:13, color:"#9A3412", marginBottom:8 }}>Cuentas creadas pendientes de activar en el ERP</div>
+            {pendientes.map(p => (
+              <div key={p.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"6px 0", flexWrap:"wrap" }}>
+                <span style={{ fontSize:13, fontWeight:600 }}>{p.email}</span><span style={{ fontSize:11, color:B.textMut }}>creada el {fmt.fecha(p.creado)}</span>
+                <BtnPri style={{ marginLeft:"auto", padding:"5px 14px", fontSize:12 }} onClick={()=>setActivar({ id:p.id, email:p.email, nombre:"", rol:"operaciones" })}>Activar</BtnPri>
+              </div>))}
+          </div>)}
+        <div style={{ ...card, overflowX:"auto" }}>
+          {cargando ? <Cargando filas={4}/> : <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead><tr><th style={th}>Nombre</th><th style={th}>Correo</th><th style={th}>Rol</th><th style={th}>Estado</th></tr></thead>
+            <tbody>{usuarios.map(u => (
+              <tr key={u.id}>
+                <td style={{...td,fontWeight:700}}>{u.nombre}{u.id===usuario.id && <span style={{ marginLeft:8, fontSize:10, background:B.bg, color:B.textSec, padding:"1px 8px", borderRadius:10 }}>tú</span>}</td>
+                <td style={td}>{u.email||"—"}</td>
+                <td style={td}><select style={{...inp,width:160,padding:"6px 10px"}} value={u.rol} disabled={u.id===usuario.id} onChange={e=>cambiarUsuario(u,{ rol:e.target.value })}>{nombresRol.map(r=><option key={r}>{r}</option>)}</select></td>
+                <td style={td}><button disabled={u.id===usuario.id} onClick={()=>cambiarUsuario(u,{ activo:!u.activo })} style={{ border:"none", borderRadius:20, padding:"4px 12px", fontSize:11, fontWeight:700, cursor:u.id===usuario.id?"not-allowed":"pointer", background:u.activo?"#ECFDF5":"#FEF2F2", color:u.activo?B.green:B.red }}>{u.activo?"Activo":"Desactivado"}</button></td>
+              </tr>))}</tbody>
+          </table>}
+        </div>
+        <div style={{ fontSize:11, color:B.textMut, marginTop:8, lineHeight:1.6 }}>Para agregar a alguien: en Supabase → Authentication → Users → <b>Add user</b> (correo y contraseña). La cuenta aparecerá arriba como pendiente y aquí le asignas nombre y rol. Al desactivar a un usuario pierde el acceso de inmediato.</div>
+      </>)}
+
+      {tab==="roles" && (
+        <div style={{ display:"grid", gridTemplateColumns:"220px minmax(0,1fr)", gap:14, alignItems:"start" }}>
+          <div style={{ ...card, padding:12 }}>
+            {nombresRol.map(r => (<button key={r} onClick={()=>setRolSel(r)} style={{ display:"block", width:"100%", textAlign:"left", padding:"9px 12px", borderRadius:8, border:"none", cursor:"pointer", fontSize:13, fontWeight:rolSel===r?800:500, background:rolSel===r?`${B.gold}22`:"transparent", color:B.textPri, marginBottom:2 }}>{r}</button>))}
+            <div style={{ borderTop:`1px solid ${B.border}`, marginTop:8, paddingTop:10 }}>
+              <input style={{...inp,marginBottom:6}} placeholder="Nuevo rol…" value={nuevoRol} onChange={e=>setNuevoRol(e.target.value)}/>
+              <BtnSec onClick={crearRol} style={{ width:"100%" }}>+ Crear rol</BtnSec>
+            </div>
+          </div>
+          <div style={{ ...card, padding:18 }}>
+            <div style={{ fontSize:14, fontWeight:800, color:B.navy, marginBottom:4 }}>Módulos que ve «{rolSel}»</div>
+            {rolSel==="admin" ? <div style={{ fontSize:12, color:B.textSec, marginBottom:10 }}>El rol admin siempre tiene acceso a todo (así nunca te quedas sin acceso).</div> : <div style={{ fontSize:12, color:B.textSec, marginBottom:10 }}>Marca o desmarca: el cambio se guarda al instante y se aplica cuando el usuario recarga el ERP.</div>}
+            {Object.entries(modulosPorSeccion).map(([g, ms]) => (
+              <div key={g} style={{ marginBottom:12 }}>
+                <div style={{ fontSize:10, fontWeight:700, color:B.textMut, letterSpacing:"1px", marginBottom:6 }}>{g}</div>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>{ms.map(m => { const on = rolSel==="admin" || permisosRol.includes(m.id); return (
+                  <label key={m.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 12px", borderRadius:10, border:`1px solid ${on?B.gold:B.border}`, background:on?`${B.gold}14`:B.white, fontSize:13, cursor:rolSel==="admin"||m.id==="dashboard"?"default":"pointer" }}>
+                    <input type="checkbox" checked={on} disabled={rolSel==="admin"||m.id==="dashboard"} onChange={()=>togglePermiso(m.id)}/><Ico n={m.icon} size={15}/>{m.label}</label>); })}</div>
+              </div>))}
+          </div>
+        </div>)}
+
+      {tab==="auditoria" && (<>
+        <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginBottom:12, alignItems:"flex-end" }}>
+          <div><label style={lbl}>Desde</label><input type="date" style={{...inp,width:150}} value={fDesde} onChange={e=>setFDesde(e.target.value)}/></div>
+          <div><label style={lbl}>Módulo</label><select style={{...inp,width:190}} value={fTabla} onChange={e=>setFTabla(e.target.value)}><option value="">Todos</option>{Object.entries(ETIQ_TABLA).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></div>
+          <div><label style={lbl}>Acción</label><select style={{...inp,width:140}} value={fOp} onChange={e=>setFOp(e.target.value)}><option value="">Todas</option><option value="INSERT">Creó</option><option value="UPDATE">Modificó</option><option value="DELETE">Eliminó</option></select></div>
+          <div style={{ flex:"1 1 200px", minWidth:0 }}><label style={lbl}>Buscar</label><input style={inp} placeholder="Usuario o dato…" value={fBusq} onChange={e=>setFBusq(e.target.value)}/></div>
+        </div>
+        <div style={{ ...card, overflowX:"auto" }}>
+          {cargandoAud ? <Cargando filas={6}/> : audFilt.length===0 ? <EstadoVacio icono="shield" titulo="Sin movimientos" texto="No hay cambios registrados con estos filtros. La auditoría empieza a registrar desde que ejecutaste el SQL de la Fase 4."/> :
+            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+              <thead><tr><th style={th}>Cuándo</th><th style={th}>Quién</th><th style={th}>Acción</th><th style={th}>Módulo</th><th style={th}>Detalle</th></tr></thead>
+              <tbody>{audFilt.map(a => { const o = ETIQ_OP[a.operacion] || [a.operacion,"#000","#eee"]; return (
+                <tr key={a.id}>
+                  <td style={{...td,whiteSpace:"nowrap"}}>{fmt.fechaHora(a.created_at)}</td>
+                  <td style={{...td,fontWeight:600}}>{nombreDe(a)}</td>
+                  <td style={td}><span style={{ background:o[2], color:o[1], fontSize:11, fontWeight:700, padding:"2px 10px", borderRadius:20 }}>{o[0]}</span></td>
+                  <td style={td}>{ETIQ_TABLA[a.tabla]||a.tabla}</td>
+                  <td style={{...td,color:B.textSec,fontSize:12,maxWidth:420}}>{resumen(a)}</td>
+                </tr>); })}</tbody>
+            </table>}
+        </div>
+        <div style={{ fontSize:11, color:B.textMut, marginTop:8 }}>Se muestran los últimos 300 movimientos. Los cambios de estado de pedidos no se registran (son muy frecuentes); sí la eliminación de pedidos. Las claves y PIN nunca se guardan en la auditoría.</div>
+      </>)}
+
+      {activar && (
+        <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1500, display:"flex", alignItems:"center", justifyContent:"center", padding:12 }}>
+          <div style={{ background:B.white, borderRadius:16, padding:24, width:420, maxWidth:"100%" }}>
+            <div style={{ fontSize:16, fontWeight:800, color:B.navy, marginBottom:4 }}>Activar usuario</div>
+            <div style={{ fontSize:12, color:B.textSec, marginBottom:14 }}>{activar.email}</div>
+            <label style={lbl}>Nombre</label><input style={{...inp,marginBottom:12}} value={activar.nombre} onChange={e=>setActivar(a=>({...a,nombre:e.target.value}))}/>
+            <label style={lbl}>Rol</label><select style={{...inp,marginBottom:16}} value={activar.rol} onChange={e=>setActivar(a=>({...a,rol:e.target.value}))}>{nombresRol.map(r=><option key={r}>{r}</option>)}</select>
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}><BtnSec onClick={()=>setActivar(null)}>Cancelar</BtnSec><BtnPri onClick={confirmarActivar}>Activar</BtnPri></div>
+          </div>
+        </div>)}
     </div>
   );
 }
@@ -8664,6 +9014,7 @@ export default function BoazERP() {
       badge: pedidos.filter(p=>p.estado==="sin_asignar").length || null },
     { id:"repartidores", icon:"bike",      label:"Repartidores" },
     { id:"unidades",     icon:"truck",     label:"Flota" },
+    { id:"incidencias",  icon:"alert",     label:"Incidencias" },
     { section:"ALMACÉN" },
     { id:"inventario",   icon:"warehouse", label:"Inventario" },
     { section:"COMERCIAL" },
@@ -8684,11 +9035,20 @@ export default function BoazERP() {
     { id:"reportes",     icon:"chart",     label:"Reportes" },
     { id:"rentabilidad", icon:"trend",     label:"Rentabilidad" },
     { section:"SISTEMA" },
+    { id:"usuarios",     icon:"shield",    label:"Usuarios y auditoría" },
     { id:"configuracion",icon:"settings",  label:"Configuración" },
   ];
 
   const sideW = sidebarOpen ? 220 : 60;
   
+  const [permisosDB, setPermisosDB] = useState(null);
+  const cargarPermisos = useCallback(async () => {
+    try {
+      const { data, error } = await sb.from("roles_permisos").select("rol,modulos");
+      if (!error && data && data.length) { const m = {}; data.forEach(r => { m[r.rol] = r.modulos||[]; }); setPermisosDB(m); }
+    } catch {}
+  }, []);
+  useEffect(() => { if (usuario) cargarPermisos(); }, [usuario, cargarPermisos]);
   const [paleta, setPaleta] = useState(false);
   useEffect(() => {
     const h = (e) => { if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==="k") { e.preventDefault(); setPaleta(v=>!v); } };
@@ -8716,7 +9076,9 @@ if (verificando) {
     return <Login onLogin={cargarUsuario}/>;
   }
 
-  const navVisible = NAV.filter(n => n.section || (ROLES_ACCESO[usuario.rol]||[]).includes(n.id));
+  const modulosRol = usuario.rol==="admin" ? ROLES_ACCESO.admin : [...new Set(["dashboard", ...((permisosDB && permisosDB[usuario.rol]) || ROLES_ACCESO[usuario.rol] || [])])];
+  const navVisible = NAV.filter(n => n.section || modulosRol.includes(n.id)).filter((n,i,arr) => !n.section || (arr[i+1] && !arr[i+1].section));
+  const seccionOk = modulosRol.includes(seccion);
   const navConSeccion = (() => { let act = null; return navVisible.map(n => { if (n.section) act = n.section; return { ...n, _sec: act }; }); })();
   const contieneActiva = (nombre) => navConSeccion.some(x => !x.section && x._sec===nombre && x.id===seccion);
   const badgeSec = (nombre) => navConSeccion.filter(x => !x.section && x._sec===nombre).reduce((t,x)=>t+(x.badge||0),0);
@@ -8868,24 +9230,27 @@ if (verificando) {
             </div>
           ) : (
             <>
-              {seccion==="dashboard"     && <Dashboard pedidos={pedidos} repartidores={repartidores} liquidaciones={liquidaciones} cotizNuevas={cotizNuevas} rol={usuario.rol} onIr={setSeccion}/>}
-              {seccion==="pedidos"       && <Pedidos pedidos={pedidos} repartidores={repartidores} empresas={empresas} tarifariosCliente={tarifariosCliente} tarifarioEstandar={tarifarioEstandar} onRefresh={cargarSilencioso} toast={showToast}/>}
-              {seccion==="repartidores"  && <Repartidores repartidores={repartidores} pedidos={pedidos} onRefresh={cargarSilencioso} toast={showToast}/>}
-              {seccion==="unidades"      && <Unidades unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} repartidores={repartidores} tarifarioVehiculoCliente={tarifarioVehiculoCliente} onRefresh={cargarSilencioso} toast={showToast} onIr={setSeccion}/>}
-              {seccion==="inventario"    && <Inventario empresas={empresas} toast={showToast}/>}
-              {seccion==="clientes"      && <Clientes empresas={empresas} pedidos={pedidos} lineasNegocio={lineasNegocio} tarifariosCliente={tarifariosCliente} tarifarioVehiculoCliente={tarifarioVehiculoCliente} tarifarioEstandar={tarifarioEstandar} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} onRefresh={cargarSilencioso} toast={showToast}/>}
-              {seccion==="cotizaciones"  && <Cotizaciones toast={showToast} onCambio={setCotizNuevas}/>}
-              {seccion==="catalogo"      && <Catalogo empresas={empresas} tarifariosCliente={tarifariosCliente} tarifarioVehiculoCliente={tarifarioVehiculoCliente} lineasNegocio={lineasNegocio} tiposServicio={tiposServicio} tarifarioEstandar={tarifarioEstandar} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} recargoFeriadoPct={recargoFeriadoPct} onRefresh={cargarSilencioso} toast={showToast}/>}
-              {seccion==="liquidaciones" && <Liquidaciones repartidores={repartidores} pedidos={pedidos} liquidaciones={liquidaciones} onRefresh={cargarSilencioso} toast={showToast}/>}
-              {seccion==="liquidacion-transporte" && <LiquidacionTransporte unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} diasServicio={diasServicio} recargoFeriadoPct={recargoFeriadoPct} onRefresh={cargarSilencioso} toast={showToast}/>}
-              {seccion==="liquidacion-clientes" && <LiquidacionClientes pedidos={pedidos} empresas={empresas} unidades={unidades} asignacionesUnidad={asignacionesUnidad} diasServicio={diasServicio} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} recargoFeriadoPct={recargoFeriadoPct} toast={showToast}/>}
-              {seccion==="facturacion"   && <Facturacion empresas={empresas} pedidos={pedidos} tiposServicio={tiposServicio} usuario={usuario} toast={showToast}/>}
-              {seccion==="cobranza"      && <Cobranza pedidos={pedidos} empresas={empresas} repartidores={repartidores} onRefresh={cargarSilencioso} toast={showToast}/>}
-              {seccion==="gastos"        && <Gastos unidades={unidades} repartidores={repartidores} usuario={usuario} toast={showToast}/>}
-              {seccion==="planilla"      && <Planilla toast={showToast} repartidores={repartidores}/>}
-              {seccion==="rentabilidad"  && <Rentabilidad pedidos={pedidos} empresas={empresas} repartidores={repartidores} unidades={unidades} asignaciones={asignacionesUnidad} diasServicio={diasServicio} recargoFeriadoPct={recargoFeriadoPct} toast={showToast}/>}
-              {seccion==="reportes"      && <Reportes pedidos={pedidos} repartidores={repartidores} empresas={empresas} toast={showToast} onIr={setSeccion}/>}
-              {seccion==="configuracion" && <Configuracion onRefresh={cargarSilencioso} toast={showToast}/>}
+              {!seccionOk && <EstadoVacio icono="shield" titulo="Sin acceso a este módulo" texto="Tu rol no tiene permiso para verlo. Pide a un administrador que lo habilite."/>}
+              {seccionOk && seccion==="dashboard"     && <Dashboard pedidos={pedidos} repartidores={repartidores} liquidaciones={liquidaciones} cotizNuevas={cotizNuevas} modulos={modulosRol} onIr={setSeccion}/>}
+              {seccionOk && seccion==="pedidos"       && <Pedidos pedidos={pedidos} repartidores={repartidores} empresas={empresas} tarifariosCliente={tarifariosCliente} tarifarioEstandar={tarifarioEstandar} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccionOk && seccion==="repartidores"  && <Repartidores repartidores={repartidores} pedidos={pedidos} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccionOk && seccion==="unidades"      && <Unidades unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} repartidores={repartidores} tarifarioVehiculoCliente={tarifarioVehiculoCliente} onRefresh={cargarSilencioso} toast={showToast} onIr={setSeccion}/>}
+              {seccionOk && seccion==="inventario"    && <Inventario empresas={empresas} toast={showToast}/>}
+              {seccionOk && seccion==="clientes"      && <Clientes empresas={empresas} pedidos={pedidos} lineasNegocio={lineasNegocio} tarifariosCliente={tarifariosCliente} tarifarioVehiculoCliente={tarifarioVehiculoCliente} tarifarioEstandar={tarifarioEstandar} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccionOk && seccion==="cotizaciones"  && <Cotizaciones toast={showToast} onCambio={setCotizNuevas}/>}
+              {seccionOk && seccion==="catalogo"      && <Catalogo empresas={empresas} tarifariosCliente={tarifariosCliente} tarifarioVehiculoCliente={tarifarioVehiculoCliente} lineasNegocio={lineasNegocio} tiposServicio={tiposServicio} tarifarioEstandar={tarifarioEstandar} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} recargoFeriadoPct={recargoFeriadoPct} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccionOk && seccion==="liquidaciones" && <Liquidaciones repartidores={repartidores} pedidos={pedidos} liquidaciones={liquidaciones} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccionOk && seccion==="liquidacion-transporte" && <LiquidacionTransporte unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} diasServicio={diasServicio} recargoFeriadoPct={recargoFeriadoPct} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccionOk && seccion==="liquidacion-clientes" && <LiquidacionClientes pedidos={pedidos} empresas={empresas} unidades={unidades} asignacionesUnidad={asignacionesUnidad} diasServicio={diasServicio} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} recargoFeriadoPct={recargoFeriadoPct} toast={showToast}/>}
+              {seccionOk && seccion==="facturacion"   && <Facturacion empresas={empresas} pedidos={pedidos} tiposServicio={tiposServicio} usuario={usuario} toast={showToast}/>}
+              {seccionOk && seccion==="incidencias"   && <Incidencias pedidos={pedidos} empresas={empresas} repartidores={repartidores} usuario={usuario} toast={showToast}/>}
+              {seccionOk && seccion==="usuarios"      && <UsuariosAuditoria usuario={usuario} navModulos={navConSeccion.filter(x=>!x.section).map(x=>({ id:x.id, label:x.label, icon:x.icon, grupo:x._sec }))} onPermisosCambio={cargarPermisos} toast={showToast}/>}
+              {seccionOk && seccion==="cobranza"      && <Cobranza pedidos={pedidos} empresas={empresas} repartidores={repartidores} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccionOk && seccion==="gastos"        && <Gastos unidades={unidades} repartidores={repartidores} usuario={usuario} toast={showToast}/>}
+              {seccionOk && seccion==="planilla"      && <Planilla toast={showToast} repartidores={repartidores}/>}
+              {seccionOk && seccion==="rentabilidad"  && <Rentabilidad pedidos={pedidos} empresas={empresas} repartidores={repartidores} unidades={unidades} asignaciones={asignacionesUnidad} diasServicio={diasServicio} recargoFeriadoPct={recargoFeriadoPct} toast={showToast}/>}
+              {seccionOk && seccion==="reportes"      && <Reportes pedidos={pedidos} repartidores={repartidores} empresas={empresas} toast={showToast} onIr={setSeccion}/>}
+              {seccionOk && seccion==="configuracion" && <Configuracion onRefresh={cargarSilencioso} toast={showToast}/>}
             </>
           )}
         </div>
