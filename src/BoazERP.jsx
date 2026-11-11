@@ -252,6 +252,8 @@ const ICONOS = {
   inbox:'<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
 };
 const diaLocal = (d=new Date()) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+const escHTML = (v) => String(v==null?"":v).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
 // Trae TODAS las filas de una consulta (Supabase corta en 1.000 por pedido)
 const traerTodo = async (armar, tam=1000) => {
   let desde = 0, acc = [];
@@ -666,13 +668,13 @@ function MapaFlota({ pedidos, repartidores }) {
     activos.forEach(p => {
       const c = ESTADOS_PEDIDO[p.estado]?.color || "#888";
       L.circleMarker([p.dest_lat,p.dest_lng], { radius:6, color:"#fff", weight:2, fillColor:c, fillOpacity:.95 }).addTo(capa.current)
-        .bindPopup(`<b>${p.omd||""}</b><br>${p.dest_nombre||""}<br>${p.dest_direccion||""}<br><i>${ESTADOS_PEDIDO[p.estado]?.label||p.estado}</i>`);
+        .bindPopup(`<b>${escHTML(p.omd)}</b><br>${escHTML(p.dest_nombre)}<br>${escHTML(p.dest_direccion)}<br><i>${escHTML(ESTADOS_PEDIDO[p.estado]?.label||p.estado)}</i>`);
       pts.push([p.dest_lat,p.dest_lng]);
     });
     riders.filter(r=>r.pos).forEach(r => {
-      const ic = L.divIcon({ className:"", iconSize:[34,34], iconAnchor:[17,17], html:`<div style="width:34px;height:34px;border-radius:50%;background:${B.navy};border:3px solid ${B.gold};color:${B.gold};display:flex;align-items:center;justify-content:center;font:700 12px Inter,sans-serif;box-shadow:0 2px 8px #0006">${(r.nombres||"?")[0]}${(r.apellidos||"")[0]||""}</div>` });
+      const ic = L.divIcon({ className:"", iconSize:[34,34], iconAnchor:[17,17], html:`<div style="width:34px;height:34px;border-radius:50%;background:${B.navy};border:3px solid ${B.gold};color:${B.gold};display:flex;align-items:center;justify-content:center;font:700 12px Inter,sans-serif;box-shadow:0 2px 8px #0006">${escHTML((r.nombres||"?")[0])}${escHTML((r.apellidos||"")[0]||"")}</div>` });
       L.marker([r.pos.lat,r.pos.lng], { icon:ic, zIndexOffset:1000 }).addTo(capa.current)
-        .bindPopup(`<b>${r.nombres} ${r.apellidos||""}</b><br>Última señal ${haceCuanto(r.pos.t)}<br>${r.enRuta} en ruta · ${r.asig} asignados`);
+        .bindPopup(`<b>${escHTML(r.nombres)} ${escHTML(r.apellidos)}</b><br>Última señal ${haceCuanto(r.pos.t)}<br>${r.enRuta} en ruta · ${r.asig} asignados`);
       pts.push([r.pos.lat,r.pos.lng]);
     });
     if (pts.length && !foco) mapa.current.fitBounds(pts, { padding:[40,40], maxZoom:14 });
@@ -4710,9 +4712,9 @@ function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesUnidad, 
     const filasHtml = filtrados.map(p=>{
       const sub = parseFloat(p.tarifa_s)||0;
       return `<tr>
-        <td>${p.omd}</td><td>${p.cliente_referencia||"—"}</td>
-        ${empresaId==="todas"?`<td>${nombreEmpresa(p.empresa_id)}</td>`:""}
-        <td>${p.dest_nombre}</td><td>${p.tipo_servicio||"—"}</td><td>${fmt.fecha(p.created_at)}</td>
+        <td>${escHTML(p.omd)}</td><td>${escHTML(p.cliente_referencia||"—")}</td>
+        ${empresaId==="todas"?`<td>${escHTML(nombreEmpresa(p.empresa_id))}</td>`:""}
+        <td>${escHTML(p.dest_nombre)}</td><td>${escHTML(p.tipo_servicio||"—")}</td><td>${fmt.fecha(p.created_at)}</td>
         <td style="text-align:right">S/ ${sub.toFixed(2)}</td>
       </tr>`;
     }).join("");
@@ -4726,7 +4728,7 @@ function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesUnidad, 
         .totales{margin-top:16px;text-align:right;font-size:13px}
         .totales div{margin-bottom:4px} .totales strong{font-size:16px;color:#D4AF37}
       </style></head><body>
-      <h1>Reporte de facturación — ${empresaId==="todas"?"Todos los clientes":nombreEmpresa(empresaId)}</h1>
+      <h1>Reporte de facturación — ${empresaId==="todas"?"Todos los clientes":escHTML(nombreEmpresa(empresaId))}</h1>
       <div class="sub">Del ${fmt.fecha(fechaInicio+"T00:00:00")} al ${fmt.fecha(fechaFin+"T00:00:00")} · ${filtrados.length} pedido${filtrados.length===1?"":"s"}</div>
       <table><thead><tr>
         <th>Tracking Boaz</th><th>N° Orden</th>${empresaId==="todas"?"<th>Cliente</th>":""}<th>Destinatario</th><th>Servicio</th><th>Fecha</th><th style="text-align:right">Subtotal</th>

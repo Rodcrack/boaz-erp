@@ -1318,13 +1318,13 @@ async function generarLiquidacionEntregasCliente({ pedidosOrdenados, empresa, fe
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("Liquidación", { views: [{ showGridLines: false }] });
 
-  const anchos = [5, 26, 20, 16, 14, 9, 9, 13, 11, 11, 12];
+  const anchos = [5, 24, 18, 16, 12, 32, 9, 9, 13, 11, 11, 12];
   anchos.forEach((w,i)=>{ ws.getColumn(i+1).width = w; });
 
   const bordeFino = { style:"thin", color:{ argb:"FFBFBFBF" } };
   const borde = { top:bordeFino, left:bordeFino, right:bordeFino, bottom:bordeFino };
 
-  ws.mergeCells("A1:K1");
+  ws.mergeCells("A1:L1");
   const titulo = ws.getCell("A1");
   titulo.value = "GRUPO BOAZ S.A.C.";
   titulo.font = { size:16, bold:true, color:{ argb:WHITE } };
@@ -1332,14 +1332,14 @@ async function generarLiquidacionEntregasCliente({ pedidosOrdenados, empresa, fe
   titulo.alignment = { horizontal:"center", vertical:"middle" };
   ws.getRow(1).height = 28;
 
-  ws.mergeCells("A2:K2");
+  ws.mergeCells("A2:L2");
   const sub = ws.getCell("A2");
   sub.value = "RUC 20613172301  ·  Con Boaz, tu negocio no para  ·  contacto@boaz.com.pe  ·  +51 960 622 471";
   sub.font = { size:9, color:{ argb:WHITE } };
   sub.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:NAVY } };
   sub.alignment = { horizontal:"center" };
 
-  ws.mergeCells("A4:K4");
+  ws.mergeCells("A4:L4");
   const tituloDoc = ws.getCell("A4");
   tituloDoc.value = "LIQUIDACIÓN DE ENTREGAS";
   tituloDoc.font = { size:13, bold:true, color:{ argb:NAVY } };
@@ -1363,7 +1363,7 @@ async function generarLiquidacionEntregasCliente({ pedidosOrdenados, empresa, fe
   });
 
   const filaTabla = filaInfo + 1;
-  const encabezados = ["N°","Punto / Destinatario","Distrito","Tracking Boaz","N° Orden","Peso (kg)","Banda","Ámbito","Tarifa","IGV","Total"];
+  const encabezados = ["N°","Punto / Destinatario","Distrito","Tracking Boaz","N° Orden","Detalle de Servicio","Peso (kg)","Banda","Ámbito","Tarifa","IGV","Total"];
   encabezados.forEach((h,i)=>{
     const celda = ws.getCell(filaTabla, i+1);
     celda.value = h;
@@ -1381,36 +1381,41 @@ async function generarLiquidacionEntregasCliente({ pedidosOrdenados, empresa, fe
     const igv = tarifa*0.18;
     const total = tarifa*1.18;
     subtotal += tarifa;
-    const valores = [i+1, p.dest_nombre, p.dest_distrito||"—", p.omd, p.cliente_referencia||"—",
+    const tipoServLabel = p.tipo_servicio==="same_day" ? "SAME DAY"
+      : p.tipo_servicio==="next_day" ? "NEXT DAY"
+      : p.tipo_servicio==="especial" ? "ESPECIAL" : "";
+    const detalle = "SERVICIO DE TRANSPORTE Y DISTRIBUCIÓN MULTIPUNTO" + (tipoServLabel ? ` - ${tipoServLabel}` : "");
+    const valores = [i+1, p.dest_nombre, p.dest_distrito||"—", p.omd, p.cliente_referencia||"—", detalle,
       parseFloat(p.peso_kg)||0, bandaDePeso(p.peso_kg), (p.ambito||"—").replace("_"," "), tarifa, igv, total];
     valores.forEach((v,j)=>{
       const celda = ws.getCell(fila, j+1);
       celda.value = v;
       celda.border = borde;
       celda.font = { size:10 };
+      if (j===5) celda.font = { size:8, italic:true, color:{ argb:"FF4B5563" } };
       if (i%2===1) celda.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:LIGHT_GRAY } };
-      if (j===8) celda.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:BLUE_EDIT } };
-      if (j>=8) celda.numFmt = '"S/" #,##0.00';
-      if (j===0 || j===5) celda.alignment = { horizontal:"center" };
+      if (j===9) celda.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:BLUE_EDIT } };
+      if (j>=9) celda.numFmt = '"S/" #,##0.00';
+      if (j===0 || j===6) celda.alignment = { horizontal:"center" };
     });
   });
 
   const filaTotales = filaTabla + 1 + pedidosOrdenados.length;
-  ws.mergeCells(`A${filaTotales}:H${filaTotales}`);
+  ws.mergeCells(`A${filaTotales}:I${filaTotales}`);
   ws.getCell(`A${filaTotales}`).value = `Total de puntos: ${pedidosOrdenados.length}`;
   ws.getCell(`A${filaTotales}`).font = { bold:true, size:10, color:{ argb:NAVY } };
-  ws.getCell(`I${filaTotales}`).value = "Subtotal";
-  ws.getCell(`I${filaTotales}`).font = { bold:true, size:10 };
-  ws.getCell(`J${filaTotales}`).value = "IGV 18%";
+  ws.getCell(`J${filaTotales}`).value = "Subtotal";
   ws.getCell(`J${filaTotales}`).font = { bold:true, size:10 };
-  ws.getCell(`K${filaTotales}`).value = "TOTAL";
-  ws.getCell(`K${filaTotales}`).font = { bold:true, size:11, color:{ argb:NAVY } };
+  ws.getCell(`K${filaTotales}`).value = "IGV 18%";
+  ws.getCell(`K${filaTotales}`).font = { bold:true, size:10 };
+  ws.getCell(`L${filaTotales}`).value = "TOTAL";
+  ws.getCell(`L${filaTotales}`).font = { bold:true, size:11, color:{ argb:NAVY } };
 
   const filaMontos = filaTotales + 1;
-  ws.getCell(`I${filaMontos}`).value = subtotal;
-  ws.getCell(`J${filaMontos}`).value = subtotal*0.18;
-  ws.getCell(`K${filaMontos}`).value = subtotal*1.18;
-  [`I${filaMontos}`,`J${filaMontos}`,`K${filaMontos}`].forEach(c=>{
+  ws.getCell(`J${filaMontos}`).value = subtotal;
+  ws.getCell(`K${filaMontos}`).value = subtotal*0.18;
+  ws.getCell(`L${filaMontos}`).value = subtotal*1.18;
+  [`J${filaMontos}`,`K${filaMontos}`,`L${filaMontos}`].forEach(c=>{
     ws.getCell(c).numFmt = '"S/" #,##0.00';
     ws.getCell(c).font = { bold:true, size:11, color:{ argb:NAVY } };
     ws.getCell(c).fill = { type:"pattern", pattern:"solid", fgColor:{ argb:AMBER } };
