@@ -7706,6 +7706,14 @@ export default function BoazERP() {
 
   const sideW = sidebarOpen ? 220 : 60;
   
+  const [secAbiertas, setSecAbiertas] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("boaz_nav_abiertas")||"{}"); } catch { return {}; }
+  });
+  const toggleSec = (nombre) => setSecAbiertas(prev => {
+    const nuevo = { ...prev, [nombre]: !prev[nombre] };
+    try { localStorage.setItem("boaz_nav_abiertas", JSON.stringify(nuevo)); } catch {}
+    return nuevo;
+  });
 if (verificando) {
     return (
       <div style={{ minHeight:"100vh", background:B.navy, display:"flex",
@@ -7715,14 +7723,6 @@ if (verificando) {
     );
   }
 
-  const [secAbiertas, setSecAbiertas] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("boaz_nav_abiertas")||"{}"); } catch { return {}; }
-  });
-  const toggleSec = (nombre) => setSecAbiertas(prev => {
-    const nuevo = { ...prev, [nombre]: !prev[nombre] };
-    try { localStorage.setItem("boaz_nav_abiertas", JSON.stringify(nuevo)); } catch {}
-    return nuevo;
-  });
   if (!sesion || !usuario) {
     return <Login onLogin={cargarUsuario}/>;
   }
