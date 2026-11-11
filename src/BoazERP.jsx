@@ -8969,6 +8969,8 @@ function ModalTipoServicio({ lineaNegocioId, lineasNegocio, onClose, onSaved, to
               <option value="entrega">Entrega</option>
               <option value="km">Kilómetro</option>
               <option value="hora">Hora</option>
+              <option value="viaje">Viaje</option>
+              <option value="servicio">Servicio (cotizado)</option>
             </select>
           </div>
           <div>
