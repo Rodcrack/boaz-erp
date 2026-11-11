@@ -214,6 +214,159 @@ const BtnSec = ({ children, onClick, style={} }) => (
 );
 
 // ══════════════════════════════════════════════════════════════
+// UI KIT (Fase 1): íconos, estilos globales, estados de carga/vacío
+// ══════════════════════════════════════════════════════════════
+const ICONOS = {
+  dashboard:'<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',
+  package:'<path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 8.7 5 8.7-5"/>',
+  bike:'<circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/>',
+  truck:'<path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/>',
+  warehouse:'<path d="M22 8.35V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8.35A2 2 0 0 1 3.26 6.5l8-3.2a2 2 0 0 1 1.48 0l8 3.2A2 2 0 0 1 22 8.35Z"/><path d="M6 18h12"/><path d="M6 14h12"/>',
+  building:'<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/>',
+  mail:'<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
+  tag:'<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><path d="M7.5 7.5h.01"/>',
+  filetext:'<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+  receipt:'<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/>',
+  wallet:'<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
+  calendar:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  banknote:'<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/>',
+  users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  chart:'<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9M13 17V5M8 17v-3"/>',
+  settings:'<path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"/>',
+  search:'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  refresh:'<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+  chevdown:'<path d="m6 9 6 6 6-6"/>',
+  alert:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
+  check:'<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+  panel:'<path d="m11 17-5-5 5-5"/><path d="m18 17-5-5 5-5"/>',
+  panelr:'<path d="m13 17 5-5-5-5"/><path d="m6 17 5-5-5-5"/>',
+  wrench:'<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
+  trend:'<path d="M22 7 13.5 15.5 8.5 10.5 2 17"/><path d="M16 7h6v6"/>',
+  dollar:'<path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+  x:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  arrow:'<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
+  inbox:'<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+};
+const diaLocal = (d=new Date()) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+function Ico({ n, size=18, color="currentColor", sw=1.8, style }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw}
+    strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0, display:"block", ...style }}
+    dangerouslySetInnerHTML={{ __html: ICONOS[n] || "" }}/>;
+}
+
+// Estilos globales + tipografía Inter (se inyecta una sola vez)
+if (typeof document !== "undefined" && !document.getElementById("bz-css")) {
+  try {
+    const l = document.createElement("link");
+    l.rel = "stylesheet";
+    l.href = "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap";
+    document.head.appendChild(l);
+    const st = document.createElement("style");
+    st.id = "bz-css";
+    st.textContent = `
+      body, button, input, select, textarea { font-family:'Inter','Segoe UI',sans-serif; font-variant-numeric:tabular-nums; }
+      @keyframes spin { to { transform:rotate(360deg); } }
+      @keyframes bz-shimmer { 0%{background-position:-400px 0} 100%{background-position:400px 0} }
+      @keyframes bz-pop { from{opacity:0; transform:translateY(-6px) scale(.98)} to{opacity:1; transform:none} }
+      .bz-skel { background:linear-gradient(90deg,#E6EDF5 25%,#F3F7FB 37%,#E6EDF5 63%); background-size:800px 100%; animation:bz-shimmer 1.3s infinite linear; border-radius:8px; }
+      tbody tr:hover { background:#EEF3F9 !important; }
+      input:focus, select:focus, textarea:focus { border-color:#E8780A !important; box-shadow:0 0 0 3px #E8780A22; outline:none; }
+      ::-webkit-scrollbar { width:8px; height:8px; } ::-webkit-scrollbar-thumb { background:#C5D2E0; border-radius:8px; } ::-webkit-scrollbar-track { background:transparent; }
+      .bz-nav-item:hover { background:#1E3A5F55 !important; color:#E8EAF0 !important; }
+      .bz-card-hover { transition:box-shadow .15s, transform .15s; } .bz-card-hover:hover { box-shadow:0 8px 24px #0D1E3D1A !important; transform:translateY(-1px); }
+    `;
+    document.head.appendChild(st);
+  } catch {}
+}
+
+// Carga con esqueleto animado (reemplaza el texto "Cargando...")
+function Cargando({ filas=4 }) {
+  return (
+    <div style={{ padding:20, display:"flex", flexDirection:"column", gap:12 }}>
+      {Array.from({ length:filas }).map((_,i) => <div key={i} className="bz-skel" style={{ height:i===0?22:16, width:i===0?"40%":`${95-i*8}%` }}/>)}
+    </div>
+  );
+}
+// Estado vacío con ícono y mensaje
+function EstadoVacio({ icono="inbox", titulo, texto, children }) {
+  return (
+    <div style={{ padding:"40px 20px", textAlign:"center" }}>
+      <div style={{ width:52, height:52, margin:"0 auto 12px", borderRadius:14, background:B.bg, display:"flex", alignItems:"center", justifyContent:"center", color:B.textMut }}>
+        <Ico n={icono} size={24}/>
+      </div>
+      <div style={{ fontSize:14, fontWeight:700, color:B.textPri }}>{titulo}</div>
+      {texto && <div style={{ fontSize:12, color:B.textSec, marginTop:4 }}>{texto}</div>}
+      {children && <div style={{ marginTop:14 }}>{children}</div>}
+    </div>
+  );
+}
+
+// ── BÚSQUEDA GLOBAL (Ctrl+K) ──────────────────────────────────
+function PaletaComandos({ onCerrar, onIr, modulos, pedidos, empresas, unidades, repartidores }) {
+  const [q, setQ] = useState("");
+  const [sel, setSel] = useState(0);
+  const ref = useRef(null);
+  useEffect(() => { ref.current && ref.current.focus(); }, []);
+  const norm = (t) => (t||"").toString().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");
+  const resultados = useMemo(() => {
+    const t = norm(q).trim();
+    const out = [];
+    modulos.filter(m => !t || norm(m.label).includes(t) || norm(m.grupo).includes(t)).slice(0, t?6:20)
+      .forEach(m => out.push({ k:"m"+m.id, tipo:"Módulo", titulo:m.label, sub:m.grupo, icono:m.icon, ir:m.id }));
+    if (t.length >= 2) {
+      empresas.filter(e => norm(e.nombre).includes(t) || norm(e.ruc).includes(t)).slice(0,5)
+        .forEach(e => out.push({ k:"e"+e.id, tipo:"Cliente", titulo:e.nombre, sub:e.ruc?`RUC ${e.ruc}`:"", icono:"building", ir:"clientes" }));
+      repartidores.filter(r => norm(`${r.nombres} ${r.apellidos} ${r.placa||""}`).includes(t)).slice(0,5)
+        .forEach(r => out.push({ k:"r"+r.id, tipo:"Repartidor", titulo:`${r.nombres||""} ${r.apellidos||""}`.trim(), sub:r.placa||r.vehiculo||"", icono:"bike", ir:"repartidores" }));
+      unidades.filter(u => norm(`${u.placa} ${u.conductor_nombre||""}`).includes(t)).slice(0,5)
+        .forEach(u => out.push({ k:"u"+u.id, tipo:"Unidad", titulo:u.placa, sub:u.conductor_nombre||u.tipo_vehiculo||"", icono:"truck", ir:"unidades" }));
+      pedidos.filter(p => norm(`${p.omd} ${p.cliente_referencia||""} ${p.dest_nombre||""}`).includes(t)).slice(0,6)
+        .forEach(p => out.push({ k:"p"+p.id, tipo:"Pedido", titulo:p.omd||"(sin tracking)", sub:`${p.dest_nombre||""}${p.cliente_referencia?` · ${p.cliente_referencia}`:""}`, icono:"package", ir:"pedidos" }));
+    }
+    return out;
+  }, [q, modulos, pedidos, empresas, unidades, repartidores]);
+  useEffect(() => { setSel(0); }, [q]);
+  const onKey = (e) => {
+    if (e.key==="Escape") onCerrar();
+    else if (e.key==="ArrowDown") { e.preventDefault(); setSel(s => Math.min(s+1, resultados.length-1)); }
+    else if (e.key==="ArrowUp") { e.preventDefault(); setSel(s => Math.max(s-1, 0)); }
+    else if (e.key==="Enter" && resultados[sel]) { onIr(resultados[sel].ir); onCerrar(); }
+  };
+  return (
+    <div onClick={onCerrar} style={{ position:"fixed", inset:0, background:"#0D1E3D88", zIndex:3000, display:"flex", justifyContent:"center", alignItems:"flex-start", paddingTop:"12vh" }}>
+      <div onClick={e=>e.stopPropagation()} style={{ width:560, maxWidth:"92vw", background:B.white, borderRadius:16, boxShadow:"0 24px 70px #0008", overflow:"hidden", animation:"bz-pop .15s ease-out" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10, padding:"14px 18px", borderBottom:`1px solid ${B.border}` }}>
+          <Ico n="search" size={18} color={B.textMut}/>
+          <input ref={ref} value={q} onChange={e=>setQ(e.target.value)} onKeyDown={onKey}
+            placeholder="Buscar módulo, pedido, cliente, repartidor o placa…"
+            style={{ flex:1, border:"none", outline:"none", fontSize:15, background:"transparent", color:B.textPri, padding:0, boxShadow:"none" }}/>
+          <span style={{ fontSize:10, color:B.textMut, border:`1px solid ${B.border}`, borderRadius:6, padding:"2px 6px" }}>Esc</span>
+        </div>
+        <div style={{ maxHeight:"50vh", overflowY:"auto", padding:8 }}>
+          {resultados.length===0 && <div style={{ padding:24, textAlign:"center", color:B.textMut, fontSize:13 }}>Sin resultados</div>}
+          {resultados.map((r,i) => (
+            <div key={r.k} onClick={()=>{ onIr(r.ir); onCerrar(); }} onMouseEnter={()=>setSel(i)}
+              style={{ display:"flex", alignItems:"center", gap:12, padding:"9px 12px", borderRadius:10, cursor:"pointer",
+                background: i===sel ? `${B.gold}18` : "transparent" }}>
+              <div style={{ width:32, height:32, borderRadius:8, background:B.bg, color:B.navy, display:"flex", alignItems:"center", justifyContent:"center" }}><Ico n={r.icono} size={16}/></div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:13, fontWeight:600, color:B.textPri, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{r.titulo}</div>
+                {r.sub && <div style={{ fontSize:11, color:B.textMut, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{r.sub}</div>}
+              </div>
+              <span style={{ fontSize:10, fontWeight:700, color:B.textSec, background:B.bg, borderRadius:6, padding:"2px 8px" }}>{r.tipo}</span>
+            </div>
+          ))}
+        </div>
+        <div style={{ padding:"8px 16px", borderTop:`1px solid ${B.border}`, fontSize:11, color:B.textMut, display:"flex", gap:14 }}>
+          <span>↑↓ navegar</span><span>Enter abrir</span><span style={{ marginLeft:"auto" }}>Ctrl + K</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
 // MÓDULO 1: DASHBOARD
 // ══════════════════════════════════════════════════════════════
 function generarInsights(pedidos, hoyP, ayerP, entregados, efectividad, ingresoHoy, ingresoAyer, sinAsignar, repartidores) {
@@ -265,15 +418,36 @@ function generarInsights(pedidos, hoyP, ayerP, entregados, efectividad, ingresoH
   return frases.slice(0, 4);
 }
 
-function Dashboard({ pedidos, repartidores, liquidaciones }) {
-  const hoy = new Date().toISOString().split("T")[0];
-  const ayer = new Date(Date.now()-86400000).toISOString().split("T")[0];
+function Dashboard({ pedidos, repartidores, liquidaciones, cotizNuevas=0, rol, onIr }) {
+  const [alertasFin, setAlertasFin] = useState({ facturas:null, mant:[] });
+  const veFinanzas = rol==='admin' || rol==='finanzas';
+  useEffect(() => {
+    if (!veFinanzas) return;
+    let vivo = true;
+    (async () => {
+      try {
+        const lim = new Date(); lim.setDate(lim.getDate()-30);
+        const [f, g] = await Promise.all([
+          sb.from('facturas').select('total_s,estado_pago,fecha_emision,estado').lte('fecha_emision', diaLocal(lim)),
+          sb.from('gastos').select('placa,categoria,fecha,proximo_mant_fecha').in('categoria',['Mantenimiento','Reparación']).not('placa','is',null).order('fecha',{ascending:false}).limit(1000),
+        ]);
+        if (!vivo) return;
+        const pend = (f.data||[]).filter(x => x.estado_pago!=='pagado' && x.estado!=='anulada' && x.estado!=='anulado');
+        const vistos = {}, mant = [];
+        (g.data||[]).forEach(r => { if (vistos[r.placa]) return; vistos[r.placa]=true; if (r.proximo_mant_fecha && r.proximo_mant_fecha < diaLocal()) mant.push(r.placa); });
+        setAlertasFin({ facturas: { n: pend.length, total: pend.reduce((t,x)=>t+(parseFloat(x.total_s)||0),0) }, mant });
+      } catch {}
+    })();
+    return () => { vivo = false; };
+  }, [veFinanzas]);
+  const hoy = diaLocal();
+  const ayer = diaLocal(new Date(Date.now()-86400000));
   const horaActual = new Date().getHours()*60 + new Date().getMinutes();
 
-  const hoyP = pedidos.filter(p => p.created_at?.startsWith(hoy));
+  const hoyP = pedidos.filter(p => p.created_at && diaLocal(new Date(p.created_at))===hoy);
   // "Ayer a esta hora" — comparación justa, no todo el día de ayer completo
   const ayerP = pedidos.filter(p => {
-    if (!p.created_at?.startsWith(ayer)) return false;
+    if (!p.created_at || diaLocal(new Date(p.created_at))!==ayer) return false;
     const d = new Date(p.created_at);
     return (d.getHours()*60+d.getMinutes()) <= horaActual;
   });
@@ -292,12 +466,12 @@ function Dashboard({ pedidos, repartidores, liquidaciones }) {
   const deltaIngreso = deltaPct(ingresoHoy, ingresoAyer);
 
   const kpis = [
-    { icon:"📦", label:"Pedidos hoy", value: hoyP.length, sub:`${pedidos.length} total`, color: B.navy, delta: deltaPedidos },
-    { icon:"✅", label:"Entregados", value: entregados.length, sub:`${efectividad}% efectividad`, color: B.green },
-    { icon:"🛵", label:"En ruta", value: enRuta.length, sub:"activos ahora", color: B.gold },
-    { icon:"⚠️", label:"Sin asignar", value: sinAsignar.length, sub: sinAsignar.length>0?"requieren atención":"todo OK", color: sinAsignar.length>0?B.red:B.green },
-    { icon:"💰", label:"Ingresos hoy", value: fmt.sol(ingresoHoy), sub:"antes de IGV", color: B.goldDk, big:true, delta: deltaIngreso },
-    { icon:"🏍️", label:"Repartidores", value: repartidores.filter(r=>r.activo).length, sub:"activos", color: B.navy },
+    { icon:"package", label:"Pedidos hoy", value: hoyP.length, sub:`${pedidos.length} total`, color: B.navy, delta: deltaPedidos },
+    { icon:"check", label:"Entregados", value: entregados.length, sub:`${efectividad}% efectividad`, color: B.green },
+    { icon:"bike", label:"En ruta", value: enRuta.length, sub:"activos ahora", color: B.gold },
+    { icon:"alert", label:"Sin asignar", value: sinAsignar.length, sub: sinAsignar.length>0?"requieren atención":"todo OK", color: sinAsignar.length>0?B.red:B.green },
+    { icon:"dollar", label:"Ingresos hoy (est.)", value: fmt.sol(ingresoHoy), sub:"tarifas de pedidos, sin IGV", color: B.goldDk, big:true, delta: deltaIngreso },
+    { icon:"users", label:"Repartidores", value: repartidores.filter(r=>r.activo).length, sub:"activos", color: B.navy },
   ];
 
   const porEstado = Object.entries(ESTADOS_PEDIDO).map(([k,v])=>({
@@ -309,8 +483,8 @@ function Dashboard({ pedidos, repartidores, liquidaciones }) {
   const serie7dias = [];
   for (let i=6; i>=0; i--) {
     const fecha = new Date(Date.now() - i*86400000);
-    const key = fecha.toISOString().split("T")[0];
-    const delDia = pedidos.filter(p=>p.created_at?.startsWith(key));
+    const key = diaLocal(fecha);
+    const delDia = pedidos.filter(p=>p.created_at && diaLocal(new Date(p.created_at))===key);
     serie7dias.push({
       label: fecha.toLocaleDateString("es-PE",{day:"2-digit",month:"2-digit"}),
       total: delDia.length,
@@ -336,14 +510,39 @@ function Dashboard({ pedidos, repartidores, liquidaciones }) {
         </div>
       </div>
 
+      {/* Atención requerida */}
+      {(() => {
+        const items = [];
+        if (sinAsignar.length>0) items.push({ ico:"alert", c:B.red, t:`${sinAsignar.length} pedido${sinAsignar.length===1?"":"s"} sin asignar`, ir:"pedidos" });
+        if (cotizNuevas>0) items.push({ ico:"mail", c:B.blue, t:`${cotizNuevas} cotización${cotizNuevas===1?"":"es"} nueva${cotizNuevas===1?"":"s"}`, ir:"cotizaciones" });
+        if (veFinanzas && alertasFin.facturas && alertasFin.facturas.n>0) items.push({ ico:"receipt", c:B.orange, t:`${alertasFin.facturas.n} factura${alertasFin.facturas.n===1?"":"s"} con más de 30 días sin cobrar (${fmt.sol(alertasFin.facturas.total)})`, ir:"facturacion" });
+        if (veFinanzas && alertasFin.mant.length>0) items.push({ ico:"wrench", c:B.red, t:`Mantenimiento vencido: ${alertasFin.mant.slice(0,4).join(", ")}${alertasFin.mant.length>4?"…":""}`, ir:"gastos" });
+        return (
+          <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:"14px 18px", marginBottom:20, boxShadow:"0 2px 8px #0D1E3D0A" }}>
+            <div style={{ fontSize:12, fontWeight:700, color:B.textPri, marginBottom:items.length?10:0, display:"flex", alignItems:"center", gap:8 }}>
+              <Ico n={items.length?"alert":"check"} size={16} color={items.length?B.orange:B.green}/> {items.length?"Atención requerida":"Todo en orden: sin alertas pendientes"}
+            </div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:10 }}>
+              {items.map((it,i)=>(
+                <button key={i} onClick={()=>onIr&&onIr(it.ir)}
+                  style={{ display:"flex", alignItems:"center", gap:8, background:`${it.c}10`, border:`1px solid ${it.c}33`, color:B.textPri,
+                    borderRadius:10, padding:"8px 12px", fontSize:12, fontWeight:600, cursor:"pointer" }}>
+                  <Ico n={it.ico} size={15} color={it.c}/>{it.t}<Ico n="arrow" size={13} color={B.textMut}/>
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* KPIs */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(6,1fr)", gap:14, marginBottom:24 }}>
         {kpis.map((k,i) => (
-          <div key={i} style={{ background:B.white, border:`1px solid ${B.border}`,
+          <div key={i} className="bz-card-hover" style={{ background:B.white, border:`1px solid ${B.border}`,
             borderRadius:12, padding:18, borderTop:`3px solid ${k.color}`,
             boxShadow:"0 2px 8px #0D1E3D0A" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
-              <div style={{ fontSize:22, marginBottom:8 }}>{k.icon}</div>
+              <div style={{ width:36, height:36, borderRadius:10, background:`${k.color}15`, color:k.color, display:"flex", alignItems:"center", justifyContent:"center", marginBottom:10 }}><Ico n={k.icon} size={20}/></div>
               {k.delta != null && (
                 <span style={{ fontSize:10, fontWeight:700, padding:"2px 6px", borderRadius:8,
                   background: k.delta>=0?"#ECFDF5":"#FEF2F2", color: k.delta>=0?B.green:B.red }}>
@@ -4900,7 +5099,7 @@ function Planilla({ toast }) {
   const pendientesPlanilla = pagosPlanilla.filter(p=>p.estado==="pendiente").length;
   const pendientesTerceros = pagosTerceros.filter(p=>p.estado==="pendiente").length;
 
-  if (cargando) return <div style={{ padding:40, textAlign:"center", color:B.textMut }}>Cargando...</div>;
+  if (cargando) return <Cargando filas={6}/>;
 
   return (
     <div>
@@ -5280,7 +5479,7 @@ function ModalPersonalPlanilla({ persona, onClose, onSaved, toast }) {
           <button onClick={agregarHijo} style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer", fontWeight:700, textTransform:"none", letterSpacing:0 }}>+ Agregar hijo</button>
         </div>
         {cargandoHijos ? (
-          <div style={{ fontSize:12, color:B.textMut, padding:"8px 0" }}>Cargando...</div>
+          <Cargando filas={3}/>
         ) : (
           <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
             {hijos.map((h,i)=>(
@@ -5461,7 +5660,7 @@ function ModalTerceroPlanilla({ tercero, onClose, onSaved, toast }) {
           <button onClick={agregarHijo} style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer", fontWeight:700, textTransform:"none", letterSpacing:0 }}>+ Agregar hijo</button>
         </div>
         {cargandoHijos ? (
-          <div style={{ fontSize:12, color:B.textMut, padding:"8px 0" }}>Cargando...</div>
+          <Cargando filas={3}/>
         ) : (
           <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
             {hijos.map((h,i)=>(
@@ -5717,7 +5916,7 @@ function Inventario({ empresas, toast }) {
   const valorInventario = variantesConProducto.reduce((s,v)=> s + (v.stock_actual * (parseFloat(v.producto?.costo)||0)), 0);
   const ordenesPendientes = ordenes.filter(o => !["despachado","cancelado"].includes(o.estado));
 
-  if (cargando) return <div style={{ padding:40, textAlign:"center", color:B.textMut }}>Cargando...</div>;
+  if (cargando) return <Cargando filas={6}/>;
 
   return (
     <div>
@@ -6191,7 +6390,7 @@ function ModalProductoInventario({ producto, onClose, onSaved, toast }) {
           <button onClick={agregarVariante} style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer", fontWeight:700, textTransform:"none", letterSpacing:0 }}>+ Agregar variante</button>
         </div>
         {cargandoVar ? (
-          <div style={{ fontSize:12, color:B.textMut, padding:"8px 0" }}>Cargando...</div>
+          <Cargando filas={3}/>
         ) : (
           <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
             {variantes.map((v,i)=>(
@@ -7531,9 +7730,9 @@ function Login({ onLogin }) {
   };
 
   return (
-    <div style={{ minHeight:"100vh", background:B.navy, display:"flex",
+    <div style={{ minHeight:"100vh", background:`radial-gradient(1200px 600px at 20% 0%, ${B.navyLt} 0%, ${B.navy} 60%)`, display:"flex",
       alignItems:"center", justifyContent:"center",
-      fontFamily:"'Segoe UI','Inter',sans-serif" }}>
+      fontFamily:"'Inter','Segoe UI',sans-serif" }}>
       <div style={{ width:360, background:B.navyMd, border:`1px solid ${B.navyBdr}`,
         borderRadius:16, padding:32, boxShadow:"0 20px 60px #0006" }}>
         <div style={{ textAlign:"center", marginBottom:24 }}>
@@ -7543,6 +7742,7 @@ function Login({ onLogin }) {
             <span style={{ fontSize:12, color:"#8FA3BA", marginLeft:6, fontWeight:500 }}>ERP</span>
           </div>
           <div style={{ fontSize:12, color:"#8FA3BA" }}>Panel administrativo</div>
+          <div style={{ fontSize:11, color:B.gold, marginTop:6, fontWeight:600 }}>Con Boaz, tu negocio no para</div>
         </div>
         <label style={{ fontSize:11, color:"#8FA3BA", fontWeight:700,
           textTransform:"uppercase", letterSpacing:"0.7px", marginBottom:4, display:"block" }}>Email</label>
@@ -7678,34 +7878,41 @@ export default function BoazERP() {
   }, [cargar]);
 
   const NAV = [
-    { section:"OPERACIONES" },
-    { id:"dashboard",    icon:"🏠", label:"Dashboard" },
-    { id:"pedidos",      icon:"📋", label:"Pedidos",
+    { section:"OPERACIÓN" },
+    { id:"dashboard",    icon:"dashboard", label:"Dashboard" },
+    { id:"pedidos",      icon:"package",   label:"Pedidos",
       badge: pedidos.filter(p=>p.estado==="sin_asignar").length || null },
-    { id:"repartidores", icon:"🛵", label:"Repartidores" },
-    { id:"unidades",     icon:"🚛", label:"Unidades" },
-    { section:"TIENDA VIRTUAL" },
-    { id:"inventario",   icon:"📦", label:"Inventario" },
+    { id:"repartidores", icon:"bike",      label:"Repartidores" },
+    { id:"unidades",     icon:"truck",     label:"Flota" },
+    { section:"ALMACÉN" },
+    { id:"inventario",   icon:"warehouse", label:"Inventario" },
     { section:"COMERCIAL" },
-    { id:"clientes",     icon:"🏢", label:"Clientes" },
-    { id:"cotizaciones", icon:"📨", label:"Cotizaciones", badge: cotizNuevas || null },
-    { id:"catalogo",     icon:"🗂️", label:"Catálogo" },
-    { section:"FINANZAS" },
-    { id:"liquidaciones",icon:"💰", label:"Liq. Repartidores",
+    { id:"clientes",     icon:"building",  label:"Clientes" },
+    { id:"cotizaciones", icon:"mail",      label:"Cotizaciones", badge: cotizNuevas || null },
+    { id:"catalogo",     icon:"tag",       label:"Tarifas y servicios" },
+    { section:"VENTAS Y COBRANZA" },
+    { id:"liquidacion-clientes", icon:"filetext", label:"Pre-facturación" },
+    { id:"facturacion",  icon:"receipt",   label:"Facturación" },
+    { section:"COSTOS Y PAGOS" },
+    { id:"liquidaciones",icon:"wallet",    label:"Liq. Repartidores",
       badge: liquidaciones.filter(l=>l.estado==="pendiente").length || null },
-    { id:"liquidacion-transporte", icon:"📅", label:"Liq. Transporte" },
-    { id:"liquidacion-clientes", icon:"💼", label:"Liq. Clientes" },
-    { id:"facturacion",  icon:"🧾", label:"Facturación" },
-    { id:"gastos",       icon:"💸", label:"Gastos" },
-    { id:"planilla",     icon:"👥", label:"Planilla" },
+    { id:"liquidacion-transporte", icon:"calendar", label:"Liq. Transporte" },
+    { id:"planilla",     icon:"users",     label:"Planilla" },
+    { id:"gastos",       icon:"banknote",  label:"Gastos" },
     { section:"ANÁLISIS" },
-    { id:"reportes",     icon:"📊", label:"Reportes" },
+    { id:"reportes",     icon:"chart",     label:"Reportes" },
     { section:"SISTEMA" },
-    { id:"configuracion",icon:"⚙️", label:"Configuración" },
+    { id:"configuracion",icon:"settings",  label:"Configuración" },
   ];
 
   const sideW = sidebarOpen ? 220 : 60;
   
+  const [paleta, setPaleta] = useState(false);
+  useEffect(() => {
+    const h = (e) => { if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==="k") { e.preventDefault(); setPaleta(v=>!v); } };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, []);
   const [secAbiertas, setSecAbiertas] = useState(() => {
     try { return JSON.parse(localStorage.getItem("boaz_nav_abiertas")||"{}"); } catch { return {}; }
   });
@@ -7734,7 +7941,7 @@ if (verificando) {
   
   return (
     <div style={{ display:"flex", height:"100vh", background:B.bg,
-      color:B.textPri, fontFamily:"'Segoe UI','Inter',sans-serif", overflow:"hidden" }}>
+      color:B.textPri, fontFamily:"'Inter','Segoe UI',sans-serif", overflow:"hidden" }}>
 
       {/* SIDEBAR */}
       <div style={{ width:sideW, background:B.navy, display:"flex",
@@ -7762,7 +7969,7 @@ if (verificando) {
           <button onClick={()=>setSidebarOpen(s=>!s)}
             style={{ marginLeft:"auto", background:"none", border:"none",
               color:"#8FA3BA", cursor:"pointer", fontSize:16, flexShrink:0 }}>
-            {sidebarOpen?"◀":"▶"}
+            <Ico n={sidebarOpen?"panel":"panelr"} size={18}/>
           </button>
         </div>
 
@@ -7790,7 +7997,7 @@ if (verificando) {
             if (sidebarOpen && !secAbiertas[n._sec] && !contieneActiva(n._sec)) return null;
             const active = seccion===n.id;
             return (
-              <div key={n.id} onClick={()=>setSeccion(n.id)}
+              <div key={n.id} className="bz-nav-item" onClick={()=>setSeccion(n.id)}
                 style={{ display:"flex", alignItems:"center", gap:10,
                   padding: sidebarOpen?"10px 10px":"10px 0",
                   justifyContent: sidebarOpen?"flex-start":"center",
@@ -7799,7 +8006,7 @@ if (verificando) {
                   borderLeft: active?`3px solid ${B.gold}`:"3px solid transparent",
                   color: active?B.gold:"#8FA3BA",
                   fontWeight: active?700:400, fontSize:13, transition:"all 0.15s" }}>
-                <span style={{ fontSize:16, flexShrink:0 }}>{n.icon}</span>
+                <Ico n={n.icon} size={18}/>
                 {sidebarOpen && <span style={{ flex:1, whiteSpace:"nowrap" }}>{n.label}</span>}
                 {sidebarOpen && n.badge ? (
                   <span style={{ background:B.red, color:"#fff", fontSize:9,
@@ -7829,21 +8036,26 @@ if (verificando) {
           borderBottom:`1px solid ${B.border}`,
           boxShadow:"0 2px 8px #0D1E3D0A", flexShrink:0 }}>
           <div>
-            <div style={{ fontSize:17, fontWeight:800, color:B.navy }}>
-              {NAV.find(n=>n.id===seccion)?.icon} {NAV.find(n=>n.id===seccion)?.label}
+            <div style={{ fontSize:11, color:B.textMut, fontWeight:600, letterSpacing:"0.6px", textTransform:"uppercase", marginBottom:2 }}>
+              {navConSeccion.find(n=>n.id===seccion)?._sec || "Boaz ERP"}
             </div>
-            <div style={{ fontSize:11, color:B.textMut, marginTop:1 }}>
-              <span style={{ display:"inline-block", width:7, height:7,
-                background:B.green, borderRadius:"50%", marginRight:5 }}></span>
-              Sistema activo · {new Date().toLocaleDateString("es-PE",
-                {weekday:"long",day:"numeric",month:"long",year:"numeric"})}
+            <div style={{ fontSize:19, fontWeight:800, color:B.navy, display:"flex", alignItems:"center", gap:8 }}>
+              <Ico n={NAV.find(n=>n.id===seccion)?.icon} size={20} color={B.gold}/>
+              {NAV.find(n=>n.id===seccion)?.label}
             </div>
           </div>
+          <button onClick={()=>setPaleta(true)}
+            style={{ flex:"0 1 380px", margin:"0 20px", display:"flex", alignItems:"center", gap:10, background:B.bg,
+              border:`1px solid ${B.border}`, borderRadius:10, padding:"9px 14px", cursor:"pointer", color:B.textMut, fontSize:13, textAlign:"left" }}>
+            <Ico n="search" size={16}/>
+            <span style={{ flex:1 }}>Buscar pedido, cliente, placa…</span>
+            <span style={{ fontSize:10, border:`1px solid ${B.border}`, borderRadius:6, padding:"2px 6px", background:B.white }}>Ctrl K</span>
+          </button>
           <div style={{ display:"flex", gap:10, alignItems:"center" }}>
             <button onClick={cargar}
               style={{ background:B.bg, border:`1px solid ${B.border}`,
                 color:B.textSec, padding:"7px 14px", borderRadius:8,
-                cursor:"pointer", fontSize:12 }}>🔄 Actualizar</button>
+                cursor:"pointer", fontSize:12, display:"flex", alignItems:"center", gap:6 }}><Ico n="refresh" size={14}/> Actualizar</button>
             <div style={{ display:"flex", alignItems:"center", gap:8 }}>
   <div style={{ textAlign:"right" }}>
     <div style={{ fontSize:12, fontWeight:700, color:B.navy }}>{usuario.nombre}</div>
@@ -7857,7 +8069,7 @@ if (verificando) {
   </div>
   <button onClick={cerrarSesion}
     style={{ background:"none", border:`1px solid ${B.border}`, color:B.textSec,
-      fontSize:11, padding:"6px 10px", borderRadius:6, cursor:"pointer" }}>Salir</button>
+      fontSize:11, padding:"6px 10px", borderRadius:6, cursor:"pointer", display:"flex", alignItems:"center", gap:5 }}><Ico n="logout" size={13}/> Salir</button>
 </div>
 </div>
 </div>
@@ -7869,12 +8081,12 @@ if (verificando) {
               <div style={{ width:48, height:48,
                 background:`linear-gradient(135deg,${B.gold},${B.goldDk})`,
                 borderRadius:12, display:"flex", alignItems:"center",
-                justifyContent:"center", fontSize:24, animation:"spin 1s linear infinite" }}>📦</div>
+                justifyContent:"center", color:B.navy, animation:"spin 1s linear infinite" }}><Ico n="package" size={26}/></div>
               <div style={{ fontSize:14, color:B.textMut }}>Cargando Boaz ERP...</div>
             </div>
           ) : (
             <>
-              {seccion==="dashboard"     && <Dashboard pedidos={pedidos} repartidores={repartidores} liquidaciones={liquidaciones}/>}
+              {seccion==="dashboard"     && <Dashboard pedidos={pedidos} repartidores={repartidores} liquidaciones={liquidaciones} cotizNuevas={cotizNuevas} rol={usuario.rol} onIr={setSeccion}/>}
               {seccion==="pedidos"       && <Pedidos pedidos={pedidos} repartidores={repartidores} empresas={empresas} tarifariosCliente={tarifariosCliente} tarifarioEstandar={tarifarioEstandar} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="repartidores"  && <Repartidores repartidores={repartidores} pedidos={pedidos} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="unidades"      && <Unidades unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} repartidores={repartidores} tarifarioVehiculoCliente={tarifarioVehiculoCliente} onRefresh={cargarSilencioso} toast={showToast}/>}
@@ -7896,6 +8108,9 @@ if (verificando) {
       </div>
 
       {toast && <Toast msg={toast.msg} tipo={toast.tipo} onClose={()=>setToast(null)}/>}
+      {paleta && <PaletaComandos onCerrar={()=>setPaleta(false)} onIr={setSeccion}
+        modulos={navConSeccion.filter(x=>!x.section).map(x=>({ id:x.id, label:x.label, icon:x.icon, grupo:x._sec }))}
+        pedidos={pedidos} empresas={empresas} unidades={unidades} repartidores={repartidores}/>}
     </div>
   );
 }
