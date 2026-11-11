@@ -244,12 +244,24 @@ const ICONOS = {
   wrench:'<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
   trend:'<path d="M22 7 13.5 15.5 8.5 10.5 2 17"/><path d="M16 7h6v6"/>',
   dollar:'<path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+  menu:'<path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/>',
   x:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   arrow:'<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
   shield:'<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
   inbox:'<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
 };
 const diaLocal = (d=new Date()) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+// Trae TODAS las filas de una consulta (Supabase corta en 1.000 por pedido)
+const traerTodo = async (armar, tam=1000) => {
+  let desde = 0, acc = [];
+  for (;;) {
+    const { data, error } = await armar().range(desde, desde+tam-1);
+    if (error) return { data:null, error };
+    acc = acc.concat(data||[]);
+    if (!data || data.length < tam) return { data:acc, error:null };
+    desde += tam;
+  }
+};
 function Ico({ n, size=18, color="currentColor", sw=1.8, style }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw}
     strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0, display:"block", ...style }}
@@ -276,6 +288,15 @@ if (typeof document !== "undefined" && !document.getElementById("bz-css")) {
       input:focus, select:focus, textarea:focus { border-color:#E8780A !important; box-shadow:0 0 0 3px #E8780A22; outline:none; }
       ::-webkit-scrollbar { width:8px; height:8px; } ::-webkit-scrollbar-thumb { background:#C5D2E0; border-radius:8px; } ::-webkit-scrollbar-track { background:transparent; }
       .bz-nav-item:hover { background:#1E3A5F55 !important; color:#E8EAF0 !important; }
+      @media (max-width:900px) {
+        table { display:block; max-width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+        [style*="grid-template-columns"] { grid-template-columns:repeat(auto-fit,minmax(150px,1fr)) !important; }
+        [style*="position: fixed"] > div { max-width:96vw !important; max-height:92vh; overflow-y:auto; }
+        select, input, textarea { font-size:16px; }
+        button { min-height:34px; }
+      }
+      @media (max-width:900px) { .bz-oculta-movil { display:none !important; } }
+      .bz-overlay-nav { position:fixed; inset:0; background:#0D1E3D88; z-index:40; }
       .bz-card-hover { transition:box-shadow .15s, transform .15s; } .bz-card-hover:hover { box-shadow:0 8px 24px #0D1E3D1A !important; transform:translateY(-1px); }
     `;
     document.head.appendChild(st);
@@ -941,7 +962,7 @@ function ModalNuevoPedido({ repartidores, empresas, tarifariosCliente, tarifario
     dest_nombre:"", dest_telefono:"", dest_direccion:"", dest_distrito:"",
     dest_referencia:"", peso_kg:"", ambito:"urbano", empresa_id:"",
     repartidor_id:"", cobro_destino:false, monto_cobrar:"", tipo_servicio:"same_day",
-    descripcion:"", fecha_programada: new Date().toISOString().split("T")[0],
+    descripcion:"", fecha_programada: diaLocal(),
   });
   const tarifaCliente = obtenerTarifaEmpresa(f.empresa_id, f.ambito, f.tipo_servicio, tarifariosCliente);
   const tarifaEstandarAplicable = obtenerTarifaEstandar(f.ambito, f.tipo_servicio, tarifarioEstandar);
@@ -2960,7 +2981,7 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
   const [editandoAsignacion, setEditandoAsignacion] = useState(null);
 
   const finalizarAsignacion = async (a) => {
-    const hoy = new Date().toISOString().split("T")[0];
+    const hoy = diaLocal();
     const { error } = await sb.from("asignaciones_unidad").update({ fecha_fin: hoy, estado:"finalizada" }).eq("id", a.id);
     if (error) { toast("Error: "+error.message, "error"); return; }
     toast("Asignación finalizada ✓");
@@ -3201,7 +3222,7 @@ function ModalCalendarioServicio({ asignacion, diasServicio, unidad, empresa, re
     const fin = asignacion.fecha_fin ? new Date(asignacion.fecha_fin+"T00:00:00") : new Date();
     let cur = new Date(inicio);
     while (cur <= fin) {
-      arr.push(cur.toISOString().split("T")[0]);
+      arr.push(diaLocal(cur));
       cur.setDate(cur.getDate()+1);
     }
     return arr;
@@ -3425,7 +3446,7 @@ function ModalUnidad({ unidad, repartidores, onClose, onSaved, toast }) {
 function ModalAsignacionUnidad({ unidades, empresas, tiposServicio, repartidores, asignacion, onClose, onSaved, toast }) {
   const [f, setF] = useState(asignacion || {
     unidad_id:"", empresa_id:"", tipo_servicio_id:"",
-    fecha_inicio: new Date().toISOString().split("T")[0],
+    fecha_inicio: diaLocal(),
     tarifa_dia:"", notas:"",
   });
   const guardar = async () => {
@@ -3499,8 +3520,8 @@ function ModalAsignacionUnidad({ unidades, empresas, tiposServicio, repartidores
 // ══════════════════════════════════════════════════════════════
 function Liquidaciones({ repartidores, pedidos, toast, onRefresh }) {
   const [sel, setSel] = useState("");
-  const [fechaInicio, setFechaInicio] = useState(new Date().toISOString().split("T")[0]);
-  const [fechaFin, setFechaFin] = useState(new Date().toISOString().split("T")[0]);
+  const [fechaInicio, setFechaInicio] = useState(diaLocal());
+  const [fechaFin, setFechaFin] = useState(diaLocal());
   const [generando, setGenerando] = useState(false);
   const [historial, setHistorial] = useState([]);
 
@@ -3656,7 +3677,7 @@ function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }) {
   const facturaVacia = () => ({
     empresa_id:"", serie:"E001", numero:"", descripcion:
     "Servicio de transporte y distribución multipunto - Same Day",
-    cantidad:1, valor_unit_s:"", fecha_emision: new Date().toISOString().split("T")[0],
+    cantidad:1, valor_unit_s:"", fecha_emision: diaLocal(),
     tipo_servicio_id:"", aplica_detraccion:false, porcentaje_detraccion:"",
   });
   const [f, setF] = useState(facturaVacia());
@@ -3664,7 +3685,7 @@ function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }) {
   const abrirNuevaFactura = () => { setEditandoFactura(null); setF(facturaVacia()); setModal(true); };
 
   const cargarFacturas = () => {
-    sb.from("facturas").select("*,empresas(nombre)").order("created_at",{ascending:false})
+    traerTodo(() => sb.from("facturas").select("*,empresas(nombre)").order("created_at",{ascending:false}).order("id"))
       .then(({data})=>{ if(data) setFacturas(data); });
   };
   useEffect(()=>{ cargarFacturas(); },[]);
@@ -4289,7 +4310,7 @@ async function generarLiquidacionTransporte({ filasTransporte, empresa, fechaIni
 }
 
 function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesUnidad, diasServicio, tarifarioVehiculoEstandar, recargoFeriadoPct, toast }) {
-  const hoy = new Date().toISOString().split("T")[0];
+  const hoy = diaLocal();
   const primerDiaMes = hoy.slice(0,8)+"01";
   const [empresaId, setEmpresaId] = useState("todas");
   const [fechaInicio, setFechaInicio] = useState(primerDiaMes);
@@ -4610,7 +4631,7 @@ function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesUnidad, 
 }
 
 function ModalMarcarPagada({ factura, onClose, onConfirmar }) {
-  const [fecha, setFecha] = useState(new Date().toISOString().split("T")[0]);
+  const [fecha, setFecha] = useState(diaLocal());
   const [banco, setBanco] = useState("");
   const [numeroOperacion, setNumeroOperacion] = useState("");
   return (
@@ -4819,7 +4840,7 @@ function Cobranza({ pedidos, empresas, repartidores, onRefresh, toast }) {
 
   const cargar = async () => {
     setCargando(true);
-    const { data, error } = await sb.from("facturas").select("*,empresas(nombre,telefono)").order("fecha_emision", { ascending:true });
+    const { data, error } = await traerTodo(() => sb.from("facturas").select("*,empresas(nombre,telefono)").order("fecha_emision", { ascending:true }).order("id"));
     if (error) toast("Error al cargar facturas: " + error.message, "error"); else setFacturas(data||[]);
     setCargando(false);
   };
@@ -6798,7 +6819,7 @@ function ModalTerceroPlanilla({ tercero, onClose, onSaved, toast }) {
 }
 
 function ModalRegistrarPago({ tipo, registro, onClose, onSaved, toast }) {
-  const hoy = new Date().toISOString().split("T")[0];
+  const hoy = diaLocal();
   const esPlanilla = tipo==="planilla";
   const [periodo, setPeriodo] = useState(hoy.slice(0,7));
   const [montoBruto, setMontoBruto] = useState(esPlanilla ? String(registro.sueldo_bruto||"") : "");
@@ -8950,16 +8971,16 @@ export default function BoazERP() {
     if (!opts.silencioso) setCargando(true);
     try {
       const [p,r,e,l,ln,ts,u,au,tc,ds,tv,te,tve,cr] = await Promise.all([
-        sb.from("pedidos").select("*").order("created_at",{ascending:false}),
+        traerTodo(() => sb.from("pedidos").select("*").order("created_at",{ascending:false}).order("id")),
         sb.from("repartidores").select("*").order("nombres"),
         sb.from("empresas").select("*").order("nombre"),
-        sb.from("liquidaciones").select("*").order("created_at",{ascending:false}),
+        traerTodo(() => sb.from("liquidaciones").select("*").order("created_at",{ascending:false}).order("id")),
         sb.from("lineas_negocio").select("*").order("codigo"),
         sb.from("tipos_servicio").select("*").order("codigo"),
         sb.from("unidades_transporte").select("*").order("placa"),
         sb.from("asignaciones_unidad").select("*").order("fecha_inicio",{ascending:false}),
         sb.from("tarifarios_cliente").select("*"),
-        sb.from("dias_servicio_unidad").select("*"),
+        traerTodo(() => sb.from("dias_servicio_unidad").select("*").order("id")),
         sb.from("tarifario_vehiculo_cliente").select("*"),
         sb.from("tarifario_estandar").select("*"),
         sb.from("tarifario_vehiculo_estandar").select("*"),
@@ -9001,11 +9022,12 @@ export default function BoazERP() {
 
   // Realtime
   useEffect(() => {
+    let t = null;
     const ch = sb.channel("boaz-rt")
-      .on("postgres_changes",{event:"*",schema:"public",table:"pedidos"},cargar)
+      .on("postgres_changes",{event:"*",schema:"public",table:"pedidos"},() => { clearTimeout(t); t = setTimeout(() => cargarSilencioso(), 1500); })
       .subscribe();
-    return () => sb.removeChannel(ch);
-  }, [cargar]);
+    return () => { clearTimeout(t); sb.removeChannel(ch); };
+  }, [cargarSilencioso]);
 
   const NAV = [
     { section:"OPERACIÓN" },
@@ -9039,7 +9061,16 @@ export default function BoazERP() {
     { id:"configuracion",icon:"settings",  label:"Configuración" },
   ];
 
-  const sideW = sidebarOpen ? 220 : 60;
+  const [anchoVentana, setAnchoVentana] = useState(() => typeof window!=="undefined" ? window.innerWidth : 1200);
+  const [drawerNav, setDrawerNav] = useState(false);
+  useEffect(() => {
+    const f = () => setAnchoVentana(window.innerWidth);
+    window.addEventListener("resize", f);
+    return () => window.removeEventListener("resize", f);
+  }, []);
+  const esMovil = anchoVentana <= 900;
+  const navAbierto = esMovil ? true : sidebarOpen;
+  const sideW = esMovil ? 250 : (sidebarOpen ? 220 : 60);
   
   const [permisosDB, setPermisosDB] = useState(null);
   const cargarPermisos = useCallback(async () => {
@@ -9088,9 +9119,11 @@ if (verificando) {
       color:B.textPri, fontFamily:"'Inter','Segoe UI',sans-serif", overflow:"hidden" }}>
 
       {/* SIDEBAR */}
+      {esMovil && drawerNav && <div className="bz-overlay-nav" onClick={()=>setDrawerNav(false)}/>}
       <div style={{ width:sideW, background:B.navy, display:"flex",
-        flexDirection:"column", flexShrink:0, transition:"width 0.2s",
-        boxShadow:"4px 0 20px #0D1E3D33", overflow:"hidden" }}>
+        flexDirection:"column", flexShrink:0, transition: esMovil ? "transform .22s" : "width 0.2s",
+        boxShadow:"4px 0 20px #0D1E3D33", overflow:"hidden",
+        ...(esMovil ? { position:"fixed", top:0, bottom:0, left:0, zIndex:50, transform: drawerNav ? "none" : "translateX(-105%)" } : {}) }}>
 
         {/* Logo */}
         <div style={{ padding:"18px 14px 14px", borderBottom:"1px solid #1E3560",
@@ -9099,7 +9132,7 @@ if (verificando) {
             background:`linear-gradient(135deg,${B.gold},${B.goldDk})`,
             borderRadius:10, display:"flex", alignItems:"center",
             justifyContent:"center", fontSize:18, fontWeight:800 }}>B</div>
-          {sidebarOpen && (
+          {navAbierto && (
             <div style={{ overflow:"hidden" }}>
               <div style={{ fontSize:16, fontWeight:800, letterSpacing:"1px",
                 whiteSpace:"nowrap", display:"flex", alignItems:"center", gap:0 }}>
@@ -9110,10 +9143,10 @@ if (verificando) {
               <div style={{ fontSize:9, color:"#8FA3BA", whiteSpace:"nowrap" }}>Grupo Boaz S.A.C.</div>
             </div>
           )}
-          <button onClick={()=>setSidebarOpen(s=>!s)}
+          <button onClick={()=> esMovil ? setDrawerNav(false) : setSidebarOpen(s=>!s)}
             style={{ marginLeft:"auto", background:"none", border:"none",
               color:"#8FA3BA", cursor:"pointer", fontSize:16, flexShrink:0 }}>
-            <Ico n={sidebarOpen?"panel":"panelr"} size={18}/>
+            <Ico n={esMovil?"x":(sidebarOpen?"panel":"panelr")} size={18}/>
           </button>
         </div>
 
@@ -9122,7 +9155,7 @@ if (verificando) {
           
   {navConSeccion.map((n,i) => {
             if (n.section) {
-              if (!sidebarOpen) return <div key={i} style={{ margin:"8px 0", height:1, background:"#1E3560" }}/>;
+              if (!navAbierto) return <div key={i} style={{ margin:"8px 0", height:1, background:"#1E3560" }}/>;
               const cerrada = !secAbiertas[n.section] && !contieneActiva(n.section);
               const bs = cerrada ? badgeSec(n.section) : 0;
               return (
@@ -9138,21 +9171,21 @@ if (verificando) {
                 </div>
               );
             }
-            if (sidebarOpen && !secAbiertas[n._sec] && !contieneActiva(n._sec)) return null;
+            if (navAbierto && !secAbiertas[n._sec] && !contieneActiva(n._sec)) return null;
             const active = seccion===n.id;
             return (
-              <div key={n.id} className="bz-nav-item" onClick={()=>setSeccion(n.id)}
+              <div key={n.id} className="bz-nav-item" onClick={()=>{ setSeccion(n.id); setDrawerNav(false); }}
                 style={{ display:"flex", alignItems:"center", gap:10,
-                  padding: sidebarOpen?"10px 10px":"10px 0",
-                  justifyContent: sidebarOpen?"flex-start":"center",
+                  padding: navAbierto?"10px 10px":"10px 0",
+                  justifyContent: navAbierto?"flex-start":"center",
                   borderRadius:8, cursor:"pointer", marginBottom:2,
                   background: active?`linear-gradient(135deg,${B.gold}22,${B.gold}11)`:"transparent",
                   borderLeft: active?`3px solid ${B.gold}`:"3px solid transparent",
                   color: active?B.gold:"#8FA3BA",
                   fontWeight: active?700:400, fontSize:13, transition:"all 0.15s" }}>
                 <Ico n={n.icon} size={18}/>
-                {sidebarOpen && <span style={{ flex:1, whiteSpace:"nowrap" }}>{n.label}</span>}
-                {sidebarOpen && n.badge ? (
+                {navAbierto && <span style={{ flex:1, whiteSpace:"nowrap" }}>{n.label}</span>}
+                {navAbierto && n.badge ? (
                   <span style={{ background:B.red, color:"#fff", fontSize:9,
                     fontWeight:700, padding:"2px 6px", borderRadius:10 }}>{n.badge}</span>
                 ) : null}
@@ -9162,7 +9195,7 @@ if (verificando) {
         </nav>
 
         {/* Footer */}
-        {sidebarOpen && (
+        {navAbierto && (
           <div style={{ padding:"12px 14px", borderTop:"1px solid #1E3560",
             fontSize:9, color:"#4A6080" }}>
             <div style={{ color:B.gold, fontWeight:600, marginBottom:2 }}>Con Boaz, tu negocio no para</div>
@@ -9176,32 +9209,34 @@ if (verificando) {
 
         {/* Topbar */}
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
-          padding:"12px 24px", background:B.white,
+          padding: esMovil ? "10px 12px" : "12px 24px", gap: esMovil ? 8 : 0, background:B.white,
           borderBottom:`1px solid ${B.border}`,
           boxShadow:"0 2px 8px #0D1E3D0A", flexShrink:0 }}>
-          <div>
-            <div style={{ fontSize:11, color:B.textMut, fontWeight:600, letterSpacing:"0.6px", textTransform:"uppercase", marginBottom:2 }}>
+          {esMovil && <button onClick={()=>setDrawerNav(true)} aria-label="Menú"
+            style={{ background:B.bg, border:`1px solid ${B.border}`, borderRadius:8, padding:"7px 9px", cursor:"pointer", color:B.navy, display:"flex", flexShrink:0 }}><Ico n="menu" size={20}/></button>}
+          <div style={{ minWidth:0, flex: esMovil ? 1 : "none" }}>
+            <div className="bz-oculta-movil" style={{ fontSize:11, color:B.textMut, fontWeight:600, letterSpacing:"0.6px", textTransform:"uppercase", marginBottom:2 }}>
               {navConSeccion.find(n=>n.id===seccion)?._sec || "Boaz ERP"}
             </div>
-            <div style={{ fontSize:19, fontWeight:800, color:B.navy, display:"flex", alignItems:"center", gap:8 }}>
+            <div style={{ fontSize: esMovil?16:19, fontWeight:800, color:B.navy, display:"flex", alignItems:"center", gap:8, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
               <Ico n={NAV.find(n=>n.id===seccion)?.icon} size={20} color={B.gold}/>
               {NAV.find(n=>n.id===seccion)?.label}
             </div>
           </div>
           <button onClick={()=>setPaleta(true)}
-            style={{ flex:"0 1 380px", margin:"0 20px", display:"flex", alignItems:"center", gap:10, background:B.bg,
+            style={{ flex: esMovil ? "0 0 auto" : "0 1 380px", margin: esMovil ? 0 : "0 20px", display:"flex", alignItems:"center", gap:10, background:B.bg,
               border:`1px solid ${B.border}`, borderRadius:10, padding:"9px 14px", cursor:"pointer", color:B.textMut, fontSize:13, textAlign:"left" }}>
             <Ico n="search" size={16}/>
-            <span style={{ flex:1 }}>Buscar pedido, cliente, placa…</span>
-            <span style={{ fontSize:10, border:`1px solid ${B.border}`, borderRadius:6, padding:"2px 6px", background:B.white }}>Ctrl K</span>
+            <span className="bz-oculta-movil" style={{ flex:1 }}>Buscar pedido, cliente, placa…</span>
+            <span className="bz-oculta-movil" style={{ fontSize:10, border:`1px solid ${B.border}`, borderRadius:6, padding:"2px 6px", background:B.white }}>Ctrl K</span>
           </button>
           <div style={{ display:"flex", gap:10, alignItems:"center" }}>
             <button onClick={cargar}
               style={{ background:B.bg, border:`1px solid ${B.border}`,
                 color:B.textSec, padding:"7px 14px", borderRadius:8,
-                cursor:"pointer", fontSize:12, display:"flex", alignItems:"center", gap:6 }}><Ico n="refresh" size={14}/> Actualizar</button>
+                cursor:"pointer", fontSize:12, display:"flex", alignItems:"center", gap:6 }}><Ico n="refresh" size={14}/> <span className="bz-oculta-movil">Actualizar</span></button>
             <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-  <div style={{ textAlign:"right" }}>
+  <div className="bz-oculta-movil" style={{ textAlign:"right" }}>
     <div style={{ fontSize:12, fontWeight:700, color:B.navy }}>{usuario.nombre}</div>
     <div style={{ fontSize:10, color:B.textMut, textTransform:"capitalize" }}>{usuario.rol}</div>
   </div>
@@ -9213,12 +9248,12 @@ if (verificando) {
   </div>
   <button onClick={cerrarSesion}
     style={{ background:"none", border:`1px solid ${B.border}`, color:B.textSec,
-      fontSize:11, padding:"6px 10px", borderRadius:6, cursor:"pointer", display:"flex", alignItems:"center", gap:5 }}><Ico n="logout" size={13}/> Salir</button>
+      fontSize:11, padding:"6px 10px", borderRadius:6, cursor:"pointer", display:"flex", alignItems:"center", gap:5 }}><Ico n="logout" size={13}/> <span className="bz-oculta-movil">Salir</span></button>
 </div>
 </div>
 </div>
         {/* Contenido */}
-        <div style={{ flex:1, overflowY:"auto", padding:24 }}>
+        <div style={{ flex:1, overflowY:"auto", padding: esMovil ? 12 : 24 }}>
           {cargando ? (
             <div style={{ display:"flex", flexDirection:"column", alignItems:"center",
               justifyContent:"center", height:"100%", gap:16 }}>

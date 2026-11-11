@@ -1,0 +1,17 @@
+{
+  "name": "Boaz ERP",
+  "short_name": "Boaz ERP",
+  "description": "Panel operativo y administrativo de Grupo Boaz S.A.C.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0D1E3D",
+  "theme_color": "#0D1E3D",
+  "lang": "es-PE",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

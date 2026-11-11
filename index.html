@@ -2,8 +2,15 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Boaz ERP — Panel Operativo</title>
+  <meta name="theme-color" content="#0D1E3D" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" type="image/png" href="/icon-192.png" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Boaz ERP" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #0B1120; overflow-y: auto; overflow-x: hidden; }
@@ -15,5 +22,11 @@
 <body>
   <div id="root"></div>
   <script type="module" src="/src/main.jsx"></script>
+  <script>
+    // PWA: solo en https (no en localhost ni dentro del APK)
+    if ("serviceWorker" in navigator && location.protocol === "https:" && location.hostname !== "localhost") {
+      window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
+    }
+  </script>
 </body>
 </html>
