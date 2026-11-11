@@ -142,9 +142,9 @@ async function geocodificarDireccion(direccion, distrito) {
 const esperar = (ms) => new Promise(r => setTimeout(r, ms));
 
 const ROLES_ACCESO = {
-  admin: ["dashboard","pedidos","repartidores","clientes","cotizaciones","unidades","inventario","catalogo","liquidaciones","liquidacion-transporte","liquidacion-clientes","facturacion","gastos","planilla","reportes","configuracion"],
+  admin: ["dashboard","pedidos","repartidores","clientes","cotizaciones","unidades","inventario","catalogo","liquidaciones","liquidacion-transporte","liquidacion-clientes","facturacion","cobranza","gastos","planilla","reportes","configuracion"],
   operaciones: ["dashboard","pedidos","repartidores","clientes","cotizaciones","unidades","inventario","catalogo"],
-  finanzas: ["dashboard","clientes","cotizaciones","catalogo","liquidaciones","liquidacion-transporte","liquidacion-clientes","facturacion","gastos","planilla","reportes"],
+  finanzas: ["dashboard","clientes","cotizaciones","catalogo","liquidaciones","liquidacion-transporte","liquidacion-clientes","facturacion","cobranza","gastos","planilla","reportes"],
 };
 const Chip = ({ estado, size="sm" }) => {
   const s = ESTADOS_PEDIDO[estado] || { bg:"#F3F4F6", color:"#374151", label: estado };
@@ -515,7 +515,9 @@ function Dashboard({ pedidos, repartidores, liquidaciones, cotizNuevas=0, rol, o
         const items = [];
         if (sinAsignar.length>0) items.push({ ico:"alert", c:B.red, t:`${sinAsignar.length} pedido${sinAsignar.length===1?"":"s"} sin asignar`, ir:"pedidos" });
         if (cotizNuevas>0) items.push({ ico:"mail", c:B.blue, t:`${cotizNuevas} cotización${cotizNuevas===1?"":"es"} nueva${cotizNuevas===1?"":"s"}`, ir:"cotizaciones" });
-        if (veFinanzas && alertasFin.facturas && alertasFin.facturas.n>0) items.push({ ico:"receipt", c:B.orange, t:`${alertasFin.facturas.n} factura${alertasFin.facturas.n===1?"":"s"} con más de 30 días sin cobrar (${fmt.sol(alertasFin.facturas.total)})`, ir:"facturacion" });
+        if (veFinanzas && alertasFin.facturas && alertasFin.facturas.n>0) items.push({ ico:"receipt", c:B.orange, t:`${alertasFin.facturas.n} factura${alertasFin.facturas.n===1?"":"s"} con más de 30 días sin cobrar (${fmt.sol(alertasFin.facturas.total)})`, ir:"cobranza" });
+        const codSin = pedidos.filter(p => p.cobro_destino && p.estado==="entregado" && !p.cod_rendido);
+        if (veFinanzas && codSin.length>0) items.push({ ico:"banknote", c:B.orange, t:`${codSin.length} cobro${codSin.length===1?"":"s"} contraentrega sin rendir (${fmt.sol(codSin.reduce((t,p)=>t+(parseFloat(p.monto_cobrar)||0),0))})`, ir:"cobranza" });
         if (veFinanzas && alertasFin.mant.length>0) items.push({ ico:"wrench", c:B.red, t:`Mantenimiento vencido: ${alertasFin.mant.slice(0,4).join(", ")}${alertasFin.mant.length>4?"…":""}`, ir:"gastos" });
         return (
           <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:"14px 18px", marginBottom:20, boxShadow:"0 2px 8px #0D1E3D0A" }}>
@@ -4761,6 +4763,306 @@ function Cotizaciones({ toast, onCambio }) {
   );
 }
 
+// ── COBRANZA: cuentas por cobrar, detracciones y contraentrega (COD) ──
+const BUCKETS_CXC = [
+  { id:"b0", label:"0–30 días",      min:0,  max:30,    color:B.green  },
+  { id:"b1", label:"31–60 días",     min:31, max:60,    color:B.gold   },
+  { id:"b2", label:"61–90 días",     min:61, max:90,    color:B.orange },
+  { id:"b3", label:"Más de 90 días", min:91, max:99999, color:B.red    },
+];
+const diasDesdeFecha = (f) => f ? Math.floor((new Date(diaLocal()+"T00:00:00") - new Date(String(f).slice(0,10)+"T00:00:00"))/86400000) : 0;
+
+function Cobranza({ pedidos, empresas, repartidores, onRefresh, toast }) {
+  const [tab, setTab] = useState("cxc");
+  const [facturas, setFacturas] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [bucket, setBucket] = useState("");
+  const [fEmpresa, setFEmpresa] = useState("");
+  const [busq, setBusq] = useState("");
+  const [modalPago, setModalPago] = useState(null);
+  const [modalDet, setModalDet] = useState(null);
+  const [detFecha, setDetFecha] = useState(diaLocal());
+  const [detConst, setDetConst] = useState("");
+  const [verRendidos, setVerRendidos] = useState(false);
+  const [selCod, setSelCod] = useState({});
+
+  const cargar = async () => {
+    setCargando(true);
+    const { data, error } = await sb.from("facturas").select("*,empresas(nombre,telefono)").order("fecha_emision", { ascending:true });
+    if (error) toast("Error al cargar facturas: " + error.message, "error"); else setFacturas(data||[]);
+    setCargando(false);
+  };
+  useEffect(() => { cargar(); }, []);
+
+  const vigentes = useMemo(() => facturas.filter(f => f.estado!=="anulada" && f.estado!=="anulado"), [facturas]);
+  const pend = useMemo(() => vigentes.filter(f => f.estado_pago!=="pagado").map(f => ({ ...f, dias: diasDesdeFecha(f.fecha_emision) })), [vigentes]);
+  const numV = (v) => parseFloat(v)||0;
+
+  const resumenBuckets = BUCKETS_CXC.map(b => {
+    const l = pend.filter(f => f.dias>=b.min && f.dias<=b.max);
+    return { ...b, n:l.length, total:l.reduce((t,f)=>t+numV(f.total_s),0) };
+  });
+  const totalPend = pend.reduce((t,f)=>t+numV(f.total_s),0);
+  const cobradoMes = vigentes.filter(f => f.estado_pago==="pagado" && (f.fecha_pago||"").slice(0,7)===diaLocal().slice(0,7)).reduce((t,f)=>t+numV(f.total_s),0);
+
+  const lista = useMemo(() => {
+    const q = busq.trim().toLowerCase();
+    const b = BUCKETS_CXC.find(x => x.id===bucket);
+    return pend.filter(f =>
+      (!b || (f.dias>=b.min && f.dias<=b.max)) && (!fEmpresa || f.empresa_id===fEmpresa) &&
+      (!q || `${f.serie}-${f.numero} ${f.empresas?.nombre||""} ${f.descripcion||""}`.toLowerCase().includes(q))
+    ).sort((a,b) => b.dias-a.dias);
+  }, [pend, bucket, fEmpresa, busq]);
+
+  const porCliente = useMemo(() => {
+    const m = {};
+    pend.forEach(f => { const n = f.empresas?.nombre || "—"; m[n] = (m[n]||0) + numV(f.total_s); });
+    return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  }, [pend]);
+
+  const marcarPagada = async (fecha, banco, numeroOperacion) => {
+    const { error } = await sb.from("facturas").update({ estado_pago:"pagado", fecha_pago:fecha, banco_pago:banco||null, numero_operacion:numeroOperacion||null }).eq("id", modalPago.id);
+    if (error) { toast("Error: "+error.message, "error"); return; }
+    toast("Factura marcada como pagada ✓"); setModalPago(null); cargar();
+  };
+
+  const recordatorio = (f) => {
+    const tel = f.empresas?.telefono;
+    if (!tel) { toast("Este cliente no tiene teléfono registrado", "error"); return; }
+    const msg = `Hola, le escribimos de Grupo Boaz S.A.C. Le recordamos que la factura ${f.serie}-${f.numero} por ${fmt.sol(f.total_s)}, emitida el ${fmt.fecha(f.fecha_emision)}, figura pendiente de pago. Agradeceremos confirmar la fecha de cancelación. Gracias.`;
+    window.open(linkWhatsApp(tel, msg), "_blank");
+  };
+
+  // detracciones
+  const conDet = useMemo(() => vigentes.filter(f => numV(f.monto_detraccion)>0), [vigentes]);
+  const detPend = conDet.filter(f => !f.detraccion_depositada);
+  const detPendTotal = detPend.reduce((t,f)=>t+numV(f.monto_detraccion),0);
+  const detDepMes = conDet.filter(f => f.detraccion_depositada && (f.detraccion_fecha||"").slice(0,7)===diaLocal().slice(0,7)).reduce((t,f)=>t+numV(f.monto_detraccion),0);
+  const confirmarDet = async () => {
+    const { error } = await sb.from("facturas").update({ detraccion_depositada:true, detraccion_fecha:detFecha, detraccion_constancia:detConst||null }).eq("id", modalDet.id);
+    if (error) { toast("Error: " + error.message + " (¿ejecutaste cobranza_boaz.sql?)", "error"); return; }
+    toast("Detracción registrada como depositada ✓"); setModalDet(null); setDetConst(""); cargar();
+  };
+
+  // contraentrega (COD)
+  const codEntregados = useMemo(() => pedidos.filter(p => p.cobro_destino && p.estado==="entregado"), [pedidos]);
+  const codPend = codEntregados.filter(p => !p.cod_rendido);
+  const codRend = codEntregados.filter(p => p.cod_rendido);
+  const codEnCalle = pedidos.filter(p => p.cobro_destino && p.estado!=="entregado" && p.estado!=="no_entregado" && p.estado!=="cancelado");
+  const montoCod = (l) => l.reduce((t,p)=>t+numV(p.monto_cobrar),0);
+  const porRepartidor = useMemo(() => {
+    const m = {};
+    codPend.forEach(p => { const k = p.repartidor_id || "—"; (m[k] = m[k] || []).push(p); });
+    return Object.entries(m).map(([id, ps]) => {
+      const r = repartidores.find(x => x.id===id);
+      const masViejo = Math.max(...ps.map(p => diasDesdeFecha(p.fecha_entrega || p.created_at)));
+      return { id, nombre: r ? `${r.nombres||""} ${r.apellidos||""}`.trim() : "Sin repartidor", ps, total: montoCod(ps), dias: masViejo };
+    }).sort((a,b)=>b.total-a.total);
+  }, [codPend, repartidores]);
+  const idsSel = Object.keys(selCod).filter(k => selCod[k]);
+  const totalSel = montoCod(codPend.filter(p => selCod[p.id]));
+  const rendir = async (ids) => {
+    if (!ids.length) return;
+    const { error } = await sb.from("pedidos").update({ cod_rendido:true, cod_rendido_fecha:diaLocal() }).in("id", ids);
+    if (error) { toast("Error: " + error.message + " (¿ejecutaste cobranza_boaz.sql?)", "error"); return; }
+    toast(`${ids.length} cobro${ids.length===1?"":"s"} marcado${ids.length===1?"":"s"} como rendido${ids.length===1?"":"s"} ✓`);
+    setSelCod({}); onRefresh && onRefresh();
+  };
+
+  const exportar = () => {
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(lista.map(f => ({ Cliente:f.empresas?.nombre||"", Factura:`${f.serie}-${f.numero}`, Emisión:f.fecha_emision, "Días":f.dias, Total:numV(f.total_s), Detracción:numV(f.monto_detraccion), "Neto a cobrar":numV(f.total_s)-numV(f.monto_detraccion) }))), "Por cobrar");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detPend.map(f => ({ Cliente:f.empresas?.nombre||"", Factura:`${f.serie}-${f.numero}`, Emisión:f.fecha_emision, Detracción:numV(f.monto_detraccion), "%":numV(f.porcentaje_detraccion) }))), "Detracciones pendientes");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(codPend.map(p => ({ Pedido:p.omd, Destinatario:p.dest_nombre, Repartidor:(repartidores.find(r=>r.id===p.repartidor_id)||{}).nombres||"", Monto:numV(p.monto_cobrar) }))), "COD sin rendir");
+    XLSX.writeFile(wb, `cobranza_boaz_${diaLocal()}.xlsx`);
+  };
+
+  const th = { textAlign:"left", padding:"10px 12px", fontSize:11, color:B.textSec, textTransform:"uppercase", letterSpacing:".6px", borderBottom:`1px solid ${B.border}`, whiteSpace:"nowrap" };
+  const td = { padding:"10px 12px", fontSize:13, borderBottom:`1px solid ${B.border}`, color:B.textPri, verticalAlign:"middle" };
+  const card = { background:B.white, border:`1px solid ${B.border}`, borderRadius:12, boxShadow:"0 2px 8px #0D1E3D0A" };
+  const TabBtn = ({ id, children, n }) => (
+    <button onClick={()=>setTab(id)} style={{ padding:"8px 16px", borderRadius:8, border:"none", cursor:"pointer", fontSize:13, fontWeight:700,
+      background: tab===id ? B.navy : "transparent", color: tab===id ? "#fff" : B.textSec, display:"flex", alignItems:"center", gap:8 }}>
+      {children}{n ? <span style={{ background:tab===id?B.gold:B.red, color:tab===id?B.navy:"#fff", fontSize:10, padding:"1px 7px", borderRadius:10 }}>{n}</span> : null}
+    </button>
+  );
+
+  return (
+    <div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:16 }}>
+        <div>
+          <div style={{ fontSize:12, color:B.textSec }}>Seguimiento de lo que te deben: facturas por cobrar con antigüedad, detracciones y cobros contraentrega.</div>
+        </div>
+        <BtnSec onClick={exportar}>⬇ Excel</BtnSec>
+      </div>
+
+      <div style={{ display:"flex", gap:6, marginBottom:14, flexWrap:"wrap" }}>
+        <TabBtn id="cxc" n={pend.filter(f=>f.dias>60).length}>Cuentas por cobrar</TabBtn>
+        <TabBtn id="det" n={detPend.length}>Detracciones</TabBtn>
+        <TabBtn id="cod" n={codPend.length}>Contraentrega (COD)</TabBtn>
+      </div>
+
+      {tab==="cxc" && (<>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:12, marginBottom:14 }}>
+          <div style={{ ...card, padding:"14px 16px" }}>
+            <div style={{ fontSize:11, color:B.textSec, fontWeight:700, textTransform:"uppercase", letterSpacing:".6px" }}>Total por cobrar</div>
+            <div style={{ fontSize:22, fontWeight:800, color:B.navy, marginTop:4 }}>{solN(totalPend)}</div>
+            <div style={{ fontSize:11, color:B.textMut }}>{pend.length} factura{pend.length===1?"":"s"} · cobrado este mes {solN(cobradoMes)}</div>
+          </div>
+          {resumenBuckets.map(b => (
+            <button key={b.id} onClick={()=>setBucket(bucket===b.id?"":b.id)} className="bz-card-hover"
+              style={{ ...card, padding:"14px 16px", textAlign:"left", cursor:"pointer", borderTop:`3px solid ${b.color}`, outline: bucket===b.id?`2px solid ${b.color}`:"none" }}>
+              <div style={{ fontSize:11, color:B.textSec, fontWeight:700, textTransform:"uppercase", letterSpacing:".6px" }}>{b.label}</div>
+              <div style={{ fontSize:20, fontWeight:800, color:b.color, marginTop:4 }}>{solN(b.total)}</div>
+              <div style={{ fontSize:11, color:B.textMut }}>{b.n} factura{b.n===1?"":"s"}</div>
+            </button>
+          ))}
+        </div>
+
+        <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginBottom:12, alignItems:"flex-end" }}>
+          <div><label style={lbl}>Cliente</label>
+            <select style={{...inp,width:230}} value={fEmpresa} onChange={e=>setFEmpresa(e.target.value)}><option value="">Todos</option>{empresas.map(e=><option key={e.id} value={e.id}>{e.nombre}</option>)}</select></div>
+          <div style={{ flex:"1 1 200px", minWidth:0 }}><label style={lbl}>Buscar</label><input style={inp} placeholder="N° factura, cliente…" value={busq} onChange={e=>setBusq(e.target.value)}/></div>
+          {(bucket||fEmpresa||busq) && <BtnSec onClick={()=>{setBucket("");setFEmpresa("");setBusq("");}}>Limpiar filtros</BtnSec>}
+        </div>
+
+        <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1fr) 280px", gap:14, alignItems:"start" }}>
+          <div style={{ ...card, overflowX:"auto" }}>
+            {cargando ? <Cargando filas={5}/> : lista.length===0 ?
+              <EstadoVacio icono="check" titulo="Sin facturas pendientes" texto="No hay facturas por cobrar con estos filtros."/> :
+              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                <thead><tr><th style={th}>Cliente</th><th style={th}>Factura</th><th style={th}>Emisión</th><th style={{...th,textAlign:"right"}}>Días</th><th style={{...th,textAlign:"right"}}>Total</th><th style={{...th,textAlign:"right"}}>Neto a cobrar</th><th style={th}></th></tr></thead>
+                <tbody>{lista.map(f => {
+                  const b = BUCKETS_CXC.find(x => f.dias>=x.min && f.dias<=x.max) || BUCKETS_CXC[0];
+                  return (
+                    <tr key={f.id}>
+                      <td style={{...td,fontWeight:600}}>{f.empresas?.nombre||"—"}</td>
+                      <td style={td}>{f.serie}-{f.numero}</td>
+                      <td style={td}>{fmt.fecha(f.fecha_emision)}</td>
+                      <td style={{...td,textAlign:"right"}}><span style={{ background:`${b.color}18`, color:b.color, fontWeight:800, fontSize:12, padding:"2px 9px", borderRadius:20 }}>{f.dias}</span></td>
+                      <td style={{...td,textAlign:"right",fontWeight:700}}>{solN(numV(f.total_s))}</td>
+                      <td style={{...td,textAlign:"right"}}>{solN(numV(f.total_s)-numV(f.monto_detraccion))}</td>
+                      <td style={{...td,whiteSpace:"nowrap",textAlign:"right"}}>
+                        <button onClick={()=>recordatorio(f)} title="Enviar recordatorio por WhatsApp" style={{ background:"#ECFDF5", border:"1px solid #A7F3D0", color:"#047857", borderRadius:8, padding:"5px 10px", fontSize:12, cursor:"pointer", marginRight:6 }}>💬 Recordar</button>
+                        <button onClick={()=>setModalPago(f)} style={{ background:B.gold, border:"none", color:B.navy, borderRadius:8, padding:"5px 10px", fontSize:12, fontWeight:700, cursor:"pointer" }}>Marcar pagada</button>
+                      </td>
+                    </tr>);
+                })}</tbody>
+              </table>}
+          </div>
+          <div style={{ ...card, padding:16 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:B.navy, marginBottom:12 }}>Quién más te debe</div>
+            {porCliente.length===0 ? <div style={{ fontSize:12, color:B.textMut }}>Sin deuda pendiente</div> : porCliente.map(([n,v]) => (
+              <div key={n} style={{ marginBottom:10 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:3 }}><span style={{ fontWeight:600, color:B.textPri, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:150 }}>{n}</span><span style={{ color:B.textSec }}>{solN(v)}</span></div>
+                <div style={{ height:6, background:B.bg, borderRadius:4 }}><div style={{ height:6, borderRadius:4, background:B.gold, width:`${totalPend?v/totalPend*100:0}%` }}/></div>
+              </div>))}
+          </div>
+        </div>
+        <div style={{ fontSize:11, color:B.textMut, marginTop:8 }}>La antigüedad se cuenta desde la fecha de emisión de la factura.</div>
+      </>)}
+
+      {tab==="det" && (<>
+        <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:14 }}>
+          <div style={{ ...card, padding:"14px 16px", flex:"1 1 200px", borderTop:`3px solid ${B.orange}` }}>
+            <div style={{ fontSize:11, color:B.textSec, fontWeight:700, textTransform:"uppercase" }}>Detracciones por confirmar</div>
+            <div style={{ fontSize:22, fontWeight:800, color:B.orange, marginTop:4 }}>{solN(detPendTotal)}</div>
+            <div style={{ fontSize:11, color:B.textMut }}>{detPend.length} factura{detPend.length===1?"":"s"}</div></div>
+          <div style={{ ...card, padding:"14px 16px", flex:"1 1 200px", borderTop:`3px solid ${B.green}` }}>
+            <div style={{ fontSize:11, color:B.textSec, fontWeight:700, textTransform:"uppercase" }}>Depositadas este mes</div>
+            <div style={{ fontSize:22, fontWeight:800, color:B.green, marginTop:4 }}>{solN(detDepMes)}</div></div>
+        </div>
+        <div style={{ fontSize:12, color:B.textSec, marginBottom:10 }}>Marca cada detracción cuando el cliente la deposite en tu cuenta del Banco de la Nación y confirmes la constancia de depósito.</div>
+        <div style={{ ...card, overflowX:"auto" }}>
+          {cargando ? <Cargando filas={4}/> : detPend.length===0 ?
+            <EstadoVacio icono="check" titulo="Sin detracciones pendientes" texto="Todas las detracciones están confirmadas."/> :
+            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+              <thead><tr><th style={th}>Cliente</th><th style={th}>Factura</th><th style={th}>Emisión</th><th style={{...th,textAlign:"right"}}>%</th><th style={{...th,textAlign:"right"}}>Detracción</th><th style={th}></th></tr></thead>
+              <tbody>{detPend.map(f => (
+                <tr key={f.id}><td style={{...td,fontWeight:600}}>{f.empresas?.nombre||"—"}</td><td style={td}>{f.serie}-{f.numero}</td><td style={td}>{fmt.fecha(f.fecha_emision)}</td>
+                  <td style={{...td,textAlign:"right"}}>{numV(f.porcentaje_detraccion)}%</td><td style={{...td,textAlign:"right",fontWeight:700}}>{solN(numV(f.monto_detraccion))}</td>
+                  <td style={{...td,textAlign:"right"}}><button onClick={()=>{setModalDet(f);setDetFecha(diaLocal());}} style={{ background:B.gold, border:"none", color:B.navy, borderRadius:8, padding:"5px 10px", fontSize:12, fontWeight:700, cursor:"pointer" }}>Marcar depositada</button></td></tr>))}</tbody>
+            </table>}
+        </div>
+      </>)}
+
+      {tab==="cod" && (<>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:12, marginBottom:14 }}>
+          <div style={{ ...card, padding:"14px 16px", borderTop:`3px solid ${B.red}` }}>
+            <div style={{ fontSize:11, color:B.textSec, fontWeight:700, textTransform:"uppercase" }}>Cobrado sin rendir</div>
+            <div style={{ fontSize:22, fontWeight:800, color:B.red, marginTop:4 }}>{solN(montoCod(codPend))}</div>
+            <div style={{ fontSize:11, color:B.textMut }}>{codPend.length} pedido{codPend.length===1?"":"s"} entregado{codPend.length===1?"":"s"} · dinero en manos de repartidores</div></div>
+          <div style={{ ...card, padding:"14px 16px", borderTop:`3px solid ${B.gold}` }}>
+            <div style={{ fontSize:11, color:B.textSec, fontWeight:700, textTransform:"uppercase" }}>Por cobrar en la calle</div>
+            <div style={{ fontSize:22, fontWeight:800, color:B.goldDk, marginTop:4 }}>{solN(montoCod(codEnCalle))}</div>
+            <div style={{ fontSize:11, color:B.textMut }}>{codEnCalle.length} pedido{codEnCalle.length===1?"":"s"} aún sin entregar</div></div>
+          <div style={{ ...card, padding:"14px 16px", borderTop:`3px solid ${B.green}` }}>
+            <div style={{ fontSize:11, color:B.textSec, fontWeight:700, textTransform:"uppercase" }}>Ya rendido</div>
+            <div style={{ fontSize:22, fontWeight:800, color:B.green, marginTop:4 }}>{solN(montoCod(codRend))}</div>
+            <div style={{ fontSize:11, color:B.textMut }}>{codRend.length} pedido{codRend.length===1?"":"s"}</div></div>
+        </div>
+
+        {idsSel.length>0 && (
+          <div style={{ position:"sticky", top:0, zIndex:5, background:B.navy, color:"#fff", borderRadius:10, padding:"10px 16px", marginBottom:12, display:"flex", alignItems:"center", gap:14 }}>
+            <span style={{ fontSize:13 }}>{idsSel.length} seleccionado{idsSel.length===1?"":"s"} · <b>{solN(totalSel)}</b></span>
+            <BtnPri onClick={()=>rendir(idsSel)} style={{ marginLeft:"auto", padding:"6px 14px" }}>Marcar como rendido</BtnPri>
+            <button onClick={()=>setSelCod({})} style={{ background:"none", border:"none", color:"#8FA3BA", cursor:"pointer", fontSize:12 }}>Cancelar</button>
+          </div>)}
+
+        {porRepartidor.length===0 ? <div style={card}><EstadoVacio icono="check" titulo="Todo rendido" texto="No hay cobros contraentrega pendientes de rendir."/></div> :
+          porRepartidor.map(g => (
+            <div key={g.id} style={{ ...card, marginBottom:12, overflow:"hidden" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", background:B.bg, borderBottom:`1px solid ${B.border}`, flexWrap:"wrap" }}>
+                <div style={{ fontWeight:800, color:B.navy, fontSize:14 }}>{g.nombre}</div>
+                <span style={{ fontSize:12, color:B.textSec }}>{g.ps.length} cobro{g.ps.length===1?"":"s"}</span>
+                {g.dias>=3 && <span style={{ background:"#FEF2F2", color:B.red, fontSize:11, fontWeight:700, padding:"2px 9px", borderRadius:20 }}>hasta {g.dias} días sin rendir</span>}
+                <span style={{ marginLeft:"auto", fontWeight:800, color:B.red }}>{solN(g.total)}</span>
+                <button onClick={()=>rendir(g.ps.map(p=>p.id))} style={{ background:B.gold, border:"none", color:B.navy, borderRadius:8, padding:"5px 12px", fontSize:12, fontWeight:700, cursor:"pointer" }}>Rendir todo</button>
+              </div>
+              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                <tbody>{g.ps.map(p => (
+                  <tr key={p.id}>
+                    <td style={{...td,width:36}}><input type="checkbox" checked={!!selCod[p.id]} onChange={e=>setSelCod(s=>({...s,[p.id]:e.target.checked}))}/></td>
+                    <td style={{...td,fontWeight:600}}>{p.omd}</td>
+                    <td style={td}>{p.dest_nombre||"—"}</td>
+                    <td style={td}>{fmt.fecha(p.fecha_entrega||p.created_at)}</td>
+                    <td style={{...td,textAlign:"right",fontWeight:700}}>{solN(numV(p.monto_cobrar))}</td>
+                  </tr>))}</tbody>
+              </table>
+            </div>))}
+
+        {codRend.length>0 && (
+          <div style={{ marginTop:8 }}>
+            <button onClick={()=>setVerRendidos(v=>!v)} style={{ background:"none", border:"none", color:B.blue, fontSize:12, fontWeight:700, cursor:"pointer" }}>{verRendidos?"Ocultar":"Ver"} rendidos recientes ({codRend.length})</button>
+            {verRendidos && (
+              <div style={{ ...card, overflowX:"auto", marginTop:8 }}>
+                <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                  <thead><tr><th style={th}>Pedido</th><th style={th}>Destinatario</th><th style={th}>Rendido el</th><th style={{...th,textAlign:"right"}}>Monto</th></tr></thead>
+                  <tbody>{[...codRend].sort((a,b)=>(b.cod_rendido_fecha||"").localeCompare(a.cod_rendido_fecha||"")).slice(0,50).map(p => (
+                    <tr key={p.id}><td style={td}>{p.omd}</td><td style={td}>{p.dest_nombre||"—"}</td><td style={td}>{fmt.fecha(p.cod_rendido_fecha)}</td><td style={{...td,textAlign:"right"}}>{solN(numV(p.monto_cobrar))}</td></tr>))}</tbody>
+                </table>
+              </div>)}
+          </div>)}
+        <div style={{ fontSize:11, color:B.textMut, marginTop:8 }}>Se considera "cobrado" el COD de pedidos entregados. Marca "rendido" cuando el repartidor te entregue el dinero.</div>
+      </>)}
+
+      {modalPago && <ModalMarcarPagada factura={modalPago} onClose={()=>setModalPago(null)} onConfirmar={marcarPagada}/>}
+      {modalDet && (
+        <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1500, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+          <div style={{ background:B.white, borderRadius:16, padding:26, width:400, maxWidth:"100%", boxShadow:"0 20px 60px #0003" }}>
+            <div style={{ fontSize:15, fontWeight:800, color:B.navy, marginBottom:6 }}>Detracción depositada</div>
+            <div style={{ fontSize:13, color:B.textSec, marginBottom:14 }}>{modalDet.serie}-{modalDet.numero} · {modalDet.empresas?.nombre} · <b>{solN(numV(modalDet.monto_detraccion))}</b></div>
+            <label style={lbl}>Fecha de depósito</label>
+            <input type="date" style={{...inp,marginBottom:12}} value={detFecha} onChange={e=>setDetFecha(e.target.value)}/>
+            <label style={lbl}>N° de constancia (opcional)</label>
+            <input style={{...inp,marginBottom:18}} value={detConst} onChange={e=>setDetConst(e.target.value)}/>
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}><BtnSec onClick={()=>setModalDet(null)}>Cancelar</BtnSec><BtnPri onClick={confirmarDet}>Confirmar</BtnPri></div>
+          </div>
+        </div>)}
+    </div>
+  );
+}
+
 // ── GASTOS / INGRESOS ─────────────────────────────────────────
 const CAT_EGRESO = ["Combustible","Mantenimiento","Reparación","Repuestos y llantas","Peajes y estacionamiento","Lavado","Seguro y SOAT","Revisión técnica","Multas","Viáticos","Servicios","Alquiler","Impuestos","Otros"];
 const CAT_INGRESO = ["Otros ingresos","Reembolso de gasto","Venta de activo","Aporte de socio"];
@@ -6848,7 +7150,7 @@ function SerieDiaria({ datos }) {
   );
 }
 
-function Reportes({ pedidos, repartidores, empresas, toast }) {
+function Reportes({ pedidos, repartidores, empresas, toast, onIr }) {
   const [periodo, setPeriodo] = useState("hoy");
   const [fechaInicio, setFechaInicio] = useState("");
   const [fechaFin, setFechaFin] = useState("");
@@ -7145,6 +7447,7 @@ function Reportes({ pedidos, repartidores, empresas, toast }) {
             <div style={{ gridColumn:"1/-1" }}><div style={{ fontSize:10, color:B.textMut, textTransform:"uppercase" }}>Pendiente por cobrar</div>
               <div style={{ fontSize:22, fontWeight:900, color:"#C2410C" }}>{fmt.sol(codPendiente)}</div></div>
           </div>
+          {onIr && <button onClick={()=>onIr("cobranza")} style={{ marginTop:14, background:"none", border:"none", color:B.blue, fontSize:12, fontWeight:700, cursor:"pointer", padding:0 }}>Gestionar rendición en Cobranza →</button>}
         </div>
       </div>
 
@@ -7496,7 +7799,10 @@ function Configuracion({ onRefresh, toast }) {
 // líneas de negocio + tipos de servicio, y tarifarios negociados
 // por cliente. Todo el tema de precios en un solo lugar.
 // ══════════════════════════════════════════════════════════════
-function Catalogo({ lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVehiculoEstandar, recargoFeriadoPct, onRefresh, toast }) {
+function Catalogo({ lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVehiculoEstandar, recargoFeriadoPct, empresas=[], tarifariosCliente=[], tarifarioVehiculoCliente=[], onRefresh, toast }) {
+  const [modalTarCli, setModalTarCli] = useState(null);
+  const [modalTarVeh, setModalTarVeh] = useState(null);
+  const [busqCli, setBusqCli] = useState("");
   const [modalLinea, setModalLinea] = useState(false);
   const [modalTipo, setModalTipo] = useState(null);
   const [modalTarifarioEstandar, setModalTarifarioEstandar] = useState(false);
@@ -7525,6 +7831,29 @@ function Catalogo({ lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVe
 
   return (
     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+      {/* Tarifas por cliente (centralizado) */}
+      <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:20, boxShadow:"0 2px 8px #0D1E3D0A", gridColumn:"span 2" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, paddingBottom:8, borderBottom:`2px solid ${B.gold}`, gap:12, flexWrap:"wrap" }}>
+          <div style={{ fontSize:14, fontWeight:800, color:B.navy }}>👥 Tarifas por cliente</div>
+          <input style={{ ...inp, width:220 }} placeholder="Buscar cliente…" value={busqCli} onChange={e=>setBusqCli(e.target.value)}/>
+        </div>
+        <div style={{ maxHeight:320, overflowY:"auto" }}>
+          {empresas.filter(e => !busqCli.trim() || (e.nombre||"").toLowerCase().includes(busqCli.trim().toLowerCase())).map(e => {
+            const aP = tarifariosCliente.filter(t=>t.empresa_id===e.id && t.activo).length;
+            const aV = tarifarioVehiculoCliente.filter(t=>t.empresa_id===e.id && t.activo).length;
+            const pill = (n, txt0, txt, onClick) => (
+              <button onClick={onClick} style={{ fontSize:11, fontWeight:700, padding:"5px 12px", borderRadius:20, cursor:"pointer",
+                border:`1px solid ${n>0?B.green:B.border}`, background:n>0?"#ECFDF5":B.bg, color:n>0?B.green:B.textSec }}>{n>0?txt:txt0}</button>);
+            return (
+              <div key={e.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 4px", borderBottom:`1px solid ${B.border}`, flexWrap:"wrap" }}>
+                <div style={{ flex:"1 1 200px", fontSize:13, fontWeight:600, color:B.textPri }}>{e.nombre}</div>
+                {pill(aP, "💰 Sin tarifario por pedido", `💰 ${aP} tarifa${aP===1?"":"s"} por pedido`, ()=>setModalTarCli(e))}
+                {pill(aV, "🚛 Sin tarifario por vehículo", `🚛 ${aV} vehículo${aV===1?"":"s"}`, ()=>setModalTarVeh(e))}
+              </div>);
+          })}
+          {empresas.length===0 && <div style={{ fontSize:12, color:B.textMut, padding:12 }}>Sin clientes registrados</div>}
+        </div>
+      </div>
       {/* Recargo por feriados */}
       <div style={{ background:B.white, border:`1px solid ${B.border}`,
         borderRadius:12, padding:20, boxShadow:"0 2px 8px #0D1E3D0A", gridColumn:"span 2" }}>
@@ -7706,6 +8035,14 @@ function Catalogo({ lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVe
       {modalTarifarioEstandar && (
         <ModalTarifarioEstandar tarifarioEstandar={tarifarioEstandar}
           onClose={()=>setModalTarifarioEstandar(false)} onSaved={()=>{onRefresh();}} toast={toast}/>
+      )}
+      {modalTarCli && (
+        <ModalTarifarioCliente empresa={modalTarCli} tarifariosCliente={tarifariosCliente} tarifarioEstandar={tarifarioEstandar}
+          onClose={()=>setModalTarCli(null)} onSaved={()=>{onRefresh();}} toast={toast}/>
+      )}
+      {modalTarVeh && (
+        <ModalTarifarioVehiculo empresa={modalTarVeh} tarifarioVehiculoCliente={tarifarioVehiculoCliente} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar}
+          onClose={()=>setModalTarVeh(null)} onSaved={()=>{onRefresh();}} toast={toast}/>
       )}
       {modalTarifarioVehiculoEstandar && (
         <ModalTarifarioVehiculoEstandar tarifarioVehiculoEstandar={tarifarioVehiculoEstandar}
@@ -7893,6 +8230,7 @@ export default function BoazERP() {
     { section:"VENTAS Y COBRANZA" },
     { id:"liquidacion-clientes", icon:"filetext", label:"Pre-facturación" },
     { id:"facturacion",  icon:"receipt",   label:"Facturación" },
+    { id:"cobranza",     icon:"dollar",    label:"Cobranza" },
     { section:"COSTOS Y PAGOS" },
     { id:"liquidaciones",icon:"wallet",    label:"Liq. Repartidores",
       badge: liquidaciones.filter(l=>l.estado==="pendiente").length || null },
@@ -8093,14 +8431,15 @@ if (verificando) {
               {seccion==="inventario"    && <Inventario empresas={empresas} toast={showToast}/>}
               {seccion==="clientes"      && <Clientes empresas={empresas} pedidos={pedidos} lineasNegocio={lineasNegocio} tarifariosCliente={tarifariosCliente} tarifarioVehiculoCliente={tarifarioVehiculoCliente} tarifarioEstandar={tarifarioEstandar} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="cotizaciones"  && <Cotizaciones toast={showToast} onCambio={setCotizNuevas}/>}
-              {seccion==="catalogo"      && <Catalogo lineasNegocio={lineasNegocio} tiposServicio={tiposServicio} tarifarioEstandar={tarifarioEstandar} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} recargoFeriadoPct={recargoFeriadoPct} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccion==="catalogo"      && <Catalogo empresas={empresas} tarifariosCliente={tarifariosCliente} tarifarioVehiculoCliente={tarifarioVehiculoCliente} lineasNegocio={lineasNegocio} tiposServicio={tiposServicio} tarifarioEstandar={tarifarioEstandar} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} recargoFeriadoPct={recargoFeriadoPct} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="liquidaciones" && <Liquidaciones repartidores={repartidores} pedidos={pedidos} liquidaciones={liquidaciones} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="liquidacion-transporte" && <LiquidacionTransporte unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} diasServicio={diasServicio} recargoFeriadoPct={recargoFeriadoPct} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="liquidacion-clientes" && <LiquidacionClientes pedidos={pedidos} empresas={empresas} unidades={unidades} asignacionesUnidad={asignacionesUnidad} diasServicio={diasServicio} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} recargoFeriadoPct={recargoFeriadoPct} toast={showToast}/>}
               {seccion==="facturacion"   && <Facturacion empresas={empresas} pedidos={pedidos} tiposServicio={tiposServicio} usuario={usuario} toast={showToast}/>}
+              {seccion==="cobranza"      && <Cobranza pedidos={pedidos} empresas={empresas} repartidores={repartidores} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="gastos"        && <Gastos unidades={unidades} repartidores={repartidores} usuario={usuario} toast={showToast}/>}
               {seccion==="planilla"      && <Planilla toast={showToast}/>}
-              {seccion==="reportes"      && <Reportes pedidos={pedidos} repartidores={repartidores} empresas={empresas} toast={showToast}/>}
+              {seccion==="reportes"      && <Reportes pedidos={pedidos} repartidores={repartidores} empresas={empresas} toast={showToast} onIr={setSeccion}/>}
               {seccion==="configuracion" && <Configuracion onRefresh={cargarSilencioso} toast={showToast}/>}
             </>
           )}
