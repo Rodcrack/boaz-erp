@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
-import * as XLSX from "xlsx";
+// Librería de Excel: se descarga solo cuando se exporta o importa un archivo (aligera la carga inicial)
+let _xlsx = null;
+const asegurarXLSX = async () => { if (!_xlsx) { const m = await import("xlsx"); _xlsx = m.utils ? m : m.default; } return _xlsx; };
+const XLSX = new Proxy({}, { get: (_, k) => { if (!_xlsx) throw new Error("XLSX no cargado"); return _xlsx[k]; } });
 
 const SUPABASE_URL  = "https://jeftkwjdqzkpswvaqspi.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImplZnRrd2pkcXprcHN3dmFxc3BpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4MzI0OTEsImV4cCI6MjEwMDQwODQ5MX0.Ta8Ei_wCm8ZEzD3IM-S60R0rJvI_d5BTvix_Z3W4EmY";
@@ -254,6 +257,16 @@ const ICONOS = {
 const diaLocal = (d=new Date()) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 const escHTML = (v) => String(v==null?"":v).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
+// Pedidos sin la columna pesada "historial" (fotos/GPS); usa la función pedidos_lista() y,
+// si todavía no existe en Supabase, cae al método anterior.
+const cargarPedidosLiviano = async () => {
+  try {
+    const r = await traerTodo(() => sb.rpc("pedidos_lista"));
+    if (!r.error && Array.isArray(r.data)) return r;
+  } catch {}
+  return traerTodo(() => sb.from("pedidos").select("*").order("created_at",{ascending:false}).order("id"));
+};
+
 // Trae TODAS las filas de una consulta (Supabase corta en 1.000 por pedido)
 const traerTodo = async (armar, tam=1000) => {
   let desde = 0, acc = [];
@@ -505,22 +518,26 @@ const claveMes = (iso) => (iso||"").slice(0,7);
 
 // ── Operación: comparativo mensual (se agrega arriba del dashboard clásico)
 function ComparativoMes({ pedidos }) {
-  const hoy = new Date();
-  const mesAct = diaLocal(hoy).slice(0,7);
-  const prev = new Date(hoy.getFullYear(), hoy.getMonth()-1, 1);
-  const mesPrev = diaLocal(prev).slice(0,7);
-  const diaDelMes = hoy.getDate();
-  const info = (mes, hasta) => {
-    const l = pedidos.filter(p => { if (!p.created_at) return false; const k = diaLocal(new Date(p.created_at)); return k.slice(0,7)===mes && (!hasta || parseInt(k.slice(8,10))<=hasta); });
-    const ent = l.filter(p=>p.estado==="entregado").length;
-    return { n:l.length, ent, ef: l.length?Math.round(ent/l.length*100):0, ing: l.reduce((a,p)=>a+(parseFloat(p.tarifa_s)||0),0) };
-  };
-  const a = info(mesAct), b = info(mesPrev, diaDelMes);
-  const ult30 = [];
-  for (let i=29;i>=0;i--) { const k = diaLocal(new Date(Date.now()-i*86400000)); ult30.push(pedidos.filter(p=>p.created_at && diaLocal(new Date(p.created_at))===k)); }
-  const sPed = ult30.map(x=>x.length), sEnt = ult30.map(x=>x.filter(p=>p.estado==="entregado").length);
-  const sIng = ult30.map(x=>x.reduce((t,p)=>t+(parseFloat(p.tarifa_s)||0),0));
-  const sEf = ult30.map(x=>x.length?x.filter(p=>p.estado==="entregado").length/x.length*100:0);
+  // Una sola pasada: agrupa por día y luego arma los totales (evita recorrer todos los pedidos 30+ veces)
+  const { a, b, sPed, sEnt, sIng, sEf } = useMemo(() => {
+    const hoy = new Date();
+    const mesAct = diaLocal(hoy).slice(0,7);
+    const mesPrev = diaLocal(new Date(hoy.getFullYear(), hoy.getMonth()-1, 1)).slice(0,7);
+    const diaDelMes = hoy.getDate();
+    const porDia = {};
+    for (const p of pedidos) {
+      if (!p.created_at) continue;
+      const k = diaLocal(new Date(p.created_at));
+      const g = porDia[k] || (porDia[k] = { n:0, ent:0, ing:0 });
+      g.n++; if (p.estado==="entregado") g.ent++; g.ing += parseFloat(p.tarifa_s)||0;
+    }
+    const suma = (mes, hasta) => { let n=0, ent=0, ing=0;
+      for (const k in porDia) { if (k.slice(0,7)!==mes) continue; if (hasta && parseInt(k.slice(8,10))>hasta) continue; const g = porDia[k]; n+=g.n; ent+=g.ent; ing+=g.ing; }
+      return { n, ent, ef: n?Math.round(ent/n*100):0, ing }; };
+    const dias = [];
+    for (let i=29;i>=0;i--) dias.push(porDia[diaLocal(new Date(Date.now()-i*86400000))] || { n:0, ent:0, ing:0 });
+    return { a: suma(mesAct), b: suma(mesPrev, diaDelMes), sPed: dias.map(g=>g.n), sEnt: dias.map(g=>g.ent), sIng: dias.map(g=>g.ing), sEf: dias.map(g=>g.n?g.ent/g.n*100:0) };
+  }, [pedidos]);
   return (
     <div style={{ marginBottom:20 }}>
       <div style={{ fontSize:12, fontWeight:700, color:B.textPri, marginBottom:8 }}>Este mes vs. mismo período del mes anterior <span style={{ fontWeight:400, color:B.textMut }}>· tendencia de 30 días</span></div>
@@ -638,9 +655,22 @@ function MapaFlota({ pedidos, repartidores }) {
   const hoy = diaLocal();
   const activos = pedidos.filter(p => p.dest_lat && p.dest_lng && (p.estado==="en_ruta" || p.estado==="asignado" || (p.estado==="entregado" && p.fecha_entrega && diaLocal(new Date(p.fecha_entrega))===hoy)));
   // última posición conocida por repartidor, de los eventos con GPS de las últimas 24 h
+  const [recientes, setRecientes] = useState([]);
+  useEffect(() => {
+    let vivo = true;
+    const traer = async () => {
+      const desde = new Date(Date.now()-86400000).toISOString();
+      const { data } = await sb.from("pedidos").select("repartidor_id,historial")
+        .not("repartidor_id","is",null).or(`estado.in.(en_ruta,asignado),fecha_entrega.gte.${desde}`).limit(1500);
+      if (vivo && data) setRecientes(data);
+    };
+    traer();
+    const t = setInterval(traer, 60000);
+    return () => { vivo = false; clearInterval(t); };
+  }, []);
   const limite = Date.now()-86400000;
   const pos = {};
-  pedidos.forEach(p => {
+  recientes.forEach(p => {
     if (!p.repartidor_id || !Array.isArray(p.historial)) return;
     p.historial.forEach(h => { if (h && h.lat && h.lng && h.timestamp && new Date(h.timestamp).getTime()>=limite) { const cur = pos[p.repartidor_id]; if (!cur || h.timestamp>cur.t) pos[p.repartidor_id] = { lat:h.lat, lng:h.lng, t:h.timestamp }; } });
   });
@@ -1782,7 +1812,8 @@ function validarFilaAdmin(fila) {
   return errores;
 }
 
-function parseArchivoAdmin(file) {
+async function parseArchivoAdmin(file) {
+  await asegurarXLSX();
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -1799,7 +1830,8 @@ function parseArchivoAdmin(file) {
   });
 }
 
-function descargarPlantillaAdmin() {
+async function descargarPlantillaAdmin() {
+  await asegurarXLSX();
   const ejemplo = ["PED-00123","Marco Salinas","987654321","Calle Las Flores 890","Frente al parque","Miraflores","urbano","1.2","Same Day","NO",""];
   const ws = XLSX.utils.aoa_to_sheet([COLUMNAS_PLANTILLA_ADMIN, ejemplo]);
   ws["!cols"] = COLUMNAS_PLANTILLA_ADMIN.map(()=>({ wch:22 }));
@@ -2054,8 +2086,14 @@ function ModalDetallePedido({ pedido: p, repartidores, onClose, onRefresh, toast
   const [latManual, setLatManual] = useState(p.dest_lat||"");
   const [lngManual, setLngManual] = useState(p.dest_lng||"");
   const [ubicando, setUbicando] = useState(false);
+  const [histRaw, setHistRaw] = useState(p.historial || []);
+  useEffect(() => {
+    let vivo = true;
+    sb.from("pedidos").select("historial").eq("id", p.id).single().then(({ data }) => { if (vivo && data) setHistRaw(data.historial || []); });
+    return () => { vivo = false; };
+  }, [p.id, p.estado]);
   const historial = agruparHistorial(
-    [...(p.historial||[])].sort((a,b)=> new Date(b.timestamp) - new Date(a.timestamp))
+    [...histRaw].sort((a,b)=> new Date(b.timestamp) - new Date(a.timestamp))
   );
   const todasLasFotos = historial.filter(h=>h.esFotoGrupo).flatMap(h=>h.urls);
   const [fotoAbierta, setFotoAbierta] = useState(null);
@@ -2550,12 +2588,13 @@ function Repartidores({ repartidores, pedidos, onRefresh, toast }) {
 // ══════════════════════════════════════════════════════════════
 // MÓDULO 4: CLIENTES / EMPRESAS
 // ══════════════════════════════════════════════════════════════
-function Clientes({ empresas, pedidos, lineasNegocio, tarifariosCliente, tarifarioVehiculoCliente, tarifarioEstandar, tarifarioVehiculoEstandar, onRefresh, toast }) {
+function Clientes({ empresas, pedidos, lineasNegocio, tarifariosCliente, tarifarioVehiculoCliente, tarifarioEstandar, tarifarioVehiculoEstandar, tarifasViajeCliente=[], tarifarioViajeEstandar=[], onRefresh, toast }) {
   const [modal, setModal] = useState(false);
   const [editando, setEditando] = useState(null);
   const [modalTarifario, setModalTarifario] = useState(null); // guarda la empresa seleccionada
   const [modalTarifarioVehiculo, setModalTarifarioVehiculo] = useState(null);
-  const empty = { nombre:"", ruc:"", contacto:"", telefono:"", email:"", direccion:"", puede_generar_etiquetas:false, puede_ver_liquidacion:false, linea_negocio_id:"" };
+  const [modalTarifarioViaje, setModalTarifarioViaje] = useState(null);
+  const empty = { nombre:"", ruc:"", contacto:"", telefono:"", email:"", direccion:"", puede_generar_etiquetas:false, puede_ver_liquidacion:false, linea_negocio_id:"", modalidades_tarifa:[] };
   const [f, setF] = useState(empty);
 
   const guardar = async () => {
@@ -2567,7 +2606,7 @@ function Clientes({ empresas, pedidos, lineasNegocio, tarifariosCliente, tarifar
       ({ error } = await sb.from("empresas").insert([{...f,activo:true}]));
     }
     if (error) { toast("Error: "+error.message,"error"); return; }
-    toast(editando?"Cliente actualizado ✓":"Cliente registrado ✓");
+    toast(editando?"Cliente actualizado ✓":((f.modalidades_tarifa||[]).length?"Cliente registrado ✓ — configura sus tarifas desde su tarjeta":"Cliente registrado ✓"));
     setModal(false); setEditando(null); setF(empty); onRefresh();
   };
 
@@ -2608,28 +2647,27 @@ function Clientes({ empresas, pedidos, lineasNegocio, tarifariosCliente, tarifar
               </div>
               <div style={{ display:"flex", gap:8, marginBottom:12, flexWrap:"wrap" }}>
                 {(() => {
-                  const tarifasPedido = tarifariosCliente.filter(t=>t.empresa_id===e.id);
-                  const activosPedido = tarifasPedido.filter(t=>t.activo).length;
-                  const tarifasVehiculo = tarifarioVehiculoCliente.filter(t=>t.empresa_id===e.id);
-                  const activosVehiculo = tarifasVehiculo.filter(t=>t.activo).length;
-                  return (
-                    <>
-                      <button onClick={()=>setModalTarifario(e)}
+                  const mods = modalidadesDe(e, tarifariosCliente, tarifarioVehiculoCliente, tarifasViajeCliente);
+                  const info = {
+                    pedido:   { n: tarifariosCliente.filter(t=>t.empresa_id===e.id && t.activo).length, uno:"tarifa", otro:"tarifas", abrir:()=>setModalTarifario(e) },
+                    vehiculo: { n: tarifarioVehiculoCliente.filter(t=>t.empresa_id===e.id && t.activo).length, uno:"vehículo", otro:"vehículos", abrir:()=>setModalTarifarioVehiculo(e) },
+                    viaje:    { n: tarifasViajeCliente.filter(t=>t.empresa_id===e.id && t.activo).length, uno:"tarifa", otro:"tarifas", abrir:()=>setModalTarifarioViaje(e) },
+                  };
+                  if (!mods.length) return (
+                    <button onClick={()=>{setEditando(e);setF({...e, modalidades_tarifa:[]});setModal(true);}}
+                      style={{ fontSize:10, fontWeight:700, padding:"4px 10px", borderRadius:20, cursor:"pointer", border:`1px dashed ${B.orange}`, background:"#FFF7ED", color:B.orange }}>
+                      ⚠️ Sin tarifario habilitado — elegir
+                    </button>);
+                  return MODALIDADES_TARIFA.filter(m=>mods.includes(m.id)).map(m => {
+                    const x = info[m.id];
+                    return (
+                      <button key={m.id} onClick={x.abrir}
                         style={{ fontSize:10, fontWeight:700, padding:"4px 10px", borderRadius:20, cursor:"pointer",
-                          border:`1px solid ${activosPedido>0?B.green:B.border}`,
-                          background: activosPedido>0?"#ECFDF5":B.bg,
-                          color: activosPedido>0?B.green:B.textSec }}>
-                        💰 {activosPedido>0 ? `${activosPedido} tarifa${activosPedido===1?"":"s"} activa${activosPedido===1?"":"s"}` : "Sin tarifario por pedido"}
+                          border:`1px solid ${x.n>0?B.green:B.orange}`, background:x.n>0?"#ECFDF5":"#FFF7ED", color:x.n>0?B.green:B.orange }}>
+                        {m.icon} {m.label}: {x.n>0 ? `${x.n} ${x.n===1?x.uno:x.otro} activa${x.n===1?"":"s"}` : "configurar tarifas"}
                       </button>
-                      <button onClick={()=>setModalTarifarioVehiculo(e)}
-                        style={{ fontSize:10, fontWeight:700, padding:"4px 10px", borderRadius:20, cursor:"pointer",
-                          border:`1px solid ${activosVehiculo>0?B.green:B.border}`,
-                          background: activosVehiculo>0?"#ECFDF5":B.bg,
-                          color: activosVehiculo>0?B.green:B.textSec }}>
-                        🚛 {activosVehiculo>0 ? `${activosVehiculo} vehículo${activosVehiculo===1?"":"s"} activo${activosVehiculo===1?"":"s"}` : "Sin tarifario por vehículo"}
-                      </button>
-                    </>
-                  );
+                    );
+                  });
                 })()}
               </div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:14 }}>
@@ -2705,7 +2743,22 @@ function Clientes({ empresas, pedidos, lineasNegocio, tarifariosCliente, tarifar
                 </select>
               </div>
             </div>
-            <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:16,
+            <div style={{ marginTop:16, padding:"12px 14px", background:"#FFF8EF", border:`1px solid ${B.gold}55`, borderRadius:10 }}>
+              <div style={{ fontSize:12, fontWeight:800, color:B.navy, marginBottom:4 }}>💰 Tarifario habilitado para este cliente</div>
+              <div style={{ fontSize:11, color:B.textMut, marginBottom:10 }}>Marca cómo se le cobra según el acuerdo comercial. Puedes habilitar más de una; después configuras las tarifas de cada una desde su tarjeta.</div>
+              <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                {MODALIDADES_TARIFA.map(m => {
+                  const on = (f.modalidades_tarifa||[]).includes(m.id);
+                  return (
+                    <label key={m.id} style={{ display:"flex", alignItems:"center", gap:8, fontSize:12.5, color:B.textPri, cursor:"pointer" }}>
+                      <input type="checkbox" checked={on} style={{ width:16, height:16 }}
+                        onChange={ev=>setF(p=>{ const cur = p.modalidades_tarifa||[]; return { ...p, modalidades_tarifa: ev.target.checked ? [...cur, m.id] : cur.filter(x=>x!==m.id) }; })}/>
+                      <span><b>{m.icon} {m.label}</b> <span style={{ color:B.textMut }}>— {m.ayuda}</span></span>
+                    </label>);
+                })}
+              </div>
+            </div>
+            <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:12,
               padding:"10px 12px", background:B.bg, borderRadius:8 }}>
               <input type="checkbox" id="etiquetas" checked={!!f.puede_generar_etiquetas}
                 onChange={e=>setF(p=>({...p,puede_generar_etiquetas:e.target.checked}))}
@@ -2738,6 +2791,104 @@ function Clientes({ empresas, pedidos, lineasNegocio, tarifariosCliente, tarifar
         <ModalTarifarioVehiculo empresa={modalTarifarioVehiculo} tarifarioVehiculoCliente={tarifarioVehiculoCliente} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar}
           onClose={()=>setModalTarifarioVehiculo(null)} onSaved={()=>{onRefresh();}} toast={toast}/>
       )}
+      {modalTarifarioViaje && (
+        <ModalTarifarioViaje empresa={modalTarifarioViaje} filas={tarifasViajeCliente} estandar={tarifarioViajeEstandar}
+          onClose={()=>setModalTarifarioViaje(null)} onSaved={()=>{onRefresh();}} toast={toast}/>
+      )}
+    </div>
+  );
+}
+
+// ── Modalidades de tarifario que se pueden habilitar por cliente ──
+const MODALIDADES_TARIFA = [
+  { id:"pedido",   icon:"💰", label:"Por pedido",   ayuda:"Se cobra cada entrega según ámbito, servicio y peso" },
+  { id:"vehiculo", icon:"🚛", label:"Por vehículo", ayuda:"Se cobra por día de unidad según el tipo de vehículo" },
+  { id:"viaje",    icon:"🧭", label:"Por viaje",    ayuda:"Se cobra por viaje o recojo según ruta o concepto acordado" },
+];
+// Modalidades habilitadas de un cliente. Si todavía no se marcó ninguna, se infieren de las tarifas que ya tiene.
+const modalidadesDe = (e, tarPedido=[], tarVeh=[], tarViaje=[]) => {
+  if (Array.isArray(e?.modalidades_tarifa) && e.modalidades_tarifa.length) return e.modalidades_tarifa;
+  const m = [];
+  if (tarPedido.some(t=>t.empresa_id===e?.id)) m.push("pedido");
+  if (tarVeh.some(t=>t.empresa_id===e?.id)) m.push("vehiculo");
+  if (tarViaje.some(t=>t.empresa_id===e?.id)) m.push("viaje");
+  return m;
+};
+
+// Editor del tarifario por viaje (del cliente o el estándar si empresa=null)
+function ModalTarifarioViaje({ empresa, filas, estandar=[], onClose, onSaved, toast }) {
+  const esEstandar = !empresa;
+  const tabla = esEstandar ? "tarifario_viaje_estandar" : "tarifarios_viaje_cliente";
+  const TIPOS_VEHICULO = ["moto","bicicleta","auto","furgoneta","minivan","van","porter","camion"];
+  const origen = esEstandar ? filas : filas.filter(t=>t.empresa_id===empresa.id);
+  const [rows, setRows] = useState(() => origen.map(t=>({ id:t.id, concepto:t.concepto||"", tipo_vehiculo:t.tipo_vehiculo||"", unidad:t.unidad||"viaje", tarifa:t.tarifa??"", activo:t.activo!==false })));
+  const [quitados, setQuitados] = useState([]);
+  const [guardando, setGuardando] = useState(false);
+  const set = (i, k, v) => setRows(p => p.map((r,j)=> j===i ? { ...r, [k]:v } : r));
+  const agregar = () => setRows(p => [...p, { id:null, concepto:"", tipo_vehiculo:"", unidad:"viaje", tarifa:"", activo:true }]);
+  const quitar = (i) => { const r = rows[i]; if (r.id) setQuitados(q=>[...q, r.id]); setRows(p=>p.filter((_,j)=>j!==i)); };
+  const cargarEstandar = () => {
+    const nuevas = estandar.filter(s=>s.activo && !rows.some(r=>r.concepto.trim().toLowerCase()===(s.concepto||"").trim().toLowerCase() && (r.tipo_vehiculo||"")===(s.tipo_vehiculo||"")))
+      .map(s=>({ id:null, concepto:s.concepto, tipo_vehiculo:s.tipo_vehiculo||"", unidad:s.unidad||"viaje", tarifa:s.tarifa, activo:true }));
+    if (!nuevas.length) { toast("No hay tarifas estándar nuevas para copiar","error"); return; }
+    setRows(p=>[...p, ...nuevas]); toast(`${nuevas.length} tarifa${nuevas.length===1?"":"s"} copiada${nuevas.length===1?"":"s"} — revisa y guarda`);
+  };
+  const guardar = async () => {
+    const validas = rows.filter(r=>r.concepto.trim() || r.tarifa!=="");
+    for (const r of validas) {
+      if (!r.concepto.trim()) { toast("Cada tarifa necesita un concepto o ruta","error"); return; }
+      if (r.tarifa==="" || isNaN(parseFloat(r.tarifa))) { toast(`Falta la tarifa de "${r.concepto}"`,"error"); return; }
+    }
+    setGuardando(true);
+    let fallo = null;
+    if (quitados.length) { const { error } = await sb.from(tabla).delete().in("id", quitados); if (error) fallo = error; }
+    for (const r of validas) {
+      const cuerpo = { concepto:r.concepto.trim(), tipo_vehiculo:r.tipo_vehiculo||null, unidad:r.unidad, tarifa:parseFloat(r.tarifa), activo:r.activo, ...(esEstandar?{}:{ empresa_id:empresa.id }) };
+      const { error } = r.id ? await sb.from(tabla).update(cuerpo).eq("id", r.id) : await sb.from(tabla).insert([cuerpo]);
+      if (error) { fallo = error; break; }
+    }
+    setGuardando(false);
+    if (fallo) { toast("Error: "+fallo.message+" (¿ejecutaste tarifarios_v2_boaz.sql?)","error"); return; }
+    toast("Tarifario por viaje guardado ✓"); onSaved(); onClose();
+  };
+  return (
+    <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+      <div style={{ background:B.white, borderRadius:16, padding:24, width:760, maxWidth:"100%", maxHeight:"88vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
+          <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>🧭 Tarifario por viaje — {esEstandar ? "estándar (propuesta base)" : empresa.nombre}</div>
+          <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20, color:B.textSec, cursor:"pointer" }}>✕</button>
+        </div>
+        <div style={{ fontSize:12, color:B.textMut, marginBottom:14 }}>
+          Cada fila es una tarifa acordada: una ruta o concepto (ej. "Recojo en almacén", "Lima – Callao"), el tipo de vehículo si aplica y su precio. Usa <b>Por recojo</b> para cobros por visita de recojo.
+        </div>
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+          {rows.length===0 && <div style={{ padding:20, textAlign:"center", fontSize:12, color:B.textMut, border:`1px dashed ${B.border}`, borderRadius:10 }}>Aún no hay tarifas. Agrega la primera.</div>}
+          {rows.map((r,i)=>(
+            <div key={i} style={{ display:"grid", gridTemplateColumns:"2fr 1.1fr 1fr 0.9fr auto auto", gap:8, alignItems:"end", padding:10, border:`1px solid ${B.border}`, borderRadius:10, background:r.activo?"#FFF8EF":B.bg, opacity:r.activo?1:.65 }}>
+              <div><label style={{ ...lbl, marginBottom:3 }}>Ruta o concepto</label><input style={inp} value={r.concepto} placeholder="ej. Recojo en almacén" onChange={e=>set(i,"concepto",e.target.value)}/></div>
+              <div><label style={{ ...lbl, marginBottom:3 }}>Vehículo</label>
+                <select style={inp} value={r.tipo_vehiculo} onChange={e=>set(i,"tipo_vehiculo",e.target.value)}>
+                  <option value="">Cualquiera</option>{TIPOS_VEHICULO.map(t=><option key={t} value={t}>{t}</option>)}
+                </select></div>
+              <div><label style={{ ...lbl, marginBottom:3 }}>Se cobra</label>
+                <select style={inp} value={r.unidad} onChange={e=>set(i,"unidad",e.target.value)}>
+                  <option value="viaje">Por viaje</option><option value="recojo">Por recojo</option>
+                </select></div>
+              <div><label style={{ ...lbl, marginBottom:3 }}>Tarifa (S/)</label><input type="number" style={inp} value={r.tarifa} onChange={e=>set(i,"tarifa",e.target.value)}/></div>
+              <label style={{ display:"flex", alignItems:"center", gap:5, fontSize:11, color:B.textSec, paddingBottom:8, cursor:"pointer" }}><input type="checkbox" checked={r.activo} onChange={e=>set(i,"activo",e.target.checked)}/>Activa</label>
+              <button onClick={()=>quitar(i)} title="Quitar" style={{ background:"none", border:"none", color:B.red, cursor:"pointer", fontSize:16, paddingBottom:6 }}>🗑</button>
+            </div>
+          ))}
+        </div>
+        <div style={{ display:"flex", gap:12, marginTop:12, alignItems:"center", flexWrap:"wrap" }}>
+          <button onClick={agregar} style={{ fontSize:12, fontWeight:700, color:B.blue, background:"none", border:`1px solid ${B.border}`, borderRadius:8, padding:"7px 12px", cursor:"pointer" }}>+ Agregar tarifa</button>
+          {!esEstandar && <button onClick={cargarEstandar} style={{ fontSize:12, fontWeight:600, color:B.blue, background:"none", border:"none", cursor:"pointer" }}>📋 Cargar desde el estándar</button>}
+        </div>
+        <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:18 }}>
+          <BtnSec onClick={onClose}>Cerrar</BtnSec>
+          <BtnPri onClick={guardar} disabled={guardando}>{guardando?"Guardando...":"Guardar tarifario"}</BtnPri>
+        </div>
+      </div>
     </div>
   );
 }
@@ -3268,7 +3419,7 @@ function calcularMontoAsignacion(a, diasServicio, recargoFeriadoPct=0) {
 const calcularIGVAsignacion = (a, diasServicio, recargoFeriadoPct=0) => calcularMontoAsignacion(a, diasServicio, recargoFeriadoPct) * 0.18;
 const calcularTotalConIGVAsignacion = (a, diasServicio, recargoFeriadoPct=0) => calcularMontoAsignacion(a, diasServicio, recargoFeriadoPct) * 1.18;
 
-function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidores, onRefresh, toast, onIr }) {
+function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidores, tarifarioVehiculoCliente=[], tarifarioVehiculoEstandar=[], onRefresh, toast, onIr }) {
   const [vista, setVista] = useState("asignaciones");
   const [modalUnidad, setModalUnidad] = useState(false);
   const [modalAsignacion, setModalAsignacion] = useState(false);
@@ -3395,7 +3546,7 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
           onSaved={()=>{setModalUnidad(false); onRefresh();}} toast={toast}/>
       )}
       {modalAsignacion && (
-        <ModalAsignacionUnidad unidades={unidades} empresas={empresas} tiposServicio={tiposServicio} repartidores={repartidores}
+        <ModalAsignacionUnidad unidades={unidades} empresas={empresas} tiposServicio={tiposServicio} repartidores={repartidores} tarifarioVehiculoCliente={tarifarioVehiculoCliente} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar}
           asignacion={editandoAsignacion}
           onClose={()=>{setModalAsignacion(false); setEditandoAsignacion(null);}}
           onSaved={()=>{setModalAsignacion(false); setEditandoAsignacion(null); onRefresh();}} toast={toast}/>
@@ -3738,12 +3889,25 @@ function ModalUnidad({ unidad, repartidores, onClose, onSaved, toast }) {
   );
 }
 
-function ModalAsignacionUnidad({ unidades, empresas, tiposServicio, repartidores, asignacion, onClose, onSaved, toast }) {
+function ModalAsignacionUnidad({ unidades, empresas, tiposServicio, repartidores, tarifarioVehiculoCliente=[], tarifarioVehiculoEstandar=[], asignacion, onClose, onSaved, toast }) {
   const [f, setF] = useState(asignacion || {
     unidad_id:"", empresa_id:"", tipo_servicio_id:"",
     fecha_inicio: diaLocal(),
     tarifa_dia:"", notas:"",
   });
+  // Tarifa sugerida: primero la del cliente para ese tipo de vehículo, si no la del estándar
+  const tarifaSugerida = (() => {
+    const un = unidades.find(x=>x.id===f.unidad_id);
+    const tv = (un?.tipo_vehiculo||"").toLowerCase();
+    if (!tv) return null;
+    const c = tarifarioVehiculoCliente.find(t=>t.empresa_id===f.empresa_id && (t.tipo_vehiculo||"").toLowerCase()===tv && t.activo);
+    if (c) return { monto: parseFloat(c.tarifa_base)||0, origen:"del cliente" };
+    const e = tarifarioVehiculoEstandar.find(t=>(t.tipo_vehiculo||"").toLowerCase()===tv && t.activo);
+    return e ? { monto: parseFloat(e.tarifa_base)||0, origen:"estándar" } : null;
+  })();
+  useEffect(() => {
+    if (!asignacion && tarifaSugerida && (f.tarifa_dia===""||f.tarifa_dia==null)) setF(p=>({ ...p, tarifa_dia: tarifaSugerida.monto }));
+  }, [f.unidad_id, f.empresa_id]);
   const guardar = async () => {
     if (!f.unidad_id || !f.empresa_id || !f.fecha_inicio) { toast("Selecciona unidad, cliente y fecha de inicio","error"); return; }
     let error;
@@ -3791,7 +3955,13 @@ function ModalAsignacionUnidad({ unidades, empresas, tiposServicio, repartidores
           <div><label style={lbl}>Fecha de inicio</label>
             <input type="date" style={inp} value={f.fecha_inicio} onChange={e=>setF(p=>({...p,fecha_inicio:e.target.value}))}/></div>
           <div><label style={lbl}>Tarifa por día (S/)</label>
-            <input type="number" style={inp} value={f.tarifa_dia} onChange={e=>setF(p=>({...p,tarifa_dia:e.target.value}))}/></div>
+            <input type="number" style={inp} value={f.tarifa_dia} onChange={e=>setF(p=>({...p,tarifa_dia:e.target.value}))}/>
+            {tarifaSugerida && parseFloat(f.tarifa_dia)!==tarifaSugerida.monto && (
+              <button type="button" onClick={()=>setF(p=>({...p,tarifa_dia:tarifaSugerida.monto}))}
+                style={{ marginTop:4, fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer", padding:0 }}>
+                Usar tarifario {tarifaSugerida.origen}: S/ {tarifaSugerida.monto}
+              </button>)}
+          </div>
         </div>
         {asignacion && (
           <div style={{ marginBottom:12 }}>
@@ -4683,7 +4853,8 @@ function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesUnidad, 
     porCliente[key].subtotal += parseFloat(p.tarifa_s)||0;
   });
 
-  const exportarExcel = () => {
+  const exportarExcel = async () => {
+    await asegurarXLSX();
     if (esClienteTransporte) { toast("Este cliente se liquida por días de transporte — usa el botón de Liquidación de Transporte","error"); return; }
     if (filtrados.length===0) { toast("No hay pedidos en este rango para exportar","error"); return; }
     const filas = filtrados.map(p=>{
@@ -5216,7 +5387,8 @@ function Cobranza({ pedidos, empresas, repartidores, onRefresh, toast }) {
     setSelCod({}); onRefresh && onRefresh();
   };
 
-  const exportar = () => {
+  const exportar = async () => {
+    await asegurarXLSX();
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(lista.map(f => ({ Cliente:f.empresas?.nombre||"", Factura:`${f.serie}-${f.numero}`, Emisión:f.fecha_emision, "Días":f.dias, Total:numV(f.total_s), Detracción:numV(f.monto_detraccion), "Neto a cobrar":numV(f.total_s)-numV(f.monto_detraccion) }))), "Por cobrar");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detPend.map(f => ({ Cliente:f.empresas?.nombre||"", Factura:`${f.serie}-${f.numero}`, Emisión:f.fecha_emision, Detracción:numV(f.monto_detraccion), "%":numV(f.porcentaje_detraccion) }))), "Detracciones pendientes");
@@ -5727,7 +5899,8 @@ function Rentabilidad({ pedidos, empresas, repartidores, unidades, asignaciones,
   const resultadoOp = modelo.tot.margen - modelo.gastosGenerales - modelo.sueldosSinAsignar;
 
   const mes = (delta) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth()+delta); const ini = diaLocal(d); const fin = new Date(d.getFullYear(), d.getMonth()+1, 0); setDesde(ini); setHasta(delta===0 ? diaLocal() : diaLocal(fin)); };
-  const exportar = () => {
+  const exportar = async () => {
+    await asegurarXLSX();
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(lista.map(f => ({ Cliente:f.nombre, "Ingreso última milla":+f.ingUM.toFixed(2), "Ingreso transporte":+f.ingTR.toFixed(2), "Ingreso total":+f.ing.toFixed(2), "Costo personal":+f.cPers.toFixed(2), "Gasto vehículos":+f.cVeh.toFixed(2), "Incidencias":+f.cInc.toFixed(2), "Margen":+f.margen.toFixed(2), "Margen %":f.pct==null?"":+f.pct.toFixed(1), Pedidos:f.pedidos, "Días transporte":f.diasTR }))), "Rentabilidad");
     XLSX.writeFile(wb, `rentabilidad_boaz_${desde}_a_${hasta}.xlsx`);
@@ -6325,7 +6498,8 @@ function Gastos({ unidades, repartidores, toast, usuario }) {
     setConfirmDel(null);
   };
 
-  const exportar = () => {
+  const exportar = async () => {
+    await asegurarXLSX();
     const filas = filtrados.map(g => ({ Fecha:g.fecha, Tipo:g.tipo, Categoría:g.categoria, Placa:g.placa||"", Descripción:g.descripcion||"", Proveedor:g.proveedor||"", Monto:parseFloat(g.monto)||0, IGV:parseFloat(g.igv)||0, "Método de pago":g.metodo_pago||"", Comprobante:`${g.comprobante_tipo||""} ${g.comprobante_numero||""}`.trim(), Km:g.km||"", Galones:g.galones||"", Origen:g.auto?"Factura (automático)":"Manual" }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filas), "Movimientos");
@@ -7558,7 +7732,8 @@ function validarFilaProducto(fila) {
   return errores;
 }
 
-function generarPlantillaProductos() {
+async function generarPlantillaProductos() {
+  await asegurarXLSX();
   const ejemplo = [
     "Polo Boaz", "Ropa", "Boaz Wear", "45.00", "22.00",
     "POLO-BOAZ-M-AZUL", "7750182001234", "M", "Azul", "",
@@ -8908,9 +9083,11 @@ function Configuracion({ onRefresh, toast }) {
 // líneas de negocio + tipos de servicio, y tarifarios negociados
 // por cliente. Todo el tema de precios en un solo lugar.
 // ══════════════════════════════════════════════════════════════
-function Catalogo({ lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVehiculoEstandar, recargoFeriadoPct, empresas=[], tarifariosCliente=[], tarifarioVehiculoCliente=[], onRefresh, toast }) {
+function Catalogo({ lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVehiculoEstandar, recargoFeriadoPct, empresas=[], tarifariosCliente=[], tarifarioVehiculoCliente=[], tarifasViajeCliente=[], tarifarioViajeEstandar=[], onRefresh, toast }) {
   const [modalTarCli, setModalTarCli] = useState(null);
   const [modalTarVeh, setModalTarVeh] = useState(null);
+  const [modalTarViaje, setModalTarViaje] = useState(null);
+  const [modalViajeEstandar, setModalViajeEstandar] = useState(false);
   const [busqCli, setBusqCli] = useState("");
   const [modalLinea, setModalLinea] = useState(false);
   const [modalTipo, setModalTipo] = useState(null);
@@ -8948,16 +9125,20 @@ function Catalogo({ lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVe
         </div>
         <div style={{ maxHeight:320, overflowY:"auto" }}>
           {empresas.filter(e => !busqCli.trim() || (e.nombre||"").toLowerCase().includes(busqCli.trim().toLowerCase())).map(e => {
+            const mods = modalidadesDe(e, tarifariosCliente, tarifarioVehiculoCliente, tarifasViajeCliente);
+            const pill = (n, txt, onClick) => (
+              <button onClick={onClick} style={{ fontSize:11, fontWeight:700, padding:"5px 12px", borderRadius:20, cursor:"pointer",
+                border:`1px solid ${n>0?B.green:B.orange}`, background:n>0?"#ECFDF5":"#FFF7ED", color:n>0?B.green:B.orange }}>{txt}</button>);
             const aP = tarifariosCliente.filter(t=>t.empresa_id===e.id && t.activo).length;
             const aV = tarifarioVehiculoCliente.filter(t=>t.empresa_id===e.id && t.activo).length;
-            const pill = (n, txt0, txt, onClick) => (
-              <button onClick={onClick} style={{ fontSize:11, fontWeight:700, padding:"5px 12px", borderRadius:20, cursor:"pointer",
-                border:`1px solid ${n>0?B.green:B.border}`, background:n>0?"#ECFDF5":B.bg, color:n>0?B.green:B.textSec }}>{n>0?txt:txt0}</button>);
+            const aJ = tarifasViajeCliente.filter(t=>t.empresa_id===e.id && t.activo).length;
             return (
               <div key={e.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 4px", borderBottom:`1px solid ${B.border}`, flexWrap:"wrap" }}>
                 <div style={{ flex:"1 1 200px", fontSize:13, fontWeight:600, color:B.textPri }}>{e.nombre}</div>
-                {pill(aP, "💰 Sin tarifario por pedido", `💰 ${aP} tarifa${aP===1?"":"s"} por pedido`, ()=>setModalTarCli(e))}
-                {pill(aV, "🚛 Sin tarifario por vehículo", `🚛 ${aV} vehículo${aV===1?"":"s"}`, ()=>setModalTarVeh(e))}
+                {mods.length===0 && <span style={{ fontSize:11, color:B.textMut, fontStyle:"italic" }}>Sin tarifario habilitado (se elige en Clientes → Editar)</span>}
+                {mods.includes("pedido")   && pill(aP, `💰 Por pedido: ${aP} tarifa${aP===1?"":"s"}`, ()=>setModalTarCli(e))}
+                {mods.includes("vehiculo") && pill(aV, `🚛 Por vehículo: ${aV}`, ()=>setModalTarVeh(e))}
+                {mods.includes("viaje")    && pill(aJ, `🧭 Por viaje: ${aJ} tarifa${aJ===1?"":"s"}`, ()=>setModalTarViaje(e))}
               </div>);
           })}
           {empresas.length===0 && <div style={{ fontSize:12, color:B.textMut, padding:12 }}>Sin clientes registrados</div>}
@@ -9083,6 +9264,27 @@ function Catalogo({ lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVe
         </div>
       </div>
 
+      {/* Tarifario estándar por viaje */}
+      <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:20, boxShadow:"0 2px 8px #0D1E3D0A", gridColumn:"span 2" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>
+          <div style={{ fontSize:14, fontWeight:800, color:B.navy }}>🧭 Tarifario estándar por viaje</div>
+          <button onClick={()=>setModalViajeEstandar(true)} style={{ fontSize:11, color:B.blue, background:"none", border:`1px solid ${B.border}`, borderRadius:8, padding:"5px 12px", cursor:"pointer", fontWeight:700 }}>✏️ Editar</button>
+        </div>
+        {tarifarioViajeEstandar.filter(t=>t.activo).length===0 ? (
+          <div style={{ fontSize:12, color:B.textMut }}>Sin tarifas estándar aún. Es la propuesta base para clientes que se cobran por viaje o por recojo (ruta o concepto, vehículo y precio).</div>
+        ) : (
+          <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+            {tarifarioViajeEstandar.filter(t=>t.activo).map(t=>(
+              <div key={t.id} style={{ background:B.bg, borderRadius:8, padding:"7px 12px", fontSize:12 }}>
+                <b style={{ color:B.navy }}>{t.concepto}</b>
+                <span style={{ color:B.textMut }}> · {t.tipo_vehiculo||"cualquier vehículo"} · {t.unidad==="recojo"?"por recojo":"por viaje"} · </span>
+                <b style={{ color:B.gold }}>S/ {t.tarifa}</b>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Catálogo de servicios: líneas de negocio + tipos de servicio */}
       <div style={{ background:B.white, border:`1px solid ${B.border}`,
         borderRadius:12, padding:20, boxShadow:"0 2px 8px #0D1E3D0A", gridColumn:"span 2" }}>
@@ -9148,6 +9350,14 @@ function Catalogo({ lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVe
       {modalTarCli && (
         <ModalTarifarioCliente empresa={modalTarCli} tarifariosCliente={tarifariosCliente} tarifarioEstandar={tarifarioEstandar}
           onClose={()=>setModalTarCli(null)} onSaved={()=>{onRefresh();}} toast={toast}/>
+      )}
+      {modalTarViaje && (
+        <ModalTarifarioViaje empresa={modalTarViaje} filas={tarifasViajeCliente} estandar={tarifarioViajeEstandar}
+          onClose={()=>setModalTarViaje(null)} onSaved={()=>{onRefresh();}} toast={toast}/>
+      )}
+      {modalViajeEstandar && (
+        <ModalTarifarioViaje empresa={null} filas={tarifarioViajeEstandar}
+          onClose={()=>setModalViajeEstandar(false)} onSaved={()=>{onRefresh();}} toast={toast}/>
       )}
       {modalTarVeh && (
         <ModalTarifarioVehiculo empresa={modalTarVeh} tarifarioVehiculoCliente={tarifarioVehiculoCliente} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar}
@@ -9254,6 +9464,8 @@ export default function BoazERP() {
   const [tarifarioVehiculoCliente, setTarifarioVehiculoCliente] = useState([]);
   const [tarifarioEstandar, setTarifarioEstandar] = useState([]);
   const [tarifarioVehiculoEstandar, setTarifarioVehiculoEstandar] = useState([]);
+  const [tarifasViajeCliente, setTarifasViajeCliente] = useState([]);
+  const [tarifarioViajeEstandar, setTarifarioViajeEstandar] = useState([]);
   const [recargoFeriadoPct, setRecargoFeriadoPct] = useState(0);
   const [diasServicio, setDiasServicio] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -9265,8 +9477,8 @@ export default function BoazERP() {
   const cargar = useCallback(async (opts={}) => {
     if (!opts.silencioso) setCargando(true);
     try {
-      const [p,r,e,l,ln,ts,u,au,tc,ds,tv,te,tve,cr] = await Promise.all([
-        traerTodo(() => sb.from("pedidos").select("*").order("created_at",{ascending:false}).order("id")),
+      const [p,r,e,l,ln,ts,u,au,tc,ds,tv,te,tve,cr,tvj,tvje] = await Promise.all([
+        cargarPedidosLiviano(),
         sb.from("repartidores").select("*").order("nombres"),
         sb.from("empresas").select("*").order("nombre"),
         traerTodo(() => sb.from("liquidaciones").select("*").order("created_at",{ascending:false}).order("id")),
@@ -9276,10 +9488,12 @@ export default function BoazERP() {
         sb.from("asignaciones_unidad").select("*").order("fecha_inicio",{ascending:false}),
         sb.from("tarifarios_cliente").select("*"),
         traerTodo(() => sb.from("dias_servicio_unidad").select("*").order("id")),
-        sb.from("tarifario_vehiculo_cliente").select("*"),
+        sb.from("tarifarios_vehiculo_cliente").select("*"),
         sb.from("tarifario_estandar").select("*"),
         sb.from("tarifario_vehiculo_estandar").select("*"),
         sb.from("configuracion_recargos").select("*").limit(1).maybeSingle(),
+        sb.from("tarifarios_viaje_cliente").select("*"),
+        sb.from("tarifario_viaje_estandar").select("*").order("concepto"),
       ]);
       if(p.data) setPedidos(p.data);
       if(r.data) setRepartidores(r.data);
@@ -9295,6 +9509,8 @@ export default function BoazERP() {
       if(te.data) setTarifarioEstandar(te.data);
       if(tve.data) setTarifarioVehiculoEstandar(tve.data);
       if(cr.data) setRecargoFeriadoPct(parseFloat(cr.data.recargo_feriado_pct)||0);
+      if(tvj.data) setTarifasViajeCliente(tvj.data);
+      if(tvje.data) setTarifarioViajeEstandar(tvje.data);
     } catch(err) { console.error(err); }
     if (!opts.silencioso) setCargando(false);
   }, []);
@@ -9564,11 +9780,11 @@ if (verificando) {
               {seccionOk && seccion==="dashboard"     && <Dashboard pedidos={pedidos} repartidores={repartidores} liquidaciones={liquidaciones} cotizNuevas={cotizNuevas} modulos={modulosRol} onIr={setSeccion}/>}
               {seccionOk && seccion==="pedidos"       && <Pedidos pedidos={pedidos} repartidores={repartidores} empresas={empresas} tarifariosCliente={tarifariosCliente} tarifarioEstandar={tarifarioEstandar} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccionOk && seccion==="repartidores"  && <Repartidores repartidores={repartidores} pedidos={pedidos} onRefresh={cargarSilencioso} toast={showToast}/>}
-              {seccionOk && seccion==="unidades"      && <Unidades unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} repartidores={repartidores} tarifarioVehiculoCliente={tarifarioVehiculoCliente} onRefresh={cargarSilencioso} toast={showToast} onIr={setSeccion}/>}
+              {seccionOk && seccion==="unidades"      && <Unidades unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} repartidores={repartidores} tarifarioVehiculoCliente={tarifarioVehiculoCliente} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} onRefresh={cargarSilencioso} toast={showToast} onIr={setSeccion}/>}
               {seccionOk && seccion==="inventario"    && <Inventario empresas={empresas} toast={showToast}/>}
-              {seccionOk && seccion==="clientes"      && <Clientes empresas={empresas} pedidos={pedidos} lineasNegocio={lineasNegocio} tarifariosCliente={tarifariosCliente} tarifarioVehiculoCliente={tarifarioVehiculoCliente} tarifarioEstandar={tarifarioEstandar} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccionOk && seccion==="clientes"      && <Clientes empresas={empresas} pedidos={pedidos} lineasNegocio={lineasNegocio} tarifariosCliente={tarifariosCliente} tarifarioVehiculoCliente={tarifarioVehiculoCliente} tarifarioEstandar={tarifarioEstandar} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} tarifasViajeCliente={tarifasViajeCliente} tarifarioViajeEstandar={tarifarioViajeEstandar} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccionOk && seccion==="cotizaciones"  && <Cotizaciones toast={showToast} onCambio={setCotizNuevas}/>}
-              {seccionOk && seccion==="catalogo"      && <Catalogo empresas={empresas} tarifariosCliente={tarifariosCliente} tarifarioVehiculoCliente={tarifarioVehiculoCliente} lineasNegocio={lineasNegocio} tiposServicio={tiposServicio} tarifarioEstandar={tarifarioEstandar} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} recargoFeriadoPct={recargoFeriadoPct} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccionOk && seccion==="catalogo"      && <Catalogo empresas={empresas} tarifariosCliente={tarifariosCliente} tarifarioVehiculoCliente={tarifarioVehiculoCliente} tarifasViajeCliente={tarifasViajeCliente} tarifarioViajeEstandar={tarifarioViajeEstandar} lineasNegocio={lineasNegocio} tiposServicio={tiposServicio} tarifarioEstandar={tarifarioEstandar} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} recargoFeriadoPct={recargoFeriadoPct} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccionOk && seccion==="liquidaciones" && <Liquidaciones repartidores={repartidores} pedidos={pedidos} liquidaciones={liquidaciones} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccionOk && seccion==="liquidacion-transporte" && <LiquidacionTransporte unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} diasServicio={diasServicio} recargoFeriadoPct={recargoFeriadoPct} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccionOk && seccion==="liquidacion-clientes" && <LiquidacionClientes pedidos={pedidos} empresas={empresas} unidades={unidades} asignacionesUnidad={asignacionesUnidad} diasServicio={diasServicio} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} recargoFeriadoPct={recargoFeriadoPct} toast={showToast}/>}
