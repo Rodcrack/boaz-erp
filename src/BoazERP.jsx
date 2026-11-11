@@ -244,6 +244,7 @@ const ICONOS = {
   wrench:'<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
   trend:'<path d="M22 7 13.5 15.5 8.5 10.5 2 17"/><path d="M16 7h6v6"/>',
   dollar:'<path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+  map:'<path d="M9 3 3 5v16l6-2 6 2 6-2V3l-6 2-6-2z"/><path d="M9 3v16"/><path d="M15 5v16"/>',
   menu:'<path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/>',
   x:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   arrow:'<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
@@ -295,7 +296,7 @@ if (typeof document !== "undefined" && !document.getElementById("bz-css")) {
         select, input, textarea { font-size:16px; }
         button { min-height:34px; }
       }
-      @media (max-width:900px) { .bz-oculta-movil { display:none !important; } }
+      @media (max-width:900px) { .bz-mapa-grid { grid-template-columns:1fr !important; } .bz-oculta-movil { display:none !important; } }
       .bz-overlay-nav { position:fixed; inset:0; background:#0D1E3D88; z-index:40; }
       .bz-card-hover { transition:box-shadow .15s, transform .15s; } .bz-card-hover:hover { box-shadow:0 8px 24px #0D1E3D1A !important; transform:translateY(-1px); }
     `;
@@ -441,7 +442,298 @@ function generarInsights(pedidos, hoyP, ayerP, entregados, efectividad, ingresoH
   return frases.slice(0, 4);
 }
 
-function Dashboard({ pedidos, repartidores, liquidaciones, cotizNuevas=0, modulos=[], onIr }) {
+// ═══════════ DASHBOARD EJECUTIVO (pestañas Operación / Finanzas / Mapa) ═══════════
+function Sparkline({ datos, color=B.navy, w=90, h=28 }) {
+  if (!datos || datos.length<2) return null;
+  const max = Math.max(...datos), min = Math.min(...datos), rg = (max-min)||1;
+  const pts = datos.map((v,i)=>[ (i/(datos.length-1))*(w-4)+2, h-3-((v-min)/rg)*(h-8) ]);
+  const d = pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
+  return (
+    <svg width={w} height={h} style={{ display:"block" }}>
+      <path d={d+` L${w-2} ${h} L2 ${h} Z`} fill={color+"18"}/>
+      <path d={d} fill="none" stroke={color} strokeWidth={1.8} strokeLinejoin="round" strokeLinecap="round"/>
+      <circle cx={pts[pts.length-1][0]} cy={pts[pts.length-1][1]} r={2.6} fill={color}/>
+    </svg>
+  );
+}
+
+// Barras agrupadas (series: [{nombre,color,valores[]}], etiquetas[])
+function BarrasAgrupadas({ etiquetas, series, alto=190, formato=(v)=>String(Math.round(v)) }) {
+  const W = 560, padL = 46, padB = 24, padT = 10, H = alto;
+  const max = Math.max(1, ...series.flatMap(s=>s.valores));
+  const gw = (W-padL-8)/etiquetas.length, bw = Math.min(26, (gw-10)/series.length);
+  const ticks = [0,.5,1].map(f=>max*f);
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width:"100%", height:"auto", display:"block" }}>
+      {ticks.map((t,i)=>{ const y = H-padB-((t/max)*(H-padB-padT)); return (
+        <g key={i}><line x1={padL} x2={W-4} y1={y} y2={y} stroke="#E6EDF5" strokeDasharray={i?"3 3":""}/>
+          <text x={padL-6} y={y+3} fontSize="9" textAnchor="end" fill={B.textMut}>{formato(t)}</text></g>); })}
+      {etiquetas.map((et,i)=>(
+        <g key={i}>
+          {series.map((s,j)=>{ const v = s.valores[i]||0, bh = (v/max)*(H-padB-padT);
+            const x = padL + i*gw + (gw - bw*series.length)/2 + j*bw;
+            return <rect key={j} x={x} y={H-padB-bh} width={bw-2} height={Math.max(bh,v?2:0)} rx={3} fill={s.color}><title>{s.nombre}: {formato(v)}</title></rect>; })}
+          <text x={padL+i*gw+gw/2} y={H-8} fontSize="10" textAnchor="middle" fill={B.textSec}>{et}</text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+function KpiComparado({ icon, label, valor, previo, valorFmt, serie, color, invertir=false }) {
+  const delta = previo ? Math.round(((valor-previo)/previo)*100) : null;
+  const bueno = delta==null ? null : (invertir ? delta<=0 : delta>=0);
+  return (
+    <div className="bz-card-hover" style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:16, borderTop:`3px solid ${color}`, boxShadow:"0 2px 8px #0D1E3D0A" }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+        <div style={{ width:32, height:32, borderRadius:9, background:`${color}15`, color, display:"flex", alignItems:"center", justifyContent:"center" }}><Ico n={icon} size={18}/></div>
+        {delta!=null && <span style={{ fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:8, background: bueno?"#ECFDF5":"#FEF2F2", color: bueno?B.green:B.red }}>{delta>=0?"▲":"▼"} {Math.abs(delta)}% vs mes ant.</span>}
+      </div>
+      <div style={{ fontSize:10, color:B.textMut, textTransform:"uppercase", letterSpacing:"0.8px", marginBottom:3 }}>{label}</div>
+      <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", gap:8 }}>
+        <div style={{ fontSize:22, fontWeight:800, color:B.textPri, lineHeight:1.1 }}>{valorFmt}</div>
+        <Sparkline datos={serie} color={color}/>
+      </div>
+    </div>
+  );
+}
+
+const nombreMes = (d) => d.toLocaleDateString("es-PE",{month:"short"}).replace(".","");
+const claveMes = (iso) => (iso||"").slice(0,7);
+
+// ── Operación: comparativo mensual (se agrega arriba del dashboard clásico)
+function ComparativoMes({ pedidos }) {
+  const hoy = new Date();
+  const mesAct = diaLocal(hoy).slice(0,7);
+  const prev = new Date(hoy.getFullYear(), hoy.getMonth()-1, 1);
+  const mesPrev = diaLocal(prev).slice(0,7);
+  const diaDelMes = hoy.getDate();
+  const info = (mes, hasta) => {
+    const l = pedidos.filter(p => { if (!p.created_at) return false; const k = diaLocal(new Date(p.created_at)); return k.slice(0,7)===mes && (!hasta || parseInt(k.slice(8,10))<=hasta); });
+    const ent = l.filter(p=>p.estado==="entregado").length;
+    return { n:l.length, ent, ef: l.length?Math.round(ent/l.length*100):0, ing: l.reduce((a,p)=>a+(parseFloat(p.tarifa_s)||0),0) };
+  };
+  const a = info(mesAct), b = info(mesPrev, diaDelMes);
+  const ult30 = [];
+  for (let i=29;i>=0;i--) { const k = diaLocal(new Date(Date.now()-i*86400000)); ult30.push(pedidos.filter(p=>p.created_at && diaLocal(new Date(p.created_at))===k)); }
+  const sPed = ult30.map(x=>x.length), sEnt = ult30.map(x=>x.filter(p=>p.estado==="entregado").length);
+  const sIng = ult30.map(x=>x.reduce((t,p)=>t+(parseFloat(p.tarifa_s)||0),0));
+  const sEf = ult30.map(x=>x.length?x.filter(p=>p.estado==="entregado").length/x.length*100:0);
+  return (
+    <div style={{ marginBottom:20 }}>
+      <div style={{ fontSize:12, fontWeight:700, color:B.textPri, marginBottom:8 }}>Este mes vs. mismo período del mes anterior <span style={{ fontWeight:400, color:B.textMut }}>· tendencia de 30 días</span></div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14 }}>
+        <KpiComparado icon="package" label="Pedidos del mes" valor={a.n} previo={b.n} valorFmt={a.n} serie={sPed} color={B.navy}/>
+        <KpiComparado icon="check" label="Entregados" valor={a.ent} previo={b.ent} valorFmt={a.ent} serie={sEnt} color={B.green}/>
+        <KpiComparado icon="trend" label="Efectividad" valor={a.ef} previo={b.ef} valorFmt={a.ef+"%"} serie={sEf} color={B.gold}/>
+        <KpiComparado icon="dollar" label="Ingresos est. (sin IGV)" valor={a.ing} previo={b.ing} valorFmt={fmt.sol(a.ing)} serie={sIng} color={B.goldDk}/>
+      </div>
+    </div>
+  );
+}
+
+// ── Finanzas
+function DashboardFinanzas() {
+  const [datos, setDatos] = useState(null);
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      const desde = diaLocal(new Date(new Date().getFullYear(), new Date().getMonth()-5, 1));
+      const [f, g] = await Promise.all([
+        traerTodo(() => sb.from("facturas").select("total_s,estado_pago,estado,fecha_emision,fecha_pago,empresa_id,empresas(nombre)").order("id")),
+        traerTodo(() => sb.from("gastos").select("monto,tipo,fecha").eq("tipo","egreso").gte("fecha",desde).order("id")),
+      ]);
+      if (!vivo) return;
+      if (f.error) { setErr("No se pudieron cargar las facturas."); return; }
+      setDatos({ fact: (f.data||[]).filter(x=>x.estado!=="anulada" && x.estado!=="anulado"), gast: g.data||[] });
+    })();
+    return () => { vivo = false; };
+  }, []);
+  if (err) return <EstadoVacio icono="alert" titulo="Sin datos" texto={err}/>;
+  if (!datos) return <Cargando filas={5}/>;
+  const { fact, gast } = datos;
+  const hoy = new Date();
+  const meses = [];
+  for (let i=5;i>=0;i--) { const d = new Date(hoy.getFullYear(), hoy.getMonth()-i, 1); meses.push({ k: diaLocal(d).slice(0,7), l: nombreMes(d) }); }
+  const num = (v) => parseFloat(v)||0;
+  const factMes = meses.map(m => fact.filter(x=>claveMes(x.fecha_emision)===m.k).reduce((t,x)=>t+num(x.total_s),0));
+  const cobMes  = meses.map(m => fact.filter(x=>x.estado_pago==="pagado" && claveMes(x.fecha_pago||x.fecha_emision)===m.k).reduce((t,x)=>t+num(x.total_s),0));
+  const gastMes = meses.map(m => gast.filter(x=>claveMes(x.fecha)===m.k).reduce((t,x)=>t+num(x.monto),0));
+  const margenMes = factMes.map((v,i)=>v-gastMes[i]);
+  const i = 5;
+  const pendientes = fact.filter(x=>x.estado_pago!=="pagado");
+  const porCobrar = pendientes.reduce((t,x)=>t+num(x.total_s),0);
+  const hoyD = new Date(diaLocal()+"T00:00:00");
+  const tramos = [{l:"0-30 d",v:0},{l:"31-60 d",v:0},{l:"61-90 d",v:0},{l:"+90 d",v:0}];
+  pendientes.forEach(x => { const dias = Math.round((hoyD - new Date((x.fecha_emision||diaLocal())+"T00:00:00"))/86400000); tramos[dias<=30?0:dias<=60?1:dias<=90?2:3].v += num(x.total_s); });
+  const clientes = {};
+  fact.filter(x=>claveMes(x.fecha_emision)===meses[i].k).forEach(x => { const n = x.empresas?.nombre||"Sin cliente"; clientes[n]=(clientes[n]||0)+num(x.total_s); });
+  const topCli = Object.entries(clientes).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const maxCli = Math.max(1, ...topCli.map(x=>x[1]));
+  const tarj = { background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:18, boxShadow:"0 2px 8px #0D1E3D0A" };
+  return (
+    <div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:18 }}>
+        <KpiComparado icon="receipt" label="Facturado del mes" valor={factMes[i]} previo={factMes[i-1]} valorFmt={fmt.sol(factMes[i])} serie={factMes} color={B.navy}/>
+        <KpiComparado icon="banknote" label="Cobrado del mes" valor={cobMes[i]} previo={cobMes[i-1]} valorFmt={fmt.sol(cobMes[i])} serie={cobMes} color={B.green}/>
+        <KpiComparado icon="wallet" label="Gastos del mes" valor={gastMes[i]} previo={gastMes[i-1]} valorFmt={fmt.sol(gastMes[i])} serie={gastMes} color={B.red} invertir/>
+        <KpiComparado icon="trend" label="Margen (facturado − gastos)" valor={margenMes[i]} previo={margenMes[i-1]} valorFmt={fmt.sol(margenMes[i])} serie={margenMes} color={margenMes[i]>=0?B.goldDk:B.red}/>
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr", gap:14, marginBottom:14 }}>
+        <div style={tarj}>
+          <div style={{ fontSize:13, fontWeight:700, color:B.textPri, marginBottom:4 }}>Facturado, cobrado y gastos — últimos 6 meses</div>
+          <div style={{ fontSize:11, color:B.textMut, marginBottom:8 }}>
+            <span style={{ color:B.navy, fontWeight:700 }}>■</span> Facturado &nbsp;<span style={{ color:B.green, fontWeight:700 }}>■</span> Cobrado &nbsp;<span style={{ color:B.red, fontWeight:700 }}>■</span> Gastos
+          </div>
+          <BarrasAgrupadas etiquetas={meses.map(m=>m.l)} formato={(v)=>v>=1000?(v/1000).toFixed(v>=10000?0:1)+"k":String(Math.round(v))}
+            series={[{nombre:"Facturado",color:B.navy,valores:factMes},{nombre:"Cobrado",color:B.green,valores:cobMes},{nombre:"Gastos",color:B.red,valores:gastMes}]}/>
+        </div>
+        <div style={tarj}>
+          <div style={{ fontSize:13, fontWeight:700, color:B.textPri, marginBottom:2 }}>Cartera por cobrar</div>
+          <div style={{ fontSize:22, fontWeight:800, color:B.navy, marginBottom:10 }}>{fmt.sol(porCobrar)}</div>
+          {tramos.map((t,j)=>(
+            <div key={j} style={{ marginBottom:9 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:B.textSec, marginBottom:3 }}><span>{t.l}</span><b style={{ color:B.textPri }}>{fmt.sol(t.v)}</b></div>
+              <div style={{ height:6, background:B.bg, borderRadius:4, overflow:"hidden" }}><div style={{ height:"100%", width:`${porCobrar?t.v/porCobrar*100:0}%`, background:[B.green,B.gold,B.orange,B.red][j] }}/></div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={tarj}>
+        <div style={{ fontSize:13, fontWeight:700, color:B.textPri, marginBottom:10 }}>Top clientes del mes (facturado)</div>
+        {topCli.length===0 && <div style={{ fontSize:12, color:B.textMut }}>Aún no hay facturas emitidas este mes.</div>}
+        {topCli.map(([n,v])=>(
+          <div key={n} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
+            <div style={{ width:150, fontSize:12, color:B.textPri, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{n}</div>
+            <div style={{ flex:1, height:10, background:B.bg, borderRadius:6, overflow:"hidden" }}><div style={{ height:"100%", width:`${v/maxCli*100}%`, background:`linear-gradient(90deg,${B.navy},${B.navyLt||B.navy})` }}/></div>
+            <div style={{ width:90, textAlign:"right", fontSize:12, fontWeight:700, color:B.navy }}>{fmt.sol(v)}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Mapa de flota en vivo (última posición conocida según eventos de la app del repartidor)
+function cargarLeafletERP() {
+  return new Promise((resolve) => {
+    if (window.L) { resolve(window.L); return; }
+    const link = document.createElement("link"); link.rel="stylesheet"; link.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"; document.head.appendChild(link);
+    const sc = document.createElement("script"); sc.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+    sc.onload = () => resolve(window.L); sc.onerror = () => resolve(null); document.head.appendChild(sc);
+  });
+}
+function haceCuanto(iso) {
+  const m = Math.max(0, Math.round((Date.now()-new Date(iso))/60000));
+  return m<1?"ahora":m<60?`hace ${m} min`:m<1440?`hace ${Math.floor(m/60)} h`:`hace ${Math.floor(m/1440)} d`;
+}
+function MapaFlota({ pedidos, repartidores }) {
+  const cont = useRef(null), mapa = useRef(null), capa = useRef(null);
+  const [listo, setListo] = useState(false);
+  const [fallo, setFallo] = useState(false);
+  const [foco, setFoco] = useState(null);
+  const hoy = diaLocal();
+  const activos = pedidos.filter(p => p.dest_lat && p.dest_lng && (p.estado==="en_ruta" || p.estado==="asignado" || (p.estado==="entregado" && p.fecha_entrega && diaLocal(new Date(p.fecha_entrega))===hoy)));
+  // última posición conocida por repartidor, de los eventos con GPS de las últimas 24 h
+  const limite = Date.now()-86400000;
+  const pos = {};
+  pedidos.forEach(p => {
+    if (!p.repartidor_id || !Array.isArray(p.historial)) return;
+    p.historial.forEach(h => { if (h && h.lat && h.lng && h.timestamp && new Date(h.timestamp).getTime()>=limite) { const cur = pos[p.repartidor_id]; if (!cur || h.timestamp>cur.t) pos[p.repartidor_id] = { lat:h.lat, lng:h.lng, t:h.timestamp }; } });
+  });
+  const riders = repartidores.filter(r=>r.activo).map(r => ({ ...r, pos: pos[r.id]||null, enRuta: pedidos.filter(p=>p.repartidor_id===r.id && p.estado==="en_ruta").length, asig: pedidos.filter(p=>p.repartidor_id===r.id && p.estado==="asignado").length }))
+    .sort((a,b)=>(b.pos?1:0)-(a.pos?1:0) || b.enRuta-a.enRuta);
+  useEffect(() => {
+    let vivo = true;
+    cargarLeafletERP().then(L => {
+      if (!vivo) return; if (!L) { setFallo(true); return; }
+      if (!mapa.current && cont.current) {
+        mapa.current = L.map(cont.current).setView([-12.0464,-77.0428], 11);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution:"© OpenStreetMap", maxZoom:19 }).addTo(mapa.current);
+        capa.current = L.layerGroup().addTo(mapa.current);
+      }
+      setListo(true);
+    });
+    return () => { vivo = false; };
+  }, []);
+  useEffect(() => () => { if (mapa.current) { mapa.current.remove(); mapa.current = null; } }, []);
+  const clavePos = riders.map(r=>r.id+":"+(r.pos?.t||"")).join("|") + "#" + activos.map(p=>p.id+p.estado).join(",");
+  useEffect(() => {
+    const L = window.L; if (!listo || !L || !capa.current) return;
+    capa.current.clearLayers();
+    const pts = [];
+    activos.forEach(p => {
+      const c = ESTADOS_PEDIDO[p.estado]?.color || "#888";
+      L.circleMarker([p.dest_lat,p.dest_lng], { radius:6, color:"#fff", weight:2, fillColor:c, fillOpacity:.95 }).addTo(capa.current)
+        .bindPopup(`<b>${p.omd||""}</b><br>${p.dest_nombre||""}<br>${p.dest_direccion||""}<br><i>${ESTADOS_PEDIDO[p.estado]?.label||p.estado}</i>`);
+      pts.push([p.dest_lat,p.dest_lng]);
+    });
+    riders.filter(r=>r.pos).forEach(r => {
+      const ic = L.divIcon({ className:"", iconSize:[34,34], iconAnchor:[17,17], html:`<div style="width:34px;height:34px;border-radius:50%;background:${B.navy};border:3px solid ${B.gold};color:${B.gold};display:flex;align-items:center;justify-content:center;font:700 12px Inter,sans-serif;box-shadow:0 2px 8px #0006">${(r.nombres||"?")[0]}${(r.apellidos||"")[0]||""}</div>` });
+      L.marker([r.pos.lat,r.pos.lng], { icon:ic, zIndexOffset:1000 }).addTo(capa.current)
+        .bindPopup(`<b>${r.nombres} ${r.apellidos||""}</b><br>Última señal ${haceCuanto(r.pos.t)}<br>${r.enRuta} en ruta · ${r.asig} asignados`);
+      pts.push([r.pos.lat,r.pos.lng]);
+    });
+    if (pts.length && !foco) mapa.current.fitBounds(pts, { padding:[40,40], maxZoom:14 });
+  }, [listo, clavePos]);
+  const irA = (r) => { if (!r.pos || !mapa.current) return; setFoco(r.id); mapa.current.setView([r.pos.lat,r.pos.lng], 15); };
+  return (
+    <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1fr) 280px", gap:14 }} className="bz-mapa-grid">
+      <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden", boxShadow:"0 2px 8px #0D1E3D0A" }}>
+        <div style={{ padding:"10px 16px", borderBottom:`1px solid ${B.border}`, fontSize:11, color:B.textMut, display:"flex", gap:14, flexWrap:"wrap" }}>
+          <span><b style={{ color:B.navy }}>●</b> Repartidor (última posición)</span>
+          <span><b style={{ color:ESTADOS_PEDIDO.en_ruta?.color }}>●</b> En ruta</span>
+          <span><b style={{ color:ESTADOS_PEDIDO.asignado?.color }}>●</b> Asignado</span>
+          <span><b style={{ color:ESTADOS_PEDIDO.entregado?.color }}>●</b> Entregado hoy</span>
+        </div>
+        {fallo ? <EstadoVacio icono="map" titulo="No se pudo cargar el mapa" texto="Revisa tu conexión a internet y vuelve a intentar."/> : <div ref={cont} style={{ height:"min(62vh,560px)", minHeight:340 }}/>}
+      </div>
+      <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:14, boxShadow:"0 2px 8px #0D1E3D0A", maxHeight:"min(62vh,560px)", overflowY:"auto" }}>
+        <div style={{ fontSize:13, fontWeight:700, color:B.textPri, marginBottom:4 }}>Repartidores activos</div>
+        <div style={{ fontSize:10, color:B.textMut, marginBottom:10, lineHeight:1.4 }}>La posición se actualiza cuando el repartidor inicia ruta, cambia el estado de un pedido o entrega (últimas 24 h).</div>
+        {riders.map(r => (
+          <div key={r.id} onClick={()=>irA(r)} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 6px", borderBottom:`1px solid ${B.border}`, cursor:r.pos?"pointer":"default", background:foco===r.id?"#FFF7ED":"transparent", borderRadius:6 }}>
+            <div style={{ width:30, height:30, borderRadius:"50%", background:r.pos?B.navy:"#CBD5E1", color:r.pos?B.gold:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, flexShrink:0 }}>{(r.nombres||"?")[0]}{(r.apellidos||"")[0]}</div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:12, fontWeight:600, color:B.textPri, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.nombres} {r.apellidos}</div>
+              <div style={{ fontSize:10, color:B.textMut }}>{r.pos ? `Señal ${haceCuanto(r.pos.t)}` : "Sin señal en 24 h"} · {r.enRuta} en ruta</div>
+            </div>
+          </div>
+        ))}
+        {riders.length===0 && <div style={{ fontSize:12, color:B.textMut }}>No hay repartidores activos.</div>}
+      </div>
+    </div>
+  );
+}
+
+function Dashboard(props) {
+  const { modulos=[], pedidos, repartidores } = props;
+  const veFin = modulos.includes("cobranza");
+  const [tab, setTab] = useState(() => { try { return localStorage.getItem("boaz_dash_tab") || "operacion"; } catch { return "operacion"; } });
+  const tabOk = tab==="finanzas" && !veFin ? "operacion" : tab;
+  const cambiar = (t) => { setTab(t); try { localStorage.setItem("boaz_dash_tab", t); } catch {} };
+  const tabs = [{ id:"operacion", l:"Operación", i:"package" }, ...(veFin?[{ id:"finanzas", l:"Finanzas", i:"dollar" }]:[]), { id:"mapa", l:"Mapa de flota", i:"map" }];
+  return (
+    <div>
+      <div style={{ display:"flex", gap:6, marginBottom:16, borderBottom:`1px solid ${B.border}`, overflowX:"auto" }}>
+        {tabs.map(t => (
+          <button key={t.id} onClick={()=>cambiar(t.id)}
+            style={{ display:"flex", alignItems:"center", gap:7, padding:"10px 16px", background:"none", border:"none", cursor:"pointer", whiteSpace:"nowrap",
+              fontSize:13, fontWeight:tabOk===t.id?700:500, color:tabOk===t.id?B.navy:B.textMut,
+              borderBottom:`3px solid ${tabOk===t.id?B.gold:"transparent"}`, marginBottom:-1 }}>
+            <Ico n={t.i} size={16} color={tabOk===t.id?B.gold:B.textMut}/>{t.l}
+          </button>
+        ))}
+      </div>
+      {tabOk==="operacion" && <><ComparativoMes pedidos={pedidos}/><DashboardOperacion {...props}/></>}
+      {tabOk==="finanzas" && <DashboardFinanzas/>}
+      {tabOk==="mapa" && <MapaFlota pedidos={pedidos} repartidores={repartidores}/>}
+    </div>
+  );
+}
+
+function DashboardOperacion({ pedidos, repartidores, liquidaciones, cotizNuevas=0, modulos=[], onIr }) {
   const [alertasFin, setAlertasFin] = useState({ facturas:null, mant:[] });
   const [docsFlota, setDocsFlota] = useState({ venc:0, pronto:0 });
   const [incAbiertas, setIncAbiertas] = useState(0);
