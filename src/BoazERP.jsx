@@ -142,9 +142,9 @@ async function geocodificarDireccion(direccion, distrito) {
 const esperar = (ms) => new Promise(r => setTimeout(r, ms));
 
 const ROLES_ACCESO = {
-  admin: ["dashboard","pedidos","repartidores","clientes","cotizaciones","unidades","inventario","catalogo","liquidaciones","liquidacion-transporte","liquidacion-clientes","facturacion","cobranza","gastos","planilla","reportes","configuracion"],
+  admin: ["dashboard","pedidos","repartidores","clientes","cotizaciones","unidades","inventario","catalogo","liquidaciones","liquidacion-transporte","liquidacion-clientes","facturacion","cobranza","gastos","planilla","reportes","rentabilidad","configuracion"],
   operaciones: ["dashboard","pedidos","repartidores","clientes","cotizaciones","unidades","inventario","catalogo"],
-  finanzas: ["dashboard","clientes","cotizaciones","catalogo","liquidaciones","liquidacion-transporte","liquidacion-clientes","facturacion","cobranza","gastos","planilla","reportes"],
+  finanzas: ["dashboard","clientes","cotizaciones","catalogo","liquidaciones","liquidacion-transporte","liquidacion-clientes","facturacion","cobranza","gastos","planilla","reportes","rentabilidad"],
 };
 const Chip = ({ estado, size="sm" }) => {
   const s = ESTADOS_PEDIDO[estado] || { bg:"#F3F4F6", color:"#374151", label: estado };
@@ -420,6 +420,24 @@ function generarInsights(pedidos, hoyP, ayerP, entregados, efectividad, ingresoH
 
 function Dashboard({ pedidos, repartidores, liquidaciones, cotizNuevas=0, rol, onIr }) {
   const [alertasFin, setAlertasFin] = useState({ facturas:null, mant:[] });
+  const [docsFlota, setDocsFlota] = useState({ venc:0, pronto:0 });
+  const veFlota = rol==='admin' || rol==='operaciones';
+  useEffect(() => {
+    if (!veFlota) return;
+    let vivo = true;
+    (async () => {
+      try {
+        const { data } = await sb.from('vehiculo_documentos').select('placa,tipo,fecha_vencimiento');
+        if (!vivo || !data) return;
+        const ult = {};
+        data.forEach(d => { const k = d.placa+'|'+d.tipo; if (!ult[k] || (d.fecha_vencimiento||'') > (ult[k].fecha_vencimiento||'')) ult[k] = d; });
+        let venc=0, pronto=0;
+        Object.values(ult).forEach(d => { if (!d.fecha_vencimiento) return; const n = Math.round((new Date(d.fecha_vencimiento+'T00:00:00') - new Date(diaLocal()+'T00:00:00'))/86400000); if (n<0) venc++; else if (n<=30) pronto++; });
+        setDocsFlota({ venc, pronto });
+      } catch {}
+    })();
+    return () => { vivo = false; };
+  }, [veFlota]);
   const veFinanzas = rol==='admin' || rol==='finanzas';
   useEffect(() => {
     if (!veFinanzas) return;
@@ -518,6 +536,8 @@ function Dashboard({ pedidos, repartidores, liquidaciones, cotizNuevas=0, rol, o
         if (veFinanzas && alertasFin.facturas && alertasFin.facturas.n>0) items.push({ ico:"receipt", c:B.orange, t:`${alertasFin.facturas.n} factura${alertasFin.facturas.n===1?"":"s"} con más de 30 días sin cobrar (${fmt.sol(alertasFin.facturas.total)})`, ir:"cobranza" });
         const codSin = pedidos.filter(p => p.cobro_destino && p.estado==="entregado" && !p.cod_rendido);
         if (veFinanzas && codSin.length>0) items.push({ ico:"banknote", c:B.orange, t:`${codSin.length} cobro${codSin.length===1?"":"s"} contraentrega sin rendir (${fmt.sol(codSin.reduce((t,p)=>t+(parseFloat(p.monto_cobrar)||0),0))})`, ir:"cobranza" });
+        if (veFlota && docsFlota.venc>0) items.push({ ico:"truck", c:B.red, t:`${docsFlota.venc} documento${docsFlota.venc===1?"":"s"} de flota vencido${docsFlota.venc===1?"":"s"}`, ir:"unidades" });
+        if (veFlota && docsFlota.pronto>0) items.push({ ico:"truck", c:B.orange, t:`${docsFlota.pronto} documento${docsFlota.pronto===1?"":"s"} de flota vence${docsFlota.pronto===1?"":"n"} en 30 días`, ir:"unidades" });
         if (veFinanzas && alertasFin.mant.length>0) items.push({ ico:"wrench", c:B.red, t:`Mantenimiento vencido: ${alertasFin.mant.slice(0,4).join(", ")}${alertasFin.mant.length>4?"…":""}`, ir:"gastos" });
         return (
           <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:"14px 18px", marginBottom:20, boxShadow:"0 2px 8px #0D1E3D0A" }}>
@@ -2923,7 +2943,7 @@ function calcularMontoAsignacion(a, diasServicio, recargoFeriadoPct=0) {
 const calcularIGVAsignacion = (a, diasServicio, recargoFeriadoPct=0) => calcularMontoAsignacion(a, diasServicio, recargoFeriadoPct) * 0.18;
 const calcularTotalConIGVAsignacion = (a, diasServicio, recargoFeriadoPct=0) => calcularMontoAsignacion(a, diasServicio, recargoFeriadoPct) * 1.18;
 
-function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidores, onRefresh, toast }) {
+function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidores, onRefresh, toast, onIr }) {
   const [vista, setVista] = useState("asignaciones");
   const [modalUnidad, setModalUnidad] = useState(false);
   const [modalAsignacion, setModalAsignacion] = useState(false);
@@ -2942,7 +2962,7 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
         <div style={{ display:"flex", gap:6 }}>
-          {[["asignaciones","📋 Asignaciones"],["unidades","🚛 Flota"]].map(([id,label])=>(
+          {[["asignaciones","📋 Asignaciones"],["unidades","🚛 Flota"],["docs","📄 Documentos y mantenimiento"]].map(([id,label])=>(
             <button key={id} onClick={()=>setVista(id)}
               style={{ padding:"8px 16px", borderRadius:8, fontSize:12, cursor:"pointer",
                 border:`1px solid ${vista===id?B.gold:B.border}`,
@@ -2952,7 +2972,7 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
             </button>
           ))}
         </div>
-        {vista==="unidades" ? (
+        {vista==="docs" ? null : vista==="unidades" ? (
           <BtnPri onClick={()=>{setEditandoUnidad(null); setModalUnidad(true);}}>+ Nueva unidad</BtnPri>
         ) : (
           <BtnPri onClick={()=>{setEditandoAsignacion(null); setModalAsignacion(true);}}>+ Nueva asignación</BtnPri>
@@ -2960,12 +2980,14 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
       </div>
 
       <div style={{ fontSize:12, color:B.textMut, marginBottom:14 }}>
-        {vista==="unidades"
+        {vista==="docs"
+          ? "Vencimientos de SOAT, revisión técnica y seguro, y estado del mantenimiento de cada vehículo."
+          : vista==="unidades"
           ? "Tu flota disponible para clientes de Transporte y Carga."
           : "A qué cliente está asignada cada unidad y por cuánto tiempo. Para ver el cálculo de días, IGV y monto a facturar, ve a Finanzas → Liq. Transporte."}
       </div>
 
-      {vista==="unidades" ? (
+      {vista==="docs" ? <FlotaDocs unidades={unidades} repartidores={repartidores} toast={toast} onIr={onIr}/> : vista==="unidades" ? (
         <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden", boxShadow:"0 2px 8px #0D1E3D0A" }}>
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead><tr style={{ background:B.bg }}>
@@ -5063,6 +5085,427 @@ function Cobranza({ pedidos, empresas, repartidores, onRefresh, toast }) {
   );
 }
 
+// ══════════════════════════════════════════════════════════════
+// FASE 3: Flota (documentos y mantenimiento), Rentabilidad, Directorio de personas
+// ══════════════════════════════════════════════════════════════
+const TIPOS_DOC_VEH = ["SOAT","Revisión técnica","Seguro vehicular","Tarjeta de propiedad","Permiso MTC","Otro"];
+const COLS_DOC = ["SOAT","Revisión técnica","Seguro vehicular"];
+const diasHasta = (f) => f ? Math.round((new Date(String(f).slice(0,10)+"T00:00:00") - new Date(diaLocal()+"T00:00:00"))/86400000) : null;
+const estadoVenc = (f) => {
+  const d = diasHasta(f);
+  if (d===null) return { k:"sin", color:B.textMut, bg:B.bg, txt:"Sin registrar" };
+  if (d<0) return { k:"venc", color:B.red, bg:"#FEF2F2", txt:`Vencido hace ${-d} d` };
+  if (d<=30) return { k:"pronto", color:"#B45309", bg:"#FFF7ED", txt:`Vence en ${d} d` };
+  return { k:"ok", color:B.green, bg:"#ECFDF5", txt:fmt.fecha(f) };
+};
+
+function FlotaDocs({ unidades, repartidores, toast, onIr }) {
+  const [docs, setDocs] = useState([]);
+  const [mant, setMant] = useState([]);
+  const [gastos90, setGastos90] = useState({});
+  const [cargando, setCargando] = useState(true);
+  const [form, setForm] = useState(null);
+  const [subiendo, setSubiendo] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(null);
+  const [verHist, setVerHist] = useState(null);
+
+  const placas = useMemo(() => {
+    const s = new Set();
+    unidades.filter(u=>u.activo!==false).forEach(u => u.placa && s.add(u.placa.toUpperCase()));
+    repartidores.filter(r=>r.activo && r.placa).forEach(r => s.add(r.placa.toUpperCase()));
+    return [...s].sort();
+  }, [unidades, repartidores]);
+
+  const cargar = async () => {
+    setCargando(true);
+    const lim = new Date(); lim.setDate(lim.getDate()-90);
+    const [d, m, g] = await Promise.all([
+      sb.from("vehiculo_documentos").select("*").order("fecha_vencimiento", { ascending:false }),
+      sb.from("gastos").select("placa,categoria,fecha,km,proximo_mant_km,proximo_mant_fecha").not("placa","is",null).order("fecha",{ascending:false}).limit(3000),
+      sb.from("gastos").select("placa,monto,tipo,fecha").eq("tipo","egreso").not("placa","is",null).gte("fecha", diaLocal(lim)),
+    ]);
+    if (d.error) toast("No se pudieron cargar los documentos: " + d.error.message + " (¿ejecutaste flota_rentab_boaz.sql?)", "error"); else setDocs(d.data||[]);
+    if (!m.error) setMant(m.data||[]);
+    if (!g.error) { const t = {}; (g.data||[]).forEach(x => { const p = x.placa.toUpperCase(); t[p] = (t[p]||0) + (parseFloat(x.monto)||0); }); setGastos90(t); }
+    setCargando(false);
+  };
+  useEffect(() => { cargar(); }, []);
+
+  // último documento por placa + tipo (el de vencimiento más lejano)
+  const ultimo = useMemo(() => {
+    const m = {};
+    docs.forEach(d => { const k = `${(d.placa||"").toUpperCase()}|${d.tipo}`; if (!m[k] || (d.fecha_vencimiento||"") > (m[k].fecha_vencimiento||"")) m[k] = d; });
+    return m;
+  }, [docs]);
+
+  const mantPorPlaca = useMemo(() => {
+    const out = {}; const ultKm = {};
+    mant.forEach(r => { const p = r.placa.toUpperCase(); if (r.km && !(p in ultKm)) ultKm[p] = r.km; });
+    mant.forEach(r => {
+      const p = r.placa.toUpperCase();
+      if (!["Mantenimiento","Reparación"].includes(r.categoria) || out[p]) return;
+      out[p] = { fecha:r.fecha, proxFecha:r.proximo_mant_fecha, proxKm:r.proximo_mant_km, km:ultKm[p] };
+    });
+    return out;
+  }, [mant]);
+
+  const estMant = (p) => {
+    const m = mantPorPlaca[p];
+    if (!m) return { k:"sin", color:B.textMut, bg:B.bg, txt:"Sin registros" };
+    let k = "ok", txt = `Último ${fmt.fecha(m.fecha)}`;
+    if (m.proxFecha) { const e = estadoVenc(m.proxFecha); k = e.k; txt = e.k==="venc" ? `Mant. ${e.txt.toLowerCase()}` : e.k==="pronto" ? `Mant. ${e.txt.toLowerCase()}` : `Próx. ${fmt.fecha(m.proxFecha)}`; }
+    if (m.proxKm && m.km) { const falta = m.proxKm - m.km; if (falta<=0) { k="venc"; txt=`Pasó el km (${m.proxKm.toLocaleString()})`; } else if (falta<=500 && k!=="venc") { k="pronto"; txt=`Faltan ${falta} km`; } }
+    const c = { ok:[B.green,"#ECFDF5"], pronto:["#B45309","#FFF7ED"], venc:[B.red,"#FEF2F2"] }[k] || [B.textMut,B.bg];
+    return { k, color:c[0], bg:c[1], txt };
+  };
+
+  const resumen = useMemo(() => {
+    let venc=0, pronto=0;
+    placas.forEach(p => { COLS_DOC.forEach(t => { const d = ultimo[`${p}|${t}`]; if (!d) return; const e = estadoVenc(d.fecha_vencimiento); if (e.k==="venc") venc++; else if (e.k==="pronto") pronto++; }); const em = estMant(p); if (em.k==="venc") venc++; else if (em.k==="pronto") pronto++; });
+    return { venc, pronto };
+  }, [placas, ultimo, mantPorPlaca]);
+
+  const nuevo = (placa="", tipo="SOAT") => setForm({ placa, tipo, numero:"", fecha_emision:"", fecha_vencimiento:"", proveedor:"", monto:"", archivo_url:"", notas:"" });
+  const editar = (d) => setForm({ ...d, numero:d.numero||"", fecha_emision:d.fecha_emision||"", fecha_vencimiento:d.fecha_vencimiento||"", proveedor:d.proveedor||"", monto:d.monto??"", archivo_url:d.archivo_url||"", notas:d.notas||"" });
+  const set = (k,v) => setForm(f => ({ ...f, [k]:v }));
+  const subir = async (file) => {
+    if (!file) return; setSubiendo(true);
+    try {
+      const ext = (file.name.split(".").pop()||"jpg").toLowerCase();
+      const ruta = `flota/${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
+      const { error } = await sb.storage.from("evidencias").upload(ruta, file, { contentType:file.type||undefined });
+      if (error) throw error;
+      set("archivo_url", sb.storage.from("evidencias").getPublicUrl(ruta).data.publicUrl);
+    } catch (e) { toast("No se pudo subir el archivo: " + (e.message||e), "error"); }
+    setSubiendo(false);
+  };
+  const guardar = async () => {
+    if (!form.placa || !form.fecha_vencimiento) { toast("Indica la placa y la fecha de vencimiento", "error"); return; }
+    const reg = { placa:form.placa.toUpperCase().trim(), tipo:form.tipo, numero:form.numero||null, fecha_emision:form.fecha_emision||null, fecha_vencimiento:form.fecha_vencimiento,
+      proveedor:form.proveedor||null, monto:form.monto===""?null:Number(form.monto), archivo_url:form.archivo_url||null, notas:form.notas||null };
+    const r = form.id ? await sb.from("vehiculo_documentos").update(reg).eq("id", form.id) : await sb.from("vehiculo_documentos").insert(reg);
+    if (r.error) { toast("Error al guardar: " + r.error.message, "error"); return; }
+    toast("Documento guardado ✓"); setForm(null); cargar();
+  };
+  const eliminar = async () => {
+    const { error } = await sb.from("vehiculo_documentos").delete().eq("id", confirmDel.id);
+    if (error) toast("No se pudo eliminar: " + error.message, "error"); else { toast("Documento eliminado"); cargar(); }
+    setConfirmDel(null);
+  };
+
+  const th = { textAlign:"left", padding:"10px 12px", fontSize:11, color:B.textSec, textTransform:"uppercase", letterSpacing:".6px", borderBottom:`1px solid ${B.border}`, whiteSpace:"nowrap" };
+  const td = { padding:"10px 12px", fontSize:13, borderBottom:`1px solid ${B.border}`, verticalAlign:"middle" };
+  const Pill = ({ e, onClick }) => (
+    <button onClick={onClick} style={{ background:e.bg, color:e.color, border:`1px solid ${e.color}33`, borderRadius:20, padding:"3px 10px", fontSize:11, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>{e.txt}</button>
+  );
+  const card = { background:B.white, border:`1px solid ${B.border}`, borderRadius:12, boxShadow:"0 2px 8px #0D1E3D0A" };
+
+  return (
+    <div>
+      <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:14, alignItems:"stretch" }}>
+        <div style={{ ...card, padding:"12px 16px", flex:"1 1 150px", borderTop:`3px solid ${B.red}` }}><div style={{ fontSize:11, color:B.textSec, fontWeight:700, textTransform:"uppercase" }}>Vencidos</div><div style={{ fontSize:24, fontWeight:800, color:B.red }}>{resumen.venc}</div></div>
+        <div style={{ ...card, padding:"12px 16px", flex:"1 1 150px", borderTop:`3px solid ${B.orange}` }}><div style={{ fontSize:11, color:B.textSec, fontWeight:700, textTransform:"uppercase" }}>Vencen en 30 días</div><div style={{ fontSize:24, fontWeight:800, color:B.orange }}>{resumen.pronto}</div></div>
+        <div style={{ ...card, padding:"12px 16px", flex:"1 1 150px", borderTop:`3px solid ${B.navy}` }}><div style={{ fontSize:11, color:B.textSec, fontWeight:700, textTransform:"uppercase" }}>Vehículos</div><div style={{ fontSize:24, fontWeight:800, color:B.navy }}>{placas.length}</div></div>
+        <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:8 }}>
+          <BtnSec onClick={()=>onIr && onIr("gastos")}>+ Registrar mantenimiento (Gastos)</BtnSec>
+          <BtnPri onClick={()=>nuevo()}>+ Documento</BtnPri>
+        </div>
+      </div>
+
+      <div style={{ ...card, overflowX:"auto" }}>
+        {cargando ? <Cargando filas={5}/> : placas.length===0 ?
+          <EstadoVacio icono="truck" titulo="Sin vehículos" texto="Registra unidades o asigna placa a tus repartidores para controlar sus documentos."/> :
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead><tr><th style={th}>Placa</th>{COLS_DOC.map(t=><th key={t} style={th}>{t}</th>)}<th style={th}>Mantenimiento</th><th style={{...th,textAlign:"right"}}>Gasto 90 días</th><th style={th}></th></tr></thead>
+            <tbody>{placas.map(p => (
+              <tr key={p}>
+                <td style={{...td,fontWeight:800,color:B.navy}}>{p}</td>
+                {COLS_DOC.map(t => { const d = ultimo[`${p}|${t}`]; return (
+                  <td key={t} style={td}><Pill e={estadoVenc(d?.fecha_vencimiento)} onClick={()=> d ? editar(d) : nuevo(p,t)}/></td>); })}
+                <td style={td}><Pill e={estMant(p)} onClick={()=>onIr && onIr("gastos")}/></td>
+                <td style={{...td,textAlign:"right"}}>{solN(gastos90[p]||0)}</td>
+                <td style={{...td,whiteSpace:"nowrap",textAlign:"right"}}><button onClick={()=>setVerHist(p)} style={{ background:"none", border:"none", color:B.blue, fontSize:12, fontWeight:700, cursor:"pointer" }}>Documentos</button></td>
+              </tr>))}</tbody>
+          </table>}
+      </div>
+      <div style={{ fontSize:11, color:B.textMut, marginTop:8 }}>Haz clic en una etiqueta para editar o registrar el documento. El mantenimiento viene de los gastos con categoría Mantenimiento o Reparación (próxima fecha o kilometraje).</div>
+
+      {verHist && (
+        <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1500, display:"flex", alignItems:"center", justifyContent:"center", padding:12 }}>
+          <div style={{ background:B.white, borderRadius:16, padding:24, width:680, maxWidth:"100%", maxHeight:"88vh", overflowY:"auto" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:12 }}>
+              <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>Documentos de {verHist}</div>
+              <button onClick={()=>setVerHist(null)} style={{ background:"none", border:"none", cursor:"pointer", color:B.textSec }}><Ico n="x" size={18}/></button>
+            </div>
+            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+              <thead><tr><th style={th}>Tipo</th><th style={th}>N°</th><th style={th}>Vence</th><th style={th}></th></tr></thead>
+              <tbody>{docs.filter(d=>(d.placa||"").toUpperCase()===verHist).sort((a,b)=>(b.fecha_vencimiento||"").localeCompare(a.fecha_vencimiento||"")).map(d => (
+                <tr key={d.id}><td style={td}>{d.tipo}</td><td style={td}>{d.numero||"—"}</td><td style={td}>{fmt.fecha(d.fecha_vencimiento)}</td>
+                  <td style={{...td,textAlign:"right",whiteSpace:"nowrap"}}>
+                    {d.archivo_url && <a href={d.archivo_url} target="_blank" rel="noreferrer" style={{ fontSize:12, color:B.blue, marginRight:10 }}>📎 Ver</a>}
+                    <button onClick={()=>{setVerHist(null);editar(d);}} style={{ background:"none", border:"none", cursor:"pointer" }}>✏️</button>
+                    <button onClick={()=>setConfirmDel(d)} style={{ background:"none", border:"none", cursor:"pointer" }}>🗑️</button></td></tr>))}</tbody>
+            </table>
+            {docs.filter(d=>(d.placa||"").toUpperCase()===verHist).length===0 && <div style={{ padding:20, textAlign:"center", color:B.textMut, fontSize:13 }}>Sin documentos registrados</div>}
+            <div style={{ marginTop:14, textAlign:"right" }}><BtnPri onClick={()=>{const p=verHist;setVerHist(null);nuevo(p);}}>+ Documento</BtnPri></div>
+          </div>
+        </div>)}
+
+      {form && (
+        <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1600, display:"flex", alignItems:"center", justifyContent:"center", padding:12 }}>
+          <div style={{ background:B.white, borderRadius:16, padding:24, width:500, maxWidth:"100%", maxHeight:"92vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
+            <div style={{ fontSize:17, fontWeight:800, color:B.navy, marginBottom:14 }}>{form.id?"Editar":"Nuevo"} documento</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <div><label style={lbl}>Placa</label><input style={inp} list="placas-flota" value={form.placa} onChange={e=>set("placa",e.target.value.toUpperCase())}/><datalist id="placas-flota">{placas.map(p=><option key={p} value={p}/>)}</datalist></div>
+              <div><label style={lbl}>Tipo</label><select style={inp} value={form.tipo} onChange={e=>set("tipo",e.target.value)}>{TIPOS_DOC_VEH.map(t=><option key={t}>{t}</option>)}</select></div>
+              <div><label style={lbl}>N° de póliza / documento</label><input style={inp} value={form.numero} onChange={e=>set("numero",e.target.value)}/></div>
+              <div><label style={lbl}>Proveedor / entidad</label><input style={inp} value={form.proveedor} onChange={e=>set("proveedor",e.target.value)}/></div>
+              <div><label style={lbl}>Fecha de emisión</label><input type="date" style={inp} value={form.fecha_emision} onChange={e=>set("fecha_emision",e.target.value)}/></div>
+              <div><label style={lbl}>Fecha de vencimiento</label><input type="date" style={inp} value={form.fecha_vencimiento} onChange={e=>set("fecha_vencimiento",e.target.value)}/></div>
+              <div><label style={lbl}>Costo (S/)</label><input type="number" step="0.01" style={inp} value={form.monto} onChange={e=>set("monto",e.target.value)}/></div>
+              <div><label style={lbl}>Archivo (foto o PDF)</label><input type="file" accept="image/*,application/pdf" onChange={e=>subir(e.target.files[0])} style={{ fontSize:12 }}/>{subiendo && <span style={{ fontSize:12, color:B.textSec }}> Subiendo…</span>}{form.archivo_url && <div><a href={form.archivo_url} target="_blank" rel="noreferrer" style={{ fontSize:12, color:B.blue }}>📎 Ver adjunto</a></div>}</div>
+              <div style={{ gridColumn:"1/-1" }}><label style={lbl}>Notas</label><textarea style={{...inp,minHeight:46}} value={form.notas} onChange={e=>set("notas",e.target.value)}/></div>
+            </div>
+            <div style={{ fontSize:11, color:B.textMut, marginTop:8 }}>Al renovar, registra un documento nuevo: el anterior queda en el historial.</div>
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:14 }}><BtnSec onClick={()=>setForm(null)}>Cancelar</BtnSec><BtnPri onClick={guardar} disabled={subiendo}>Guardar</BtnPri></div>
+          </div>
+        </div>)}
+      {confirmDel && <Confirm msg={`Se eliminará el documento ${confirmDel.tipo} de ${confirmDel.placa}.`} onOk={eliminar} onCancel={()=>setConfirmDel(null)}/>}
+    </div>
+  );
+}
+
+// ── RENTABILIDAD POR CLIENTE ──────────────────────────────────
+const dia10 = (v) => String(v||"").slice(0,10);
+const costoDiaPersona = (r) => !r ? 0 : (r.modo_pago==="sueldo_fijo" ? (parseFloat(r.sueldo_fijo_mensual)||0)/30 : (parseFloat(r.tarifa_variable)||0));
+function montoAsignacionPeriodo(a, diasServicio, desde, hasta, pct) {
+  const tarifa = parseFloat(a.tarifa_dia)||0;
+  const reg = diasServicio.filter(d => d.asignacion_id===a.id);
+  if (reg.length>0) {
+    const l = reg.filter(d => d.prestado && dia10(d.fecha)>=desde && dia10(d.fecha)<=hasta);
+    return { dias:l.length, monto:l.reduce((s,d)=>s+tarifa+(esFeriadoPeru(dia10(d.fecha))?tarifa*(pct/100):0),0) };
+  }
+  const ini = dia10(a.fecha_inicio) > desde ? dia10(a.fecha_inicio) : desde;
+  const finA = a.fecha_fin ? dia10(a.fecha_fin) : hasta;
+  const fin = finA < hasta ? finA : hasta;
+  if (fin < ini) return { dias:0, monto:0 };
+  const dias = Math.round((new Date(fin+"T00:00:00")-new Date(ini+"T00:00:00"))/86400000)+1;
+  return { dias, monto:dias*tarifa };
+}
+
+function Rentabilidad({ pedidos, empresas, repartidores, unidades, asignaciones, diasServicio, recargoFeriadoPct, toast }) {
+  const [desde, setDesde] = useState(diaLocal().slice(0,8)+"01");
+  const [hasta, setHasta] = useState(diaLocal());
+  const [gastos, setGastos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [orden, setOrden] = useState("margen");
+
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      setCargando(true);
+      const { data, error } = await sb.from("gastos").select("placa,monto,categoria,tipo,fecha").eq("tipo","egreso").gte("fecha", desde).lte("fecha", hasta);
+      if (!vivo) return;
+      if (error) { toast("No se pudieron leer los gastos: " + error.message, "error"); setGastos([]); } else setGastos(data||[]);
+      setCargando(false);
+    })();
+    return () => { vivo = false; };
+  }, [desde, hasta]);
+
+  const modelo = useMemo(() => {
+    const dPeriodo = Math.max(1, Math.round((new Date(hasta+"T00:00:00")-new Date(desde+"T00:00:00"))/86400000)+1);
+    const filas = {};
+    const fila = (id) => filas[id] || (filas[id] = { id, nombre:(empresas.find(e=>e.id===id)||{}).nombre||"Sin cliente", ingUM:0, ingTR:0, pedidos:0, diasTR:0, cPers:0, cVeh:0 });
+    const rep = (id) => repartidores.find(r=>r.id===id);
+    const repsAdv = new Set();
+
+    // — Última milla
+    const entregados = pedidos.filter(p => p.estado==="entregado" && p.fecha_entrega && diaLocal(new Date(p.fecha_entrega))>=desde && diaLocal(new Date(p.fecha_entrega))<=hasta);
+    const porRep = {};
+    entregados.forEach(p => {
+      const f = fila(p.empresa_id||"—"); f.ingUM += parseFloat(p.tarifa_s)||0; f.pedidos++;
+      (porRep[p.repartidor_id||"—"] = porRep[p.repartidor_id||"—"] || []).push(p);
+    });
+
+    // — Transporte
+    const asigPeriodo = [];
+    asignaciones.forEach(a => {
+      const r = montoAsignacionPeriodo(a, diasServicio, desde, hasta, recargoFeriadoPct||0);
+      if (r.dias>0) asigPeriodo.push({ a, ...r });
+    });
+    const choferesTransporte = new Set();
+    const diasUnidad = {};
+    asigPeriodo.forEach(({ a, dias, monto }) => {
+      const f = fila(a.empresa_id||"—"); f.ingTR += monto; f.diasTR += dias;
+      const u = unidades.find(x => x.id===a.unidad_id);
+      diasUnidad[a.unidad_id] = (diasUnidad[a.unidad_id]||0) + dias;
+      if (u) [u.repartidor_id, u.auxiliar_id].filter(Boolean).forEach(rid => {
+        choferesTransporte.add(rid);
+        const r = rep(rid); if (r && !(parseFloat(r.tarifa_variable)>0 || parseFloat(r.sueldo_fijo_mensual)>0)) repsAdv.add(rid);
+        f.cPers += costoDiaPersona(r) * dias;
+      });
+    });
+
+    // — Costo de repartidores en última milla
+    let sueldosAsignados = 0;
+    Object.entries(porRep).forEach(([rid, ps]) => {
+      const r = rep(rid);
+      if (!r) return;
+      if (!(parseFloat(r.tarifa_variable)>0 || parseFloat(r.sueldo_fijo_mensual)>0)) repsAdv.add(rid);
+      if (r.modo_pago==="sueldo_fijo") {
+        if (choferesTransporte.has(rid)) return; // su sueldo se cargó a transporte
+        const total = (parseFloat(r.sueldo_fijo_mensual)||0) * dPeriodo/30;
+        sueldosAsignados += total;
+        ps.forEach(p => { fila(p.empresa_id||"—").cPers += total/ps.length; });
+      } else {
+        ps.forEach(p => { fila(p.empresa_id||"—").cPers += parseFloat(r.tarifa_variable)||0; });
+      }
+    });
+
+    // sueldos fijos de personal activo que no se pudieron atribuir
+    let sueldosSinAsignar = 0;
+    repartidores.filter(r => r.activo && r.modo_pago==="sueldo_fijo").forEach(r => {
+      const total = (parseFloat(r.sueldo_fijo_mensual)||0) * dPeriodo/30;
+      const dias = asigPeriodo.reduce((s,x)=>{ const u = unidades.find(y=>y.id===x.a.unidad_id); return s + (u && (u.repartidor_id===r.id||u.auxiliar_id===r.id) ? x.dias : 0); }, 0);
+      const cargado = (porRep[r.id] && !choferesTransporte.has(r.id)) ? total : Math.min(total, (parseFloat(r.sueldo_fijo_mensual)||0)/30*dias);
+      sueldosSinAsignar += Math.max(0, total - cargado);
+    });
+
+    // — Gastos de vehículos
+    let gastosGenerales = 0;
+    gastos.forEach(g => {
+      const monto = parseFloat(g.monto)||0; const placa = (g.placa||"").toUpperCase();
+      if (!placa) { gastosGenerales += monto; return; }
+      const u = unidades.find(x => (x.placa||"").toUpperCase()===placa);
+      if (u && diasUnidad[u.id]>0) {
+        asigPeriodo.filter(x=>x.a.unidad_id===u.id).forEach(x => { fila(x.a.empresa_id||"—").cVeh += monto * x.dias/diasUnidad[u.id]; });
+        return;
+      }
+      const r = repartidores.find(x => (x.placa||"").toUpperCase()===placa);
+      if (r && porRep[r.id]?.length) { porRep[r.id].forEach(p => { fila(p.empresa_id||"—").cVeh += monto/porRep[r.id].length; }); return; }
+      gastosGenerales += monto;
+    });
+
+    const lista = Object.values(filas).map(f => {
+      const ing = f.ingUM + f.ingTR, cost = f.cPers + f.cVeh, margen = ing - cost;
+      return { ...f, ing, cost, margen, pct: ing>0 ? margen/ing*100 : null };
+    });
+    const tot = lista.reduce((t,f)=>({ ing:t.ing+f.ing, cost:t.cost+f.cost, margen:t.margen+f.margen, pers:t.pers+f.cPers, veh:t.veh+f.cVeh }), { ing:0, cost:0, margen:0, pers:0, veh:0 });
+    return { lista, tot, gastosGenerales, sueldosSinAsignar, sinCosto:[...repsAdv].map(id => { const r = rep(id); return r ? `${r.nombres||""} ${r.apellidos||""}`.trim() : ""; }).filter(Boolean) };
+  }, [pedidos, empresas, repartidores, unidades, asignaciones, diasServicio, recargoFeriadoPct, gastos, desde, hasta]);
+
+  const lista = [...modelo.lista].sort((a,b) => orden==="pct" ? (b.pct??-999)-(a.pct??-999) : orden==="ing" ? b.ing-a.ing : b.margen-a.margen);
+  const resultadoOp = modelo.tot.margen - modelo.gastosGenerales - modelo.sueldosSinAsignar;
+
+  const mes = (delta) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth()+delta); const ini = diaLocal(d); const fin = new Date(d.getFullYear(), d.getMonth()+1, 0); setDesde(ini); setHasta(delta===0 ? diaLocal() : diaLocal(fin)); };
+  const exportar = () => {
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(lista.map(f => ({ Cliente:f.nombre, "Ingreso última milla":+f.ingUM.toFixed(2), "Ingreso transporte":+f.ingTR.toFixed(2), "Ingreso total":+f.ing.toFixed(2), "Costo personal":+f.cPers.toFixed(2), "Gasto vehículos":+f.cVeh.toFixed(2), "Margen":+f.margen.toFixed(2), "Margen %":f.pct==null?"":+f.pct.toFixed(1), Pedidos:f.pedidos, "Días transporte":f.diasTR }))), "Rentabilidad");
+    XLSX.writeFile(wb, `rentabilidad_boaz_${desde}_a_${hasta}.xlsx`);
+  };
+
+  const card = { background:B.white, border:`1px solid ${B.border}`, borderRadius:12, boxShadow:"0 2px 8px #0D1E3D0A" };
+  const th = { textAlign:"right", padding:"10px 12px", fontSize:11, color:B.textSec, textTransform:"uppercase", letterSpacing:".6px", borderBottom:`1px solid ${B.border}`, whiteSpace:"nowrap" };
+  const td = { padding:"10px 12px", fontSize:13, borderBottom:`1px solid ${B.border}`, textAlign:"right" };
+  const Kpi = ({ t, v, c, s }) => (<div style={{ ...card, padding:"14px 16px", flex:"1 1 170px", borderTop:`3px solid ${c}` }}><div style={{ fontSize:11, color:B.textSec, fontWeight:700, textTransform:"uppercase", letterSpacing:".6px" }}>{t}</div><div style={{ fontSize:21, fontWeight:800, color:c, marginTop:4 }}>{v}</div>{s && <div style={{ fontSize:11, color:B.textMut }}>{s}</div>}</div>);
+
+  return (
+    <div>
+      <div style={{ display:"flex", gap:10, flexWrap:"wrap", alignItems:"flex-end", marginBottom:14 }}>
+        <div><label style={lbl}>Desde</label><input type="date" style={{...inp,width:150}} value={desde} onChange={e=>setDesde(e.target.value)}/></div>
+        <div><label style={lbl}>Hasta</label><input type="date" style={{...inp,width:150}} value={hasta} onChange={e=>setHasta(e.target.value)}/></div>
+        <BtnSec onClick={()=>mes(0)}>Este mes</BtnSec><BtnSec onClick={()=>mes(-1)}>Mes anterior</BtnSec>
+        <div style={{ marginLeft:"auto" }}><BtnSec onClick={exportar}>⬇ Excel</BtnSec></div>
+      </div>
+
+      <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:14 }}>
+        <Kpi t="Ingresos" v={solN(modelo.tot.ing)} c={B.navy} s="última milla + transporte, sin IGV"/>
+        <Kpi t="Costos directos" v={solN(modelo.tot.cost)} c={B.orange} s={`personal ${solN(modelo.tot.pers)} · vehículos ${solN(modelo.tot.veh)}`}/>
+        <Kpi t="Margen directo" v={solN(modelo.tot.margen)} c={modelo.tot.margen>=0?B.green:B.red} s={modelo.tot.ing>0?`${(modelo.tot.margen/modelo.tot.ing*100).toFixed(1)}% de los ingresos`:""}/>
+        <Kpi t="Resultado operativo" v={solN(resultadoOp)} c={resultadoOp>=0?B.green:B.red} s={`tras gastos generales ${solN(modelo.gastosGenerales)} y sueldos sin asignar ${solN(modelo.sueldosSinAsignar)}`}/>
+      </div>
+
+      {modelo.sinCosto.length>0 && (
+        <div style={{ background:"#FFF7ED", border:"1px solid #FDBA74", borderRadius:10, padding:"10px 14px", marginBottom:12, fontSize:12, color:"#9A3412" }}>
+          <b>Atención:</b> estas personas no tienen costo configurado (tarifa o sueldo) y se están contando en S/ 0: {modelo.sinCosto.slice(0,6).join(", ")}{modelo.sinCosto.length>6?"…":""}. Configúralo en Repartidores para que el margen sea real.
+        </div>)}
+
+      <div style={{ ...card, overflowX:"auto" }}>
+        {cargando ? <Cargando filas={5}/> : lista.length===0 ?
+          <EstadoVacio icono="chart" titulo="Sin actividad en el período" texto="No hay pedidos entregados ni días de transporte entre estas fechas."/> :
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead><tr>
+              <th style={{...th,textAlign:"left"}}>Cliente</th><th style={th}>Ing. última milla</th><th style={th}>Ing. transporte</th><th style={th}>Costo personal</th><th style={th}>Gasto vehículos</th>
+              <th style={{...th,cursor:"pointer",color:orden==="margen"?B.navy:B.textSec}} onClick={()=>setOrden("margen")}>Margen {orden==="margen"?"▼":""}</th>
+              <th style={{...th,cursor:"pointer",color:orden==="pct"?B.navy:B.textSec}} onClick={()=>setOrden("pct")}>Margen % {orden==="pct"?"▼":""}</th></tr></thead>
+            <tbody>{lista.map(f => (
+              <tr key={f.id}>
+                <td style={{...td,textAlign:"left",fontWeight:600}}>{f.nombre}<div style={{ fontSize:11, color:B.textMut, fontWeight:400 }}>{f.pedidos} pedido{f.pedidos===1?"":"s"}{f.diasTR?` · ${f.diasTR} día${f.diasTR===1?"":"s"} de transporte`:""}</div></td>
+                <td style={td}>{solN(f.ingUM)}</td><td style={td}>{solN(f.ingTR)}</td><td style={td}>{solN(f.cPers)}</td><td style={td}>{solN(f.cVeh)}</td>
+                <td style={{...td,fontWeight:800,color:f.margen>=0?B.green:B.red}}>{solN(f.margen)}</td>
+                <td style={td}>{f.pct==null?"—":<span style={{ background:f.pct>=30?"#ECFDF5":f.pct>=10?"#FFF7ED":"#FEF2F2", color:f.pct>=30?B.green:f.pct>=10?"#B45309":B.red, fontWeight:800, fontSize:12, padding:"2px 9px", borderRadius:20 }}>{f.pct.toFixed(1)}%</span>}</td>
+              </tr>))}</tbody>
+          </table>}
+      </div>
+
+      <div style={{ ...card, padding:"14px 18px", marginTop:14, fontSize:12, color:B.textSec, lineHeight:1.6 }}>
+        <div style={{ fontWeight:800, color:B.navy, marginBottom:4 }}>Cómo se calcula</div>
+        • <b>Ingresos:</b> tarifa de pedidos entregados en el período, más los días de transporte prestados por cada asignación (con recargo de feriado).<br/>
+        • <b>Costo de personal:</b> repartidores por pedido = su tarifa por pedido; con sueldo fijo = sueldo del período repartido entre sus pedidos. Choferes y auxiliares de unidades = costo diario por cada día asignado al cliente.<br/>
+        • <b>Gastos de vehículos:</b> los gastos con placa se reparten entre los clientes de esa unidad según los días asignados, o entre los pedidos del repartidor dueño de la placa. Los gastos sin placa son generales y no se reparten.<br/>
+        • Es una estimación operativa: no incluye planilla administrativa ni impuestos.
+      </div>
+    </div>
+  );
+}
+
+// ── DIRECTORIO DE PERSONAS (vista unificada con detección de duplicados) ──
+const normDoc = (v) => { let d = (v||"").toString().replace(/\D/g,""); if (d.length===11 && d.startsWith("10")) d = d.slice(2,10); return d; };
+function DirectorioPersonas({ personal, terceros, repartidores }) {
+  const [busq, setBusq] = useState("");
+  const [soloDup, setSoloDup] = useState(false);
+  const filas = useMemo(() => {
+    const l = [];
+    personal.forEach(p => l.push({ k:"pl"+p.id, origen:"Planilla", nombre:`${p.nombres||""} ${p.apellidos||""}`.trim(), doc:normDoc(p.dni), rol:p.cargo||"Trabajador", activo:p.activo!==false }));
+    terceros.forEach(t => l.push({ k:"tr"+t.id, origen:"Tercero", nombre:t.nombre||"", doc:normDoc(t.ruc_dni), rol:t.servicio||"Honorarios/Factura", activo:t.activo!==false }));
+    repartidores.forEach(r => l.push({ k:"rp"+r.id, origen:"Repartidor", nombre:`${r.nombres||""} ${r.apellidos||""}`.trim(), doc:normDoc(r.dni), rol:`${r.vehiculo||"Repartidor"}${r.tipo_sueldo_fijo?` · ${r.tipo_sueldo_fijo}`:""}`, activo:!!r.activo }));
+    const grupos = {};
+    l.forEach(x => { if (x.doc) (grupos[x.doc] = grupos[x.doc] || []).push(x); });
+    l.forEach(x => { const g = x.doc && grupos[x.doc]; x.dup = !!(g && new Set(g.map(y=>y.origen)).size>1); x.otros = x.dup ? [...new Set(g.map(y=>y.origen).filter(o=>o!==x.origen))] : []; });
+    return l.sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  }, [personal, terceros, repartidores]);
+  const nDup = new Set(filas.filter(f=>f.dup).map(f=>f.doc)).size;
+  const q = busq.trim().toLowerCase();
+  const vis = filas.filter(f => (!soloDup || f.dup) && (!q || `${f.nombre} ${f.doc} ${f.rol}`.toLowerCase().includes(q)));
+  const colores = { Planilla:[B.navy,"#E8EEF7"], Tercero:["#7C3AED","#F3EEFF"], Repartidor:[B.goldDk,"#FFF4E5"] };
+  const td = { padding:"9px 12px", fontSize:13, borderBottom:`1px solid ${B.border}` };
+  return (
+    <div>
+      <div style={{ fontSize:12, color:B.textSec, marginBottom:12 }}>Vista unificada de todas las personas del sistema: planilla, terceros y repartidores. Detecta a quien está registrado en más de un lugar por su DNI o RUC.</div>
+      <div style={{ display:"flex", gap:10, flexWrap:"wrap", alignItems:"center", marginBottom:12 }}>
+        <input style={{ ...inp, width:260 }} placeholder="Buscar nombre o documento…" value={busq} onChange={e=>setBusq(e.target.value)}/>
+        <label style={{ fontSize:12, color:B.textSec, display:"flex", alignItems:"center", gap:6 }}><input type="checkbox" checked={soloDup} onChange={e=>setSoloDup(e.target.checked)}/> Solo posibles duplicados</label>
+        <span style={{ marginLeft:"auto", fontSize:12, fontWeight:700, color:nDup?B.orange:B.green }}>{nDup ? `${nDup} persona${nDup===1?"":"s"} en más de un registro` : "Sin duplicados detectados"}</span>
+      </div>
+      <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflowX:"auto" }}>
+        <table style={{ width:"100%", borderCollapse:"collapse" }}>
+          <thead><tr style={{ background:B.bg }}>{["Nombre","Documento","Registrado en","Rol / detalle","Estado","Alerta"].map(h=><th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:10, color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>)}</tr></thead>
+          <tbody>{vis.map(f => (
+            <tr key={f.k}>
+              <td style={{...td,fontWeight:600}}>{f.nombre||"—"}</td><td style={td}>{f.doc||"—"}</td>
+              <td style={td}><span style={{ background:colores[f.origen][1], color:colores[f.origen][0], fontSize:11, fontWeight:700, padding:"2px 9px", borderRadius:20 }}>{f.origen}</span></td>
+              <td style={{...td,color:B.textSec}}>{f.rol}</td>
+              <td style={td}>{f.activo ? <span style={{ color:B.green, fontWeight:700, fontSize:12 }}>Activo</span> : <span style={{ color:B.textMut, fontSize:12 }}>Inactivo</span>}</td>
+              <td style={td}>{f.dup && <span style={{ background:"#FFF7ED", color:"#B45309", fontSize:11, fontWeight:700, padding:"2px 9px", borderRadius:20 }}>También en {f.otros.join(", ")}</span>}</td>
+            </tr>))}</tbody>
+        </table>
+        {vis.length===0 && <EstadoVacio icono="users" titulo="Sin resultados"/>}
+      </div>
+      <div style={{ fontSize:11, color:B.textMut, marginTop:8 }}>Una misma persona puede estar legítimamente en dos lugares (por ejemplo, un repartidor con recibo por honorarios que también figura como tercero). Revisa los casos marcados y deja un solo registro de pago para evitar pagar dos veces.</div>
+    </div>
+  );
+}
+
 // ── GASTOS / INGRESOS ─────────────────────────────────────────
 const CAT_EGRESO = ["Combustible","Mantenimiento","Reparación","Repuestos y llantas","Peajes y estacionamiento","Lavado","Seguro y SOAT","Revisión técnica","Multas","Viáticos","Servicios","Alquiler","Impuestos","Otros"];
 const CAT_INGRESO = ["Otros ingresos","Reembolso de gasto","Venta de activo","Aporte de socio"];
@@ -5367,7 +5810,7 @@ function Gastos({ unidades, repartidores, toast, usuario }) {
   );
 }
 
-function Planilla({ toast }) {
+function Planilla({ toast, repartidores=[] }) {
   const [tab, setTab] = useState("planilla");
   const [personal, setPersonal] = useState([]);
   const [terceros, setTerceros] = useState([]);
@@ -5421,7 +5864,7 @@ function Planilla({ toast }) {
       </div>
 
       <div style={{ display:"flex", gap:6, marginBottom:16 }}>
-        {[["planilla","👤 Personal en Planilla"],["terceros","🧾 Terceros (Honorarios/Factura)"]].map(([id,label])=>(
+        {[["planilla","👤 Personal en Planilla"],["terceros","🧾 Terceros (Honorarios/Factura)"],["directorio","🗂️ Directorio y duplicados"]].map(([id,label])=>(
           <button key={id} onClick={()=>setTab(id)}
             style={{ padding:"8px 16px", borderRadius:8, fontSize:12, cursor:"pointer",
               border:`1px solid ${tab===id?B.gold:B.border}`,
@@ -5432,7 +5875,7 @@ function Planilla({ toast }) {
         ))}
       </div>
 
-      {tab==="planilla" ? (
+      {tab==="directorio" ? <DirectorioPersonas personal={personal} terceros={terceros} repartidores={repartidores}/> : tab==="planilla" ? (
         <>
           <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:12 }}>
             <BtnPri onClick={()=>{setEditandoPersonal(null); setModalPersonal(true);}}>+ Nuevo trabajador</BtnPri>
@@ -8239,6 +8682,7 @@ export default function BoazERP() {
     { id:"gastos",       icon:"banknote",  label:"Gastos" },
     { section:"ANÁLISIS" },
     { id:"reportes",     icon:"chart",     label:"Reportes" },
+    { id:"rentabilidad", icon:"trend",     label:"Rentabilidad" },
     { section:"SISTEMA" },
     { id:"configuracion",icon:"settings",  label:"Configuración" },
   ];
@@ -8427,7 +8871,7 @@ if (verificando) {
               {seccion==="dashboard"     && <Dashboard pedidos={pedidos} repartidores={repartidores} liquidaciones={liquidaciones} cotizNuevas={cotizNuevas} rol={usuario.rol} onIr={setSeccion}/>}
               {seccion==="pedidos"       && <Pedidos pedidos={pedidos} repartidores={repartidores} empresas={empresas} tarifariosCliente={tarifariosCliente} tarifarioEstandar={tarifarioEstandar} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="repartidores"  && <Repartidores repartidores={repartidores} pedidos={pedidos} onRefresh={cargarSilencioso} toast={showToast}/>}
-              {seccion==="unidades"      && <Unidades unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} repartidores={repartidores} tarifarioVehiculoCliente={tarifarioVehiculoCliente} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccion==="unidades"      && <Unidades unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} repartidores={repartidores} tarifarioVehiculoCliente={tarifarioVehiculoCliente} onRefresh={cargarSilencioso} toast={showToast} onIr={setSeccion}/>}
               {seccion==="inventario"    && <Inventario empresas={empresas} toast={showToast}/>}
               {seccion==="clientes"      && <Clientes empresas={empresas} pedidos={pedidos} lineasNegocio={lineasNegocio} tarifariosCliente={tarifariosCliente} tarifarioVehiculoCliente={tarifarioVehiculoCliente} tarifarioEstandar={tarifarioEstandar} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="cotizaciones"  && <Cotizaciones toast={showToast} onCambio={setCotizNuevas}/>}
@@ -8438,7 +8882,8 @@ if (verificando) {
               {seccion==="facturacion"   && <Facturacion empresas={empresas} pedidos={pedidos} tiposServicio={tiposServicio} usuario={usuario} toast={showToast}/>}
               {seccion==="cobranza"      && <Cobranza pedidos={pedidos} empresas={empresas} repartidores={repartidores} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccion==="gastos"        && <Gastos unidades={unidades} repartidores={repartidores} usuario={usuario} toast={showToast}/>}
-              {seccion==="planilla"      && <Planilla toast={showToast}/>}
+              {seccion==="planilla"      && <Planilla toast={showToast} repartidores={repartidores}/>}
+              {seccion==="rentabilidad"  && <Rentabilidad pedidos={pedidos} empresas={empresas} repartidores={repartidores} unidades={unidades} asignaciones={asignacionesUnidad} diasServicio={diasServicio} recargoFeriadoPct={recargoFeriadoPct} toast={showToast}/>}
               {seccion==="reportes"      && <Reportes pedidos={pedidos} repartidores={repartidores} empresas={empresas} toast={showToast} onIr={setSeccion}/>}
               {seccion==="configuracion" && <Configuracion onRefresh={cargarSilencioso} toast={showToast}/>}
             </>
