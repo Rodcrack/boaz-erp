@@ -2305,6 +2305,7 @@ function Repartidores({ repartidores, pedidos, onRefresh, toast }) {
       activo:true };
     let error;
     if (editando) {
+      if (!f.password_hash?.trim()) delete payload.password_hash; // PIN cifrado: vacío = no cambiar
       ({ error } = await sb.from("repartidores").update(payload).eq("id", editando.id));
     } else {
       ({ error } = await sb.from("repartidores").insert([payload]));
@@ -2320,7 +2321,7 @@ function Repartidores({ repartidores, pedidos, onRefresh, toast }) {
     onRefresh();
   };
 
-  const abrirEditar = (r) => { setEditando(r); setF({...r}); setModal(true); };
+  const abrirEditar = (r) => { setEditando(r); setF({...r, password_hash:""}); setModal(true); };
 
   return (
     <div>
@@ -2500,7 +2501,7 @@ function Repartidores({ repartidores, pedidos, onRefresh, toast }) {
                   <input style={inp} value={f.usuario||""} placeholder="ej. lmamani"
                     onChange={e=>setF(p=>({...p,usuario:e.target.value.trim().toLowerCase()}))}/></div>
                 <div><label style={lbl}>PIN de acceso</label>
-                  <input style={inp} value={f.password_hash||""} placeholder="ej. últimos 4 del DNI"
+                  <input style={inp} value={f.password_hash||""} placeholder={editando ? "Dejar vacío para no cambiar el PIN" : "ej. últimos 4 del DNI"}
                     onChange={e=>setF(p=>({...p,password_hash:e.target.value.trim()}))}/></div>
               </div>
               <div style={{ fontSize:10, color:B.textMut, marginTop:8 }}>

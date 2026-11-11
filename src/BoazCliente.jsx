@@ -13,6 +13,15 @@ const SUPABASE_URL  = "https://jeftkwjdqzkpswvaqspi.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImplZnRrd2pkcXprcHN3dmFxc3BpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4MzI0OTEsImV4cCI6MjEwMDQwODQ5MX0.Ta8Ei_wCm8ZEzD3IM-S60R0rJvI_d5BTvix_Z3W4EmY";
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 
+// Sesión segura: token obtenido al iniciar sesión, enviado en cada llamada.
+let _tokenCli = null;
+const setTokenCli = (t) => { _tokenCli = t; };
+const rpcCli = async (nombre, args = {}) => {
+  const res = await sb.rpc(nombre, { p_token: _tokenCli, ...args });
+  if (res.error && /sesion_invalida/.test(res.error.message || "")) window.dispatchEvent(new Event("boaz-sesion-expirada"));
+  return res;
+};
+
 // ── PALETA ────────────────────────────────────────────────────
 const C = {
   navy:"#0D1E3D", navyMd:"#152848", navyLt:"#1E3A5F",
@@ -166,11 +175,9 @@ function Login({ onLogin }) {
     });
     if (err || !data || data.length===0) { setError("Usuario o PIN incorrecto"); setCargando(false); return; }
     const contacto = data[0];
+    setTokenCli(contacto.token);
 
-    const { data: empresa } = await sb.from("empresas")
-      .select("id,nombre,ruc,contacto,telefono,email,codigo_interno,puede_generar_etiquetas,puede_ver_liquidacion")
-      .eq("id", contacto.empresa_id)
-      .maybeSingle();
+    const { data: empresa } = await rpcCli("cli_empresa");
 
     setCargando(false);
     onLogin({ ...contacto, empresa });
@@ -1109,12 +1116,8 @@ function CargaMasiva({ empresaId, empresa, onCargaCompleta }) {
         const fila = validas[i];
         setProgreso(`Ubicando dirección ${i+1} de ${validas.length}...`);
         try {
-          const { data: codigo, error: errCodigo } = await sb.rpc("generar_codigo_boaz");
-          if (errCodigo || !codigo) { generados.push({ ...fila, ok:false, error:"no se pudo generar código: "+(errCodigo?.message||"sin detalle") }); continue; }
           const coords = await geocodificarDireccion(fila.dest_direccion, fila.dest_distrito);
-          const { error: errInsert } = await sb.from("pedidos").insert({
-            omd: codigo,
-            empresa_id: empresaId,
+          const { data: codigo, error: errInsert } = await rpcCli("cli_crear_pedido", { p_datos: {
             cliente_referencia: fila.cliente_referencia || null,
             dest_nombre: fila.dest_nombre,
             dest_telefono: fila.dest_telefono || null,
@@ -1125,9 +1128,8 @@ function CargaMasiva({ empresaId, empresa, onCargaCompleta }) {
             tipo_servicio: fila.tipo_servicio || null,
             cobro_destino: !!fila.cobro_destino,
             monto_cobrar: fila.cobro_destino ? (fila.monto_cobrar || null) : null,
-            estado: "sin_asignar",
             dest_lat: coords?.lat||null, dest_lng: coords?.lng||null,
-          });
+          } });
           if (errInsert) generados.push({ ...fila, ok:false, error:errInsert.message });
           else generados.push({ ...fila, ok:true, codigo, ubicado: !!coords });
           await esperar(1100);
@@ -1682,17 +1684,8 @@ export default function BoazCliente() {
   const cargar = useCallback(async () => {
     if (!contacto?.empresa_id) return;
     setCargando(true);
-    const { data: reps } = await sb.from("repartidores").select("id,nombres,apellidos");
-    const { data } = await sb.from("pedidos").select("*")
-      .eq("empresa_id", contacto.empresa_id)
-      .order("created_at",{ascending:false});
-    if (data) {
-      const conNombreRep = data.map(p => {
-        const rep = reps?.find(r=>r.id===p.repartidor_id);
-        return { ...p, repartidor_nombre: rep ? `${rep.nombres} ${rep.apellidos}` : null };
-      });
-      setPedidos(conNombreRep);
-    }
+    const { data } = await rpcCli("cli_pedidos");
+    if (Array.isArray(data)) setPedidos(data);
     setCargando(false);
   },[contacto]);
 
@@ -1700,11 +1693,16 @@ export default function BoazCliente() {
 
   useEffect(() => {
     if (!contacto) return;
-    const ch = sb.channel("cliente-rt")
-      .on("postgres_changes",{event:"*",schema:"public",table:"pedidos"},cargar)
-      .subscribe();
-    return () => sb.removeChannel(ch);
-  },[contacto,cargar]);
+    // Actualización periódica silenciosa (cada 30 s, solo con la pestaña visible)
+    const t = setInterval(async () => {
+      if (document.visibilityState !== "visible") return;
+      const { data } = await rpcCli("cli_pedidos");
+      if (Array.isArray(data)) setPedidos(data);
+    }, 30000);
+    const exp = () => { setTokenCli(null); setContacto(null); };
+    window.addEventListener("boaz-sesion-expirada", exp);
+    return () => { clearInterval(t); window.removeEventListener("boaz-sesion-expirada", exp); };
+  },[contacto]);
 
   if (!contacto) return <Login onLogin={setContacto} />;
 
