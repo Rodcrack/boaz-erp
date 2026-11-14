@@ -47,8 +47,8 @@ const fmt = {
 };
 
 const ICONOS_HIST = {
-  llamada:"📞", whatsapp:"💬", estado:"🔄",
-  foto_entrega:"📸", foto_no_entrega:"📸",
+  llamada:"phone", whatsapp:"message", estado:"refresh",
+  foto_entrega:"camera", foto_no_entrega:"camera",
 };
 
 const BADGE_SERVICIO = {
@@ -196,8 +196,7 @@ function Confirm({ msg, onOk, onCancel }) {
 // ── CAMPO INPUT ───────────────────────────────────────────────
 const inp = { background:B.bg, border:`1px solid ${B.border}`, color:B.textPri,
   borderRadius:8, padding:"9px 12px", fontSize:13, width:"100%", outline:"none" };
-const lbl = { fontSize:11, color:B.textSec, fontWeight:700,
-  textTransform:"uppercase", letterSpacing:"0.7px", marginBottom:4, display:"block" };
+const lbl = { fontSize:12, color:B.textSec, fontWeight:600, marginBottom:5, display:"block" };
 const BtnPri = ({ children, onClick, disabled, style={} }) => (
   <button onClick={onClick} disabled={disabled}
     className="bz-btn-pri" style={{ background:"#D46A08",
@@ -270,6 +269,10 @@ const ICONOS = {
   user:'<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
   phone:'<path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384"/>',
   filter:'<path d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z"/>',
+  camera:'<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
+  grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
+  list:'<path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/>',
+  message:'<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
   inbox:'<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
 };
 const diaLocal = (d=new Date()) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
@@ -589,17 +592,17 @@ function generarInsights(pedidos, hoyP, ayerP, entregados, efectividad, ingresoH
     const delta = Math.round(((hoyP.length - ayerP.length) / ayerP.length) * 100);
     if (Math.abs(delta) >= 5) {
       frases.push(delta > 0
-        ? `📈 Hoy llevas ${delta}% más pedidos que ayer a esta hora (${hoyP.length} vs ${ayerP.length}).`
-        : `📉 Hoy llevas ${Math.abs(delta)}% menos pedidos que ayer a esta hora (${hoyP.length} vs ${ayerP.length}).`);
+        ? `Hoy llevas ${delta}% más pedidos que ayer a esta hora (${hoyP.length} vs ${ayerP.length}).`
+        : `Hoy llevas ${Math.abs(delta)}% menos pedidos que ayer a esta hora (${hoyP.length} vs ${ayerP.length}).`);
     }
   } else if (hoyP.length > 0) {
-    frases.push(`📦 Ya registraste ${hoyP.length} pedido${hoyP.length===1?"":"s"} hoy.`);
+    frases.push(`Ya registraste ${hoyP.length} pedido${hoyP.length===1?"":"s"} hoy.`);
   }
 
   // Efectividad
   if (pedidos.length >= 10) {
-    if (efectividad >= 90) frases.push(`✅ Tu efectividad general está en ${efectividad}% — excelente nivel.`);
-    else if (efectividad < 70) frases.push(`⚠️ Tu efectividad general bajó a ${efectividad}% — vale la pena revisar los pedidos no entregados.`);
+    if (efectividad >= 90) frases.push(`Tu efectividad general está en ${efectividad}% — excelente nivel.`);
+    else if (efectividad < 70) frases.push(`Tu efectividad general bajó a ${efectividad}% — vale la pena revisar los pedidos no entregados.`);
   }
 
   // Ingresos vs ayer
@@ -607,14 +610,14 @@ function generarInsights(pedidos, hoyP, ayerP, entregados, efectividad, ingresoH
     const deltaIngreso = Math.round(((ingresoHoy - ingresoAyer) / ingresoAyer) * 100);
     if (Math.abs(deltaIngreso) >= 10) {
       frases.push(deltaIngreso > 0
-        ? `💰 Los ingresos de hoy van ${deltaIngreso}% por encima de ayer a esta hora.`
-        : `💰 Los ingresos de hoy van ${Math.abs(deltaIngreso)}% por debajo de ayer a esta hora.`);
+        ? `Los ingresos de hoy van ${deltaIngreso}% por encima de ayer a esta hora.`
+        : `Los ingresos de hoy van ${Math.abs(deltaIngreso)}% por debajo de ayer a esta hora.`);
     }
   }
 
   // Pedidos sin asignar
   if (sinAsignar.length > 0) {
-    frases.push(`🔔 Tienes ${sinAsignar.length} pedido${sinAsignar.length===1?"":"s"} sin asignar esperando repartidor.`);
+    frases.push(`Tienes ${sinAsignar.length} pedido${sinAsignar.length===1?"":"s"} sin asignar esperando repartidor.`);
   }
 
   // Repartidor destacado del día
@@ -623,10 +626,10 @@ function generarInsights(pedidos, hoyP, ayerP, entregados, efectividad, ingresoH
   const topId = Object.keys(conteoHoy).sort((a,b)=>conteoHoy[b]-conteoHoy[a])[0];
   if (topId && conteoHoy[topId] >= 3) {
     const rep = repartidores.find(r=>r.id===topId);
-    if (rep) frases.push(`🏆 ${rep.nombres} ${rep.apellidos} lleva la delantera hoy, con ${conteoHoy[topId]} pedidos.`);
+    if (rep) frases.push(`${rep.nombres} ${rep.apellidos} lleva la delantera hoy, con ${conteoHoy[topId]} pedidos.`);
   }
 
-  if (frases.length === 0) frases.push("👋 Sin novedades destacadas hoy todavía — vuelve más tarde para ver el resumen.");
+  if (frases.length === 0) frases.push("Sin novedades destacadas hoy todavía — vuelve más tarde para ver el resumen.");
   return frases.slice(0, 4);
 }
 
@@ -750,7 +753,7 @@ function DashboardFinanzas() {
   fact.filter(x=>claveMes(x.fecha_emision)===meses[i].k).forEach(x => { const n = x.empresas?.nombre||"Sin cliente"; clientes[n]=(clientes[n]||0)+num(x.total_s); });
   const topCli = Object.entries(clientes).sort((a,b)=>b[1]-a[1]).slice(0,6);
   const maxCli = Math.max(1, ...topCli.map(x=>x[1]));
-  const tarj = { background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:18, boxShadow:"0 2px 8px #0D1E3D0A" };
+  const tarj = { background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:18, boxShadow:"0 1px 2px #0D1E3D0D" };
   return (
     <div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:18 }}>
@@ -872,7 +875,7 @@ function MapaFlota({ pedidos, repartidores }) {
   const irA = (r) => { if (!r.pos || !mapa.current) return; setFoco(r.id); mapa.current.setView([r.pos.lat,r.pos.lng], 15); };
   return (
     <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1fr) 280px", gap:14 }} className="bz-mapa-grid">
-      <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden", boxShadow:"0 2px 8px #0D1E3D0A" }}>
+      <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden", boxShadow:"0 1px 2px #0D1E3D0D" }}>
         <div style={{ padding:"10px 16px", borderBottom:`1px solid ${B.border}`, fontSize:11, color:B.textMut, display:"flex", gap:14, flexWrap:"wrap" }}>
           <span><b style={{ color:B.navy }}>●</b> Repartidor (última posición)</span>
           <span><b style={{ color:ESTADOS_PEDIDO.en_ruta?.color }}>●</b> En ruta</span>
@@ -881,7 +884,7 @@ function MapaFlota({ pedidos, repartidores }) {
         </div>
         {fallo ? <EstadoVacio icono="map" titulo="No se pudo cargar el mapa" texto="Revisa tu conexión a internet y vuelve a intentar."/> : <div ref={cont} style={{ height:"min(62vh,560px)", minHeight:340 }}/>}
       </div>
-      <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:14, boxShadow:"0 2px 8px #0D1E3D0A", maxHeight:"min(62vh,560px)", overflowY:"auto" }}>
+      <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:14, boxShadow:"0 1px 2px #0D1E3D0D", maxHeight:"min(62vh,560px)", overflowY:"auto" }}>
         <div style={{ fontSize:13, fontWeight:700, color:B.textPri, marginBottom:4 }}>Repartidores activos</div>
         <div style={{ fontSize:10, color:B.textMut, marginBottom:10, lineHeight:1.4 }}>La posición se actualiza cuando el repartidor inicia ruta, cambia el estado de un pedido o entrega (últimas 24 h).</div>
         {riders.map(r => (
@@ -1646,7 +1649,7 @@ function generarHtmlEtiquetas(pedidosSel, empresas) {
 </head>
 <body>
   <div class="no-print" style="text-align:center;padding:14px;">
-    <button onclick="window.print()" style="padding:10px 20px;font-size:14px;cursor:pointer;">🖨️ Imprimir</button>
+    <button onclick="window.print()" style="padding:10px 20px;font-size:14px;cursor:pointer;">Imprimir</button>
   </div>
   ${filas}
   <script>
@@ -1654,7 +1657,7 @@ function generarHtmlEtiquetas(pedidosSel, empresas) {
       if (typeof JsBarcode === "undefined") {
         document.body.insertAdjacentHTML("afterbegin",
           '<div style="background:#FEE;color:#900;padding:12px;text-align:center;font-family:Arial;">' +
-          '⚠️ No se pudo cargar la librería de códigos de barras (revisa tu conexión a internet e intenta de nuevo).</div>');
+          'No se pudo cargar la librería de códigos de barras (revisa tu conexión a internet e intenta de nuevo).</div>');
         return;
       }
       document.querySelectorAll("svg[data-code]").forEach(function(el){
@@ -1706,7 +1709,7 @@ function ModalEtiquetas({ pedidos, empresas, onClose }) {
       <div style={{ background:B.white, borderRadius:16, padding:28, width:560,
         maxHeight:"85vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-          <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>🏷️ Generar etiquetas con código de barras</div>
+          <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>Generar etiquetas con código de barras</div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20,
             color:B.textSec, cursor:"pointer" }}>✕</button>
         </div>
@@ -1741,8 +1744,7 @@ function ModalEtiquetas({ pedidos, empresas, onClose }) {
 
         <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
           <BtnSec onClick={onClose}>Cancelar</BtnSec>
-          <BtnPri onClick={imprimir} disabled={seleccionados.size===0}>
-            🖨️ Generar e imprimir ({seleccionados.size})
+          <BtnPri onClick={imprimir} disabled={seleccionados.size===0}><Ico n="filetext" size={15}/> Generar e imprimir ({seleccionados.size})
           </BtnPri>
         </div>
       </div>
@@ -1791,7 +1793,7 @@ function ModalGeocodificarPendientes({ pedidos, onClose, onDone, toast }) {
       <div style={{ background:B.white, borderRadius:16, padding:28, width:560,
         maxHeight:"85vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-          <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>📍 Geocodificar pedidos existentes</div>
+          <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>Geocodificar pedidos existentes</div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20,
             color:B.textSec, cursor:"pointer" }}>✕</button>
         </div>
@@ -1813,7 +1815,7 @@ function ModalGeocodificarPendientes({ pedidos, onClose, onDone, toast }) {
                 {pendientes.map((p,i)=>(
                   <div key={p.id} style={{ padding:"8px 12px", fontSize:12,
                     borderTop: i>0 ? `1px solid ${B.border}` : "none",
-                    background: i%2===0?B.white:"#F8FAFC" }}>
+                    background:B.white }}>
                     <span style={{ fontWeight:700, color:B.navy }}>{p.omd}</span> — {p.dest_nombre}
                     <div style={{ color:B.textMut }}>{p.dest_direccion}, {p.dest_distrito}</div>
                   </div>
@@ -1846,14 +1848,14 @@ function ModalGeocodificarPendientes({ pedidos, onClose, onDone, toast }) {
                     {resultado.fallidos.length} no se pudieron ubicar
                   </div>
                   <div style={{ fontSize:11, color:B.textSec }}>
-                    Corrige la dirección de cada uno abriendo su detalle ("Ver") y usa "🔄 Guardar dirección y reintentar ubicación", o ingresa las coordenadas manualmente.
+                    Corrige la dirección de cada uno abriendo su detalle ("Ver") y usa "Guardar dirección y reintentar ubicación", o ingresa las coordenadas manualmente.
                   </div>
                 </div>
                 <div style={{ border:`1px solid ${B.border}`, borderRadius:8, maxHeight:220, overflowY:"auto" }}>
                   {resultado.fallidos.map((p,i)=>(
                     <div key={p.id} style={{ padding:"8px 12px", fontSize:12,
                       borderTop: i>0 ? `1px solid ${B.border}` : "none",
-                      background: i%2===0?B.white:"#F8FAFC" }}>
+                      background:B.white }}>
                       <span style={{ fontWeight:700, color:B.navy }}>{p.omd}</span> — {p.dest_nombre}
                       <div style={{ color:B.textMut }}>{p.dest_direccion}, {p.dest_distrito}</div>
                     </div>
@@ -2074,11 +2076,11 @@ function ModalCargaMasiva({ repartidores, empresas, tarifariosCliente, tarifario
         </div>
 
         <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginBottom:16 }}>
-          <BtnSec onClick={descargarPlantillaAdmin}>📥 Descargar plantilla</BtnSec>
-          <label style={{ background:`linear-gradient(135deg,${B.gold},${B.goldDk})`, color:B.navy,
+          <BtnSec onClick={descargarPlantillaAdmin}><Ico n="download" size={15}/> Descargar plantilla</BtnSec>
+          <label style={{ background:"#D46A08", color:"#fff",
             padding:"9px 18px", borderRadius:8, fontSize:13, fontWeight:800, cursor:"pointer",
             display:"inline-flex", alignItems:"center", gap:6 }}>
-            📤 Seleccionar archivo (.csv, .xlsx)
+            Seleccionar archivo (.csv, .xlsx)
             <input type="file" accept=".csv,.xlsx,.xls" onChange={onSeleccionarArchivo} style={{ display:"none" }}/>
           </label>
           {nombreArchivo && <div style={{ fontSize:12, color:B.textMut, alignSelf:"center" }}>{nombreArchivo}</div>}
@@ -2092,7 +2094,7 @@ function ModalCargaMasiva({ repartidores, empresas, tarifariosCliente, tarifario
         {filas.length > 0 && !empresaId && (
           <div style={{ marginBottom:14, background:"#FFFBEB", border:"1px solid #FDE68A", borderRadius:8,
             padding:"10px 14px", color:"#92400E", fontSize:12, fontWeight:600 }}>
-            ⚠️ Selecciona el cliente (empresa) arriba antes de confirmar — el botón no hace nada hasta que lo elijas.
+            Selecciona el cliente (empresa) arriba antes de confirmar — el botón no hace nada hasta que lo elijas.
           </div>
         )}
 
@@ -2109,7 +2111,7 @@ function ModalCargaMasiva({ repartidores, empresas, tarifariosCliente, tarifario
             </div>
             <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
               <thead>
-                <tr style={{ background:B.bg }}>
+                <tr style={{ background:"#F6F9FC" }}>
                   {["N° Orden","Destinatario","Distrito","Ámbito","Servicio","Estado"].map(h=>(
                     <th key={h} style={{ padding:"8px 10px", fontSize:10, fontWeight:700, color:B.textMut,
                       textTransform:"uppercase", borderBottom:`1px solid ${B.border}` }}>{h}</th>
@@ -2127,8 +2129,8 @@ function ModalCargaMasiva({ repartidores, empresas, tarifariosCliente, tarifario
                     <td style={{ padding:"8px 10px" }}>{f.tipo_servicio||"—"}</td>
                     <td style={{ padding:"8px 10px" }}>
                       {f.errores.length===0
-                        ? <span style={{ color:B.green, fontWeight:700 }}>✅ OK</span>
-                        : <span style={{ color:B.red, fontWeight:700 }} title={f.errores.join(", ")}>❌ {f.errores[0]}</span>}
+                        ? <span style={{ color:B.green, fontWeight:700 }}>OK</span>
+                        : <span style={{ color:B.red, fontWeight:700 }} title={f.errores.join(", ")}>{f.errores[0]}</span>}
                     </td>
                   </tr>
                 ))}
@@ -2145,7 +2147,7 @@ function ModalCargaMasiva({ repartidores, empresas, tarifariosCliente, tarifario
               </div>
               {resultado.some(r=>r.ok) && (
                 <BtnPri onClick={()=>setMostrarEtiquetas(true)} style={{ fontSize:12, padding:"7px 14px" }}>
-                  🏷️ Generar etiquetas
+                  Generar etiquetas
                 </BtnPri>
               )}
             </div>
@@ -2155,7 +2157,7 @@ function ModalCargaMasiva({ repartidores, empresas, tarifariosCliente, tarifario
                   padding:"6px 10px", background:B.bg, borderRadius:6, fontSize:12 }}>
                   <span style={{ color:B.textSec }}>{r.cliente_referencia||"—"} · {r.dest_nombre}</span>
                   <span style={{ fontWeight:700, color: r.ok?B.green:B.red }}>
-                    {r.ok ? `${r.ubicado?"📍 ":"⚠️ "}${r.codigo}` : `Error: ${r.error}`}
+                    {r.ok ? `${r.codigo}${r.ubicado?"":" (sin ubicar en el mapa)"}` : `Error: ${r.error}`}
                   </span>
                 </div>
               ))}
@@ -2284,7 +2286,7 @@ function ModalDetallePedido({ pedido: p, repartidores, onClose, onRefresh, toast
               <div style={{ borderRadius:10, padding:"10px 14px", background:"#ECFDF5",
                 border:`1.5px solid ${B.green}` }}>
                 <div style={{ fontSize:11, fontWeight:700, color:B.green }}>
-                  ✅ Entregado {p.recibido_por && `— a ${p.recibido_por}`}
+                  Entregado {p.recibido_por && `— a ${p.recibido_por}`}
                 </div>
                 <div style={{ fontSize:9, color:B.textMut, marginTop:2 }}>{fmt.fecha(p.fecha_entrega)}</div>
                 {p.comentario_entrega && <div style={{ fontSize:10, color:"#065F46", marginTop:4, fontStyle:"italic" }}>{p.comentario_entrega}</div>}
@@ -2293,7 +2295,7 @@ function ModalDetallePedido({ pedido: p, repartidores, onClose, onRefresh, toast
               <div style={{ borderRadius:10, padding:"10px 14px", background:"#FEF2F2",
                 border:`1.5px solid ${B.red}` }}>
                 <div style={{ fontSize:11, fontWeight:700, color:B.red }}>
-                  ⚠️ No entregado {p.motivo_no_entrega && `— ${p.motivo_no_entrega}`}
+                  No entregado {p.motivo_no_entrega && `— ${p.motivo_no_entrega}`}
                 </div>
                 <div style={{ fontSize:9, color:B.textMut, marginTop:2 }}>{fmt.fecha(p.fecha_entrega)}</div>
                 {p.comentario_no_entrega && <div style={{ fontSize:10, color:"#991B1B", marginTop:4, fontStyle:"italic" }}>{p.comentario_no_entrega}</div>}
@@ -2331,13 +2333,13 @@ function ModalDetallePedido({ pedido: p, repartidores, onClose, onRefresh, toast
         {historial.length > 0 && (
           <div style={{ marginTop:16 }}>
             <div style={{ fontSize:11, fontWeight:700, color:B.navy, textTransform:"uppercase",
-              letterSpacing:"0.8px", marginBottom:10 }}>🕒 Historial del pedido</div>
+              letterSpacing:"0.8px", marginBottom:10 }}>Historial del pedido</div>
             <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
               {historial.map((h,i)=>(
                 <div key={i} style={{ display:"flex", gap:10, alignItems:"flex-start",
                   borderBottom: i<historial.length-1 ? `1px solid ${B.border}` : "none",
                   paddingBottom:10 }}>
-                  <span style={{ fontSize:15 }}>{ICONOS_HIST[h.tipo]||"•"}</span>
+                  <Ico n={ICONOS_HIST[h.tipo]||"clock"} size={15} color={B.textSec}/>
                   <div style={{ flex:1 }}>
                     <div style={{ fontSize:12, fontWeight:600, color:B.textPri }}>
                       {h.tipo==="llamada" && "Llamada al destinatario"}
@@ -2368,10 +2370,10 @@ function ModalDetallePedido({ pedido: p, repartidores, onClose, onRefresh, toast
 
         <div style={{ marginTop:16, background:B.bg, borderRadius:10, padding:16 }}>
           <div style={{ fontSize:11, fontWeight:700, color:B.navy, textTransform:"uppercase",
-            letterSpacing:"0.8px", marginBottom:10 }}>📍 Ubicación en el mapa</div>
+            letterSpacing:"0.8px", marginBottom:10 }}>Ubicación en el mapa</div>
           <div style={{ fontSize:12, marginBottom:12,
             color: p.dest_lat ? B.green : B.red, fontWeight:600 }}>
-            {p.dest_lat ? `✓ Ubicado (${parseFloat(p.dest_lat).toFixed(5)}, ${parseFloat(p.dest_lng).toFixed(5)})` : "⚠️ Sin coordenadas — no aparece en el mapa del repartidor"}
+            {p.dest_lat ? `✓ Ubicado (${parseFloat(p.dest_lat).toFixed(5)}, ${parseFloat(p.dest_lng).toFixed(5)})` : "Sin coordenadas — no aparece en el mapa del repartidor"}
           </div>
 
           <label style={{ ...lbl, marginTop:0 }}>Dirección (ajústala si la ubicación está mal)</label>
@@ -2379,10 +2381,10 @@ function ModalDetallePedido({ pedido: p, repartidores, onClose, onRefresh, toast
           <label style={lbl}>Distrito</label>
           <input style={{ ...inp, marginBottom:10 }} value={distrito} onChange={e=>setDistrito(e.target.value)}/>
           <button onClick={reintentarUbicacion} disabled={ubicando}
-            style={{ width:"100%", background:`linear-gradient(135deg,${B.gold},${B.goldDk})`,
-              border:"none", color:B.navy, padding:10, borderRadius:8,
+            style={{ width:"100%", background:"#D46A08",
+              border:"none", color:"#fff", padding:10, borderRadius:8,
               fontSize:12, fontWeight:800, cursor: ubicando?"default":"pointer", marginBottom:14 }}>
-            {ubicando ? "Buscando ubicación..." : "🔄 Guardar dirección y reintentar ubicación"}
+            {ubicando ? "Buscando ubicación..." : "Guardar dirección y reintentar ubicación"}
           </button>
 
           <div style={{ borderTop:`1px solid ${B.border}`, paddingTop:12 }}>
@@ -2479,18 +2481,15 @@ function Repartidores({ repartidores, pedidos, onRefresh, toast }) {
   return (
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-        <div style={{ display:"flex", gap:6 }}>
+        <div style={{ ...TAB_CONT }}>
           {["cards","tabla"].map(v=>(
             <button key={v} onClick={()=>setVista(v)}
-              style={{ padding:"7px 14px", borderRadius:8, fontSize:12, cursor:"pointer",
-                border:`1px solid ${vista===v?B.gold:B.border}`,
-                background:vista===v?B.gold:"transparent",
-                color:vista===v?B.navy:B.textSec, fontWeight:vista===v?700:400 }}>
-              {v==="cards"?"🃏 Tarjetas":"📋 Tabla"}
+              style={TAB_SEG(vista===v)}>
+              <Ico n={v==="cards"?"grid":"list"} size={14}/>{v==="cards"?"Tarjetas":"Tabla"}
             </button>
           ))}
         </div>
-        <BtnPri onClick={()=>{setEditando(null);setF(emptyForm);setModal(true);}}>+ Nuevo repartidor</BtnPri>
+        <BtnPri onClick={()=>{setEditando(null);setF(emptyForm);setModal(true);}}><Ico n="plus" size={15} sw={2.4}/> Nuevo repartidor</BtnPri>
       </div>
 
       {vista==="cards" ? (
@@ -2502,8 +2501,7 @@ function Repartidores({ repartidores, pedidos, onRefresh, toast }) {
             return (
               <div key={r.id} style={{ background:B.white, border:`1px solid ${B.border}`,
                 borderRadius:12, padding:20, opacity:r.activo?1:0.6,
-                boxShadow:"0 2px 8px #0D1E3D0A",
-                borderTop:`3px solid ${r.activo?B.gold:B.border}` }}>
+                boxShadow:"0 1px 2px #0D1E3D0D" }}>
                 <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16 }}>
                   <div style={{ width:48, height:48, borderRadius:"50%",
                     background:`linear-gradient(135deg,${B.navy},${B.navyLt})`,
@@ -2523,9 +2521,9 @@ function Repartidores({ repartidores, pedidos, onRefresh, toast }) {
                   </span>
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:14 }}>
-                  {[["📱",r.telefono||"—"],["🚗",r.vehiculo||"—"],
-                    ["🔑",r.placa||"—"],["📍",r.zona_default?.replace("_"," ")||"—"]].map(([ic,v],i)=>(
-                    <div key={i} style={{ fontSize:11, color:B.textSec }}>{ic} {v}</div>
+                  {[["phone",r.telefono||"—"],["truck",r.vehiculo||"—"],
+                    ["tag",r.placa||"—"],["pin",r.zona_default?.replace("_"," ")||"—"]].map(([ic,v],i)=>(
+                    <div key={i} style={{ fontSize:12, color:B.textSec, display:"flex", alignItems:"center", gap:7, minWidth:0 }}><Ico n={ic} size={14} color={B.textMut}/><span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", textTransform:ic==="pin"?"capitalize":"none" }}>{v}</span></div>
                   ))}
                 </div>
                 <div style={{ background:B.bg, borderRadius:8, padding:10,
@@ -2554,13 +2552,12 @@ function Repartidores({ repartidores, pedidos, onRefresh, toast }) {
         </div>
       ) : (
         <div style={{ background:B.white, border:`1px solid ${B.border}`,
-          borderRadius:12, overflow:"hidden", boxShadow:"0 2px 8px #0D1E3D0A" }}>
+          borderRadius:12, overflow:"hidden", boxShadow:"0 1px 2px #0D1E3D0D" }}>
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead>
-              <tr style={{ background:B.bg }}>
+              <tr style={{ background:"#F6F9FC" }}>
                 {["Nombre","DNI","Teléfono","Vehículo","Placa","Zona","Pedidos","Efectividad","Estado","Acciones"].map(h=>(
-                  <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:10,
-                    color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
+                  <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -2570,7 +2567,7 @@ function Repartidores({ repartidores, pedidos, onRefresh, toast }) {
                 const ent = misP.filter(p=>p.estado==="entregado").length;
                 return (
                   <tr key={r.id} style={{ borderTop:`1px solid ${B.border}`,
-                    background:i%2===0?B.white:"#F8FAFC" }}>
+                    background:B.white }}>
                     <td style={{ padding:"11px 14px" }}>
                       <div style={{ fontSize:12, fontWeight:700, color:B.navy }}>{r.nombres} {r.apellidos}</div>
                       <div style={{ fontSize:10, color:B.textMut }}>{r.email||""}</div>
@@ -2648,7 +2645,7 @@ function Repartidores({ repartidores, pedidos, onRefresh, toast }) {
 
             <div style={{ marginTop:16, padding:"12px 14px", background:B.bg, borderRadius:10 }}>
               <div style={{ fontSize:11, fontWeight:700, color:B.navy, textTransform:"uppercase",
-                letterSpacing:"0.7px", marginBottom:10 }}>📱 Acceso a la app (/app)</div>
+                letterSpacing:"0.7px", marginBottom:10 }}>Acceso a la app (/app)</div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
                 <div><label style={lbl}>Usuario</label>
                   <input style={inp} value={f.usuario||""} placeholder="ej. lmamani"
@@ -2664,7 +2661,7 @@ function Repartidores({ repartidores, pedidos, onRefresh, toast }) {
 
             <div style={{ marginTop:12, padding:"12px 14px", background:B.bg, borderRadius:10 }}>
               <div style={{ fontSize:11, fontWeight:700, color:B.navy, textTransform:"uppercase",
-                letterSpacing:"0.7px", marginBottom:10 }}>💰 Costo de reparto (para el modelo de rentabilidad)</div>
+                letterSpacing:"0.7px", marginBottom:10 }}>Costo de reparto (para el modelo de rentabilidad)</div>
               <label style={lbl}>¿Cómo se le paga?</label>
               <select style={{ ...inp, marginBottom:12 }} value={f.modo_pago} onChange={e=>setF(p=>({...p,modo_pago:e.target.value}))}>
                 <option value="por_pedido">Tarifa fija por pedido/día entregado</option>
@@ -2923,9 +2920,9 @@ function Clientes({ empresas, pedidos, lineasNegocio, tarifariosCliente, tarifar
 
 // ── Modalidades de tarifario que se pueden habilitar por cliente ──
 const MODALIDADES_TARIFA = [
-  { id:"pedido",   ico:"package", icon:"💰", label:"Por pedido",   ayuda:"Se cobra cada entrega según ámbito, servicio y peso" },
-  { id:"vehiculo", ico:"truck", icon:"🚛", label:"Por vehículo", ayuda:"Se cobra por día de unidad según el tipo de vehículo" },
-  { id:"viaje",    ico:"map", icon:"🧭", label:"Por viaje",    ayuda:"Se cobra por viaje o recojo según ruta o concepto acordado" },
+  { id:"pedido",   ico:"package", icon:"dollar", label:"Por pedido",   ayuda:"Se cobra cada entrega según ámbito, servicio y peso" },
+  { id:"vehiculo", ico:"truck", icon:"truck", label:"Por vehículo", ayuda:"Se cobra por día de unidad según el tipo de vehículo" },
+  { id:"viaje",    ico:"map", icon:"", label:"Por viaje",    ayuda:"Se cobra por viaje o recojo según ruta o concepto acordado" },
 ];
 // Modalidades habilitadas de un cliente. Si todavía no se marcó ninguna, se infieren de las tarifas que ya tiene.
 const modalidadesDe = (e, tarPedido=[], tarVeh=[], tarViaje=[]) => {
@@ -2977,7 +2974,7 @@ function ModalTarifarioViaje({ empresa, filas, estandar=[], onClose, onSaved, to
     <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
       <div style={{ background:B.white, borderRadius:16, padding:24, width:760, maxWidth:"100%", maxHeight:"88vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
         <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
-          <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>🧭 Tarifario por viaje — {esEstandar ? "estándar (propuesta base)" : empresa.nombre}</div>
+          <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>Tarifario por viaje — {esEstandar ? "estándar (propuesta base)" : empresa.nombre}</div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20, color:B.textSec, cursor:"pointer" }}>✕</button>
         </div>
         <div style={{ fontSize:12, color:B.textMut, marginBottom:14 }}>
@@ -3004,7 +3001,7 @@ function ModalTarifarioViaje({ empresa, filas, estandar=[], onClose, onSaved, to
         </div>
         <div style={{ display:"flex", gap:12, marginTop:12, alignItems:"center", flexWrap:"wrap" }}>
           <button onClick={agregar} style={{ fontSize:12, fontWeight:700, color:B.blue, background:"none", border:`1px solid ${B.border}`, borderRadius:8, padding:"7px 12px", cursor:"pointer" }}>+ Agregar tarifa</button>
-          {!esEstandar && <button onClick={cargarEstandar} style={{ fontSize:12, fontWeight:600, color:B.blue, background:"none", border:"none", cursor:"pointer" }}>📋 Cargar desde el estándar</button>}
+          {!esEstandar && <button onClick={cargarEstandar} style={{ fontSize:12, fontWeight:600, color:B.blue, background:"none", border:"none", cursor:"pointer" }}>Cargar desde el estándar</button>}
         </div>
         <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:18 }}>
           <BtnSec onClick={onClose}>Cerrar</BtnSec>
@@ -3103,7 +3100,7 @@ function ModalTarifarioCliente({ empresa, tarifariosCliente, tarifarioEstandar, 
       <div style={{ background:B.white, borderRadius:16, padding:28, width:600,
         maxHeight:"85vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
         <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
-          <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>💰 Tarifario por pedido — {empresa.nombre}</div>
+          <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>Tarifario por pedido — {empresa.nombre}</div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20,
             color:B.textSec, cursor:"pointer" }}>✕</button>
         </div>
@@ -3125,7 +3122,7 @@ function ModalTarifarioCliente({ empresa, tarifariosCliente, tarifarioEstandar, 
         <button onClick={cargarTodoElServicioDesdeEstandar}
           style={{ width:"100%", marginBottom:16, padding:"9px 12px", borderRadius:8, fontSize:12,
             fontWeight:700, cursor:"pointer", border:`1px dashed ${B.blue}`, background:"#EFF6FF", color:B.blue }}>
-          📋 Habilitar tarifario "{SERVICIOS.find(s=>s.id===servicioTab).label}" completo desde el estándar
+          Habilitar tarifario "{SERVICIOS.find(s=>s.id===servicioTab).label}" completo desde el estándar
         </button>
 
         {AMBITOS.map(a=>{
@@ -3142,7 +3139,7 @@ function ModalTarifarioCliente({ empresa, tarifariosCliente, tarifarioEstandar, 
                 <div style={{ display:"flex", alignItems:"center", gap:12 }}>
                   <button onClick={()=>cargarDesdeEstandar(a.id)}
                     style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer", fontWeight:600 }}>
-                    📋 Cargar desde el estándar
+                    Cargar desde el estándar
                   </button>
                   {completo && (
                     <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, color:B.textSec, cursor:"pointer" }}>
@@ -3243,7 +3240,7 @@ function ModalTarifarioEstandar({ tarifarioEstandar, onClose, onSaved, toast }) 
       <div style={{ background:B.white, borderRadius:16, padding:28, width:600,
         maxHeight:"85vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
         <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
-          <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>💰 Tarifario estándar (propuesta base)</div>
+          <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>Tarifario estándar (propuesta base)</div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20,
             color:B.textSec, cursor:"pointer" }}>✕</button>
         </div>
@@ -3354,7 +3351,7 @@ function ModalTarifarioVehiculoEstandar({ tarifarioVehiculoEstandar, onClose, on
       <div style={{ background:B.white, borderRadius:16, padding:28, width:560,
         maxHeight:"85vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
         <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
-          <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>🚛 Tarifario estándar por unidad</div>
+          <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>Tarifario estándar por unidad</div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20,
             color:B.textSec, cursor:"pointer" }}>✕</button>
         </div>
@@ -3453,7 +3450,7 @@ function ModalTarifarioVehiculo({ empresa, tarifarioVehiculoCliente, tarifarioVe
       <div style={{ background:B.white, borderRadius:16, padding:28, width:560,
         maxHeight:"85vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
         <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
-          <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>🚛 Tarifario por vehículo — {empresa.nombre}</div>
+          <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>Tarifario por vehículo — {empresa.nombre}</div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20,
             color:B.textSec, cursor:"pointer" }}>✕</button>
         </div>
@@ -3476,7 +3473,7 @@ function ModalTarifarioVehiculo({ empresa, tarifarioVehiculoCliente, tarifarioVe
                   <div style={{ display:"flex", alignItems:"center", gap:12 }}>
                     <button onClick={()=>cargarDesdeEstandar(tv)}
                       style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer", fontWeight:600 }}>
-                      📋 Cargar desde el estándar
+                      Cargar desde el estándar
                     </button>
                     {completo && (
                       <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, color:B.textSec, cursor:"pointer" }}>
@@ -3559,21 +3556,18 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
   return (
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-        <div style={{ display:"flex", gap:6 }}>
-          {[["asignaciones","📋 Asignaciones"],["unidades","🚛 Flota"],["docs","📄 Documentos y mantenimiento"]].map(([id,label])=>(
+        <div style={{ ...TAB_CONT }}>
+          {[["asignaciones","Asignaciones"],["unidades","Flota"],["docs","Documentos y mantenimiento"]].map(([id,label])=>(
             <button key={id} onClick={()=>setVista(id)}
-              style={{ padding:"8px 16px", borderRadius:8, fontSize:12, cursor:"pointer",
-                border:`1px solid ${vista===id?B.gold:B.border}`,
-                background:vista===id?B.gold:"transparent",
-                color:vista===id?B.navy:B.textSec, fontWeight:vista===id?700:400 }}>
+              style={TAB_SEG(vista===id)}>
               {label}
             </button>
           ))}
         </div>
         {vista==="docs" ? null : vista==="unidades" ? (
-          <BtnPri onClick={()=>{setEditandoUnidad(null); setModalUnidad(true);}}>+ Nueva unidad</BtnPri>
+          <BtnPri onClick={()=>{setEditandoUnidad(null); setModalUnidad(true);}}><Ico n="plus" size={15} sw={2.4}/> Nueva unidad</BtnPri>
         ) : (
-          <BtnPri onClick={()=>{setEditandoAsignacion(null); setModalAsignacion(true);}}>+ Nueva asignación</BtnPri>
+          <BtnPri onClick={()=>{setEditandoAsignacion(null); setModalAsignacion(true);}}><Ico n="plus" size={15} sw={2.4}/> Nueva asignación</BtnPri>
         )}
       </div>
 
@@ -3586,18 +3580,18 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
       </div>
 
       {vista==="docs" ? <FlotaDocs unidades={unidades} repartidores={repartidores} toast={toast} onIr={onIr}/> : vista==="unidades" ? (
-        <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden", boxShadow:"0 2px 8px #0D1E3D0A" }}>
+        <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden", boxShadow:"0 1px 2px #0D1E3D0D" }}>
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
-            <thead><tr style={{ background:B.bg }}>
+            <thead><tr style={{ background:"#F6F9FC" }}>
               {["Placa","Tipo","Conductor","Teléfono","Estado","Acciones"].map(h=>(
-                <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:10, color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
+                <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
               {unidades.map((u,i)=>{
                 const conductor = repartidores.find(r=>r.id===u.repartidor_id);
                 return (
-                <tr key={u.id} style={{ borderTop:`1px solid ${B.border}`, background:i%2===0?B.white:"#F8FAFC" }}>
+                <tr key={u.id} style={{ borderTop:`1px solid ${B.border}`, background:B.white }}>
                   <td style={{ padding:"11px 14px", fontSize:12, fontWeight:700, color:B.navy }}>{u.placa}</td>
                   <td style={{ padding:"11px 14px", fontSize:12, color:B.textSec, textTransform:"capitalize" }}>{u.tipo_vehiculo||"—"}</td>
                   <td style={{ padding:"11px 14px", fontSize:12, color:B.textSec }}>{conductor?`${conductor.nombres} ${conductor.apellidos}`:"Sin asignar"}</td>
@@ -3620,11 +3614,11 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
           </table>
         </div>
       ) : (
-        <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden", boxShadow:"0 2px 8px #0D1E3D0A" }}>
+        <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden", boxShadow:"0 1px 2px #0D1E3D0D" }}>
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
-            <thead><tr style={{ background:B.bg }}>
+            <thead><tr style={{ background:"#F6F9FC" }}>
               {["Unidad","Cliente","Servicio","Desde","Hasta","Estado","Acciones"].map(h=>(
-                <th key={h} style={{ padding:"10px 12px", textAlign:"left", fontSize:10, color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
+                <th key={h} style={{ padding:"10px 12px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
@@ -3633,7 +3627,7 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
                 const empresa = empresas.find(e=>e.id===a.empresa_id);
                 const servicio = tiposServicio.find(t=>t.id===a.tipo_servicio_id);
                 return (
-                  <tr key={a.id} style={{ borderTop:`1px solid ${B.border}`, background:i%2===0?B.white:"#F8FAFC" }}>
+                  <tr key={a.id} style={{ borderTop:`1px solid ${B.border}`, background:B.white }}>
                     <td style={{ padding:"10px 12px", fontSize:12, fontWeight:700, color:B.navy }}>{unidad?.placa||"—"}</td>
                     <td style={{ padding:"10px 12px", fontSize:12, color:B.textPri }}>{empresa?.nombre||"—"}</td>
                     <td style={{ padding:"10px 12px", fontSize:11, color:B.textSec }}>{servicio?.codigo||"—"}</td>
@@ -3699,24 +3693,17 @@ function LiquidacionTransporte({ unidades, asignaciones, empresas, tiposServicio
     <div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14, marginBottom:20 }}>
         {[
-          { label:"Asignaciones activas", value: asignaciones.filter(a=>a.estado==="activa").length, icon:"🚛", color:B.gold },
-          { label:"Pendientes de liquidar", value: asignaciones.filter(a=>!a.liquidado).length, icon:"⏳", color:B.red },
-          { label:"Total pendiente (con IGV)", value: fmt.sol(totalPendiente), icon:"💰", color:B.green },
-        ].map((k,i)=>(
-          <div key={i} style={{ background:B.white, border:`1px solid ${B.border}`,
-            borderRadius:12, padding:18, borderTop:`3px solid ${k.color}`, boxShadow:"0 2px 8px #0D1E3D0A" }}>
-            <div style={{ fontSize:20, marginBottom:6 }}>{k.icon}</div>
-            <div style={{ fontSize:20, fontWeight:800, color:B.textPri }}>{k.value}</div>
-            <div style={{ fontSize:10, color:B.textMut, textTransform:"uppercase" }}>{k.label}</div>
-          </div>
-        ))}
+          { label:"Asignaciones activas", value: asignaciones.filter(a=>a.estado==="activa").length, icon:"truck", color:B.gold },
+          { label:"Pendientes de liquidar", value: asignaciones.filter(a=>!a.liquidado).length, icon:"clock", color:B.red },
+          { label:"Total pendiente (con IGV)", value: fmt.sol(totalPendiente), icon:"dollar", color:B.green },
+        ].map((k,i)=><Kpi key={i} icon={k.icon} label={k.label} valor={k.value} sub={k.sub} color={k.color}/>)}
       </div>
 
-      <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden", boxShadow:"0 2px 8px #0D1E3D0A" }}>
+      <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden", boxShadow:"0 1px 2px #0D1E3D0D" }}>
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
-          <thead><tr style={{ background:B.bg }}>
+          <thead><tr style={{ background:"#F6F9FC" }}>
             {["Unidad","Cliente","Servicio","Desde","Hasta","Días","Tarifa/día","Subtotal","IGV (18%)","Total a facturar","Estado","Acciones"].map(h=>(
-              <th key={h} style={{ padding:"10px 12px", textAlign:"left", fontSize:10, color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
+              <th key={h} style={{ padding:"10px 12px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
             ))}
           </tr></thead>
           <tbody>
@@ -3730,7 +3717,7 @@ function LiquidacionTransporte({ unidades, asignaciones, empresas, tiposServicio
               const totalConIGV = calcularTotalConIGVAsignacion(a, diasServicio, recargoFeriadoPct);
               const tieneRegistro = diasServicio.some(d=>d.asignacion_id===a.id);
               return (
-                <tr key={a.id} style={{ borderTop:`1px solid ${B.border}`, background:i%2===0?B.white:"#F8FAFC" }}>
+                <tr key={a.id} style={{ borderTop:`1px solid ${B.border}`, background:B.white }}>
                   <td style={{ padding:"10px 12px", fontSize:12, fontWeight:700, color:B.navy }}>{unidad?.placa||"—"}</td>
                   <td style={{ padding:"10px 12px", fontSize:12, color:B.textPri }}>{empresa?.nombre||"—"}</td>
                   <td style={{ padding:"10px 12px", fontSize:11, color:B.textSec }}>{servicio?.codigo||"—"}</td>
@@ -3755,7 +3742,7 @@ function LiquidacionTransporte({ unidades, asignaciones, empresas, tiposServicio
                   </td>
                   <td style={{ padding:"10px 12px" }}>
                     <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                      <button onClick={()=>setModalCalendario(a)} style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer" }}>📅 Calendario</button>
+                      <button onClick={()=>setModalCalendario(a)} style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer" }}>Calendario</button>
                       {!a.liquidado && a.estado==="finalizada" && (
                         <button onClick={()=>marcarLiquidado(a)} style={{ fontSize:11, color:B.green, background:"none", border:"none", cursor:"pointer" }}>Liquidar</button>
                       )}
@@ -3854,7 +3841,7 @@ function ModalCalendarioServicio({ asignacion, diasServicio, unidad, empresa, re
       <div style={{ background:B.white, borderRadius:16, padding:28, width:560,
         maxHeight:"85vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
         <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
-          <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>📅 Calendario de servicio</div>
+          <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>Calendario de servicio</div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20,
             color:B.textSec, cursor:"pointer" }}>✕</button>
         </div>
@@ -4154,7 +4141,7 @@ function Liquidaciones({ repartidores, pedidos, toast, onRefresh }) {
     <div>
       {/* Generador */}
       <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12,
-        padding:24, marginBottom:20, boxShadow:"0 2px 8px #0D1E3D0A" }}>
+        padding:24, marginBottom:20, boxShadow:"0 1px 2px #0D1E3D0D" }}>
         <div style={{ fontSize:14, fontWeight:800, color:B.navy, marginBottom:16 }}>Generar nueva liquidación</div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr auto", gap:14, alignItems:"flex-end" }}>
           <div>
@@ -4203,20 +4190,19 @@ function Liquidaciones({ repartidores, pedidos, toast, onRefresh }) {
       {/* Historial */}
       <div style={{ fontSize:14, fontWeight:800, color:B.navy, marginBottom:12 }}>Historial de liquidaciones</div>
       <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12,
-        overflow:"hidden", boxShadow:"0 2px 8px #0D1E3D0A" }}>
+        overflow:"hidden", boxShadow:"0 1px 2px #0D1E3D0D" }}>
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
           <thead>
-            <tr style={{ background:B.bg }}>
+            <tr style={{ background:"#F6F9FC" }}>
               {["Repartidor","Fecha","Pedidos","Total","Estado","Acciones"].map(h=>(
-                <th key={h} style={{ padding:"10px 16px", textAlign:"left", fontSize:10,
-                  color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
+                <th key={h} style={{ padding:"10px 16px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {historial.map((l,i)=>(
               <tr key={l.id} style={{ borderTop:`1px solid ${B.border}`,
-                background:i%2===0?B.white:"#F8FAFC" }}>
+                background:B.white }}>
                 <td style={{ padding:"12px 16px", fontSize:12, fontWeight:600, color:B.navy }}>
                   {l.repartidores?.nombres} {l.repartidores?.apellidos}
                 </td>
@@ -5011,7 +4997,7 @@ function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesUnidad, 
         <div>IGV 18%: S/ ${igv.toFixed(2)}</div>
         <div><strong>TOTAL: S/ ${total.toFixed(2)}</strong></div>
       </div>
-      <button onclick="window.print()" style="margin-top:20px;padding:10px 20px;font-size:14px;cursor:pointer;">🖨️ Imprimir</button>
+      <button onclick="window.print()" style="margin-top:20px;padding:10px 20px;font-size:14px;cursor:pointer;">Imprimir</button>
       </body></html>`;
     const ventana = window.open("", "_blank");
     if (!ventana) return;
@@ -5121,16 +5107,15 @@ function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesUnidad, 
                 overflow:"hidden", maxHeight:340, overflowY:"auto" }}>
                 <table style={{ width:"100%", borderCollapse:"collapse" }}>
                   <thead style={{ position:"sticky", top:0 }}>
-                    <tr style={{ background:B.bg }}>
+                    <tr style={{ background:"#F6F9FC" }}>
                       {["Placa","Tipo de Vehículo","Días trabajados","Tarifa/día","Subtotal"].map(h=>(
-                        <th key={h} style={{ padding:"8px 12px", textAlign:"left", fontSize:10,
-                          color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
+                        <th key={h} style={{ padding:"8px 12px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {filasTransporte.map((f,i)=>(
-                      <tr key={f.asignacion.id} style={{ borderTop:`1px solid ${B.border}`, background:i%2===0?B.white:"#F8FAFC" }}>
+                      <tr key={f.asignacion.id} style={{ borderTop:`1px solid ${B.border}`, background:B.white }}>
                         <td style={{ padding:"8px 12px", fontSize:12, fontWeight:700, color:B.navy }}>{f.unidad?.placa||"—"}</td>
                         <td style={{ padding:"8px 12px", fontSize:12, color:B.textPri, textTransform:"capitalize" }}>{f.unidad?.tipo_vehiculo||"—"}</td>
                         <td style={{ padding:"8px 12px", fontSize:12, color:B.textSec }}>{f.dias}</td>
@@ -5151,16 +5136,15 @@ function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesUnidad, 
                 overflow:"hidden", maxHeight:340, overflowY:"auto" }}>
                 <table style={{ width:"100%", borderCollapse:"collapse" }}>
                   <thead style={{ position:"sticky", top:0 }}>
-                    <tr style={{ background:B.bg }}>
+                    <tr style={{ background:"#F6F9FC" }}>
                       {["Tracking Boaz","N° Orden", ...(empresaId==="todas"?["Cliente"]:[]), "Destinatario","Servicio","Fecha","Subtotal"].map(h=>(
-                        <th key={h} style={{ padding:"8px 12px", textAlign:"left", fontSize:10,
-                          color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
+                        <th key={h} style={{ padding:"8px 12px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {filtrados.map((p,i)=>(
-                      <tr key={p.id} style={{ borderTop:`1px solid ${B.border}`, background:i%2===0?B.white:"#F8FAFC" }}>
+                      <tr key={p.id} style={{ borderTop:`1px solid ${B.border}`, background:B.white }}>
                         <td style={{ padding:"8px 12px", fontSize:12, fontWeight:700, color:B.navy }}>{p.omd}</td>
                         <td style={{ padding:"8px 12px", fontSize:12, color:B.textSec }}>{p.cliente_referencia||"—"}</td>
                         {empresaId==="todas" && <td style={{ padding:"8px 12px", fontSize:12, color:B.textSec }}>{nombreEmpresa(p.empresa_id)}</td>}
@@ -5301,7 +5285,7 @@ function Cotizaciones({ toast, onCambio }) {
             {l} ({n})
           </button>
         ))}
-        <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="🔍 Buscar nombre, empresa, correo, WhatsApp..."
+        <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="Buscar nombre, empresa, correo, WhatsApp..."
           style={{ ...inp, maxWidth:340, marginLeft:"auto" }}/>
         <BtnSec onClick={cargar}>↻ Actualizar</BtnSec>
       </div>
@@ -5341,11 +5325,11 @@ function Cotizaciones({ toast, onCambio }) {
                       <a href={linkWhatsApp(c.whatsapp, `Hola ${c.nombre}, te escribimos de Boaz por tu solicitud de cotización de ${c.servicio||"nuestros servicios"}.`)}
                         target="_blank" rel="noreferrer" onClick={()=>c.estado==="nueva" && cambiarEstado(c,"contactada")}
                         style={{ background:"#25D366", color:"#fff", padding:"8px 14px", borderRadius:8, fontSize:12, fontWeight:700, textDecoration:"none" }}>
-                        💬 WhatsApp {c.whatsapp}
+                        WhatsApp {c.whatsapp}
                       </a>
                       <a href={`mailto:${c.email}?subject=${encodeURIComponent("Cotización Boaz")}`}
                         style={{ background:B.navy, color:"#fff", padding:"8px 14px", borderRadius:8, fontSize:12, fontWeight:700, textDecoration:"none" }}>
-                        ✉️ {c.email}
+                        {c.email}
                       </a>
                       <select value={c.estado} onChange={e=>cambiarEstado(c, e.target.value)} style={{ ...inp, width:"auto" }}>
                         {Object.entries(ESTADOS_COTIZ).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
@@ -5571,13 +5555,8 @@ function Cobranza({ pedidos, empresas, repartidores, onRefresh, toast }) {
 
       {tab==="det" && (<>
         <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:14 }}>
-          <div style={{ ...card, padding:"14px 16px", flex:"1 1 200px", borderTop:`3px solid ${B.orange}` }}>
-            <div style={{ fontSize:11, color:B.textSec, fontWeight:700, textTransform:"uppercase" }}>Detracciones por confirmar</div>
-            <div style={{ fontSize:22, fontWeight:800, color:B.orange, marginTop:4 }}>{solN(detPendTotal)}</div>
-            <div style={{ fontSize:11, color:B.textMut }}>{detPend.length} factura{detPend.length===1?"":"s"}</div></div>
-          <div style={{ ...card, padding:"14px 16px", flex:"1 1 200px", borderTop:`3px solid ${B.green}` }}>
-            <div style={{ fontSize:11, color:B.textSec, fontWeight:700, textTransform:"uppercase" }}>Depositadas este mes</div>
-            <div style={{ fontSize:22, fontWeight:800, color:B.green, marginTop:4 }}>{solN(detDepMes)}</div></div>
+          <div style={{ flex:"1 1 200px", minWidth:0, display:"grid" }}><KpiDS icon="clock" label="Detracciones por confirmar" valor={solN(detPendTotal)} sub={<>{detPend.length} factura{detPend.length===1?"":"s"}</>} color={B.orange} cv="#B45309"/></div>
+          <div style={{ flex:"1 1 200px", minWidth:0, display:"grid" }}><KpiDS icon="check" label="Depositadas este mes" valor={solN(detDepMes)} color={B.green} cv="#047857"/></div>
         </div>
         <div style={{ fontSize:12, color:B.textSec, marginBottom:10 }}>Marca cada detracción cuando el cliente la deposite en tu cuenta del Banco de la Nación y confirmes la constancia de depósito.</div>
         <div style={{ ...card, overflowX:"auto" }}>
@@ -5595,18 +5574,9 @@ function Cobranza({ pedidos, empresas, repartidores, onRefresh, toast }) {
 
       {tab==="cod" && (<>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:12, marginBottom:14 }}>
-          <div style={{ ...card, padding:"14px 16px", borderTop:`3px solid ${B.red}` }}>
-            <div style={{ fontSize:11, color:B.textSec, fontWeight:700, textTransform:"uppercase" }}>Cobrado sin rendir</div>
-            <div style={{ fontSize:22, fontWeight:800, color:B.red, marginTop:4 }}>{solN(montoCod(codPend))}</div>
-            <div style={{ fontSize:11, color:B.textMut }}>{codPend.length} pedido{codPend.length===1?"":"s"} entregado{codPend.length===1?"":"s"} · dinero en manos de repartidores</div></div>
-          <div style={{ ...card, padding:"14px 16px", borderTop:`3px solid ${B.gold}` }}>
-            <div style={{ fontSize:11, color:B.textSec, fontWeight:700, textTransform:"uppercase" }}>Por cobrar en la calle</div>
-            <div style={{ fontSize:22, fontWeight:800, color:B.goldDk, marginTop:4 }}>{solN(montoCod(codEnCalle))}</div>
-            <div style={{ fontSize:11, color:B.textMut }}>{codEnCalle.length} pedido{codEnCalle.length===1?"":"s"} aún sin entregar</div></div>
-          <div style={{ ...card, padding:"14px 16px", borderTop:`3px solid ${B.green}` }}>
-            <div style={{ fontSize:11, color:B.textSec, fontWeight:700, textTransform:"uppercase" }}>Ya rendido</div>
-            <div style={{ fontSize:22, fontWeight:800, color:B.green, marginTop:4 }}>{solN(montoCod(codRend))}</div>
-            <div style={{ fontSize:11, color:B.textMut }}>{codRend.length} pedido{codRend.length===1?"":"s"}</div></div>
+          <KpiDS icon="alert" label="Cobrado sin rendir" valor={solN(montoCod(codPend))} sub={<>{codPend.length} pedido{codPend.length===1?"":"s"} entregado{codPend.length===1?"":"s"} · dinero en manos de repartidores</>} color={B.red} cv="#B91C1C"/>
+          <KpiDS icon="bike" label="Por cobrar en la calle" valor={solN(montoCod(codEnCalle))} sub={<>{codEnCalle.length} pedido{codEnCalle.length===1?"":"s"} aún sin entregar</>} color={B.goldDk}/>
+          <KpiDS icon="check" label="Ya rendido" valor={solN(montoCod(codRend))} sub={<>{codRend.length} pedido{codRend.length===1?"":"s"}</>} color={B.green} cv="#047857"/>
         </div>
 
         {idsSel.length>0 && (
@@ -5788,12 +5758,12 @@ function FlotaDocs({ unidades, repartidores, toast, onIr }) {
   return (
     <div>
       <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:14, alignItems:"stretch" }}>
-        <div style={{ ...card, padding:"12px 16px", flex:"1 1 150px", borderTop:`3px solid ${B.red}` }}><div style={{ fontSize:11, color:B.textSec, fontWeight:700, textTransform:"uppercase" }}>Vencidos</div><div style={{ fontSize:24, fontWeight:800, color:B.red }}>{resumen.venc}</div></div>
-        <div style={{ ...card, padding:"12px 16px", flex:"1 1 150px", borderTop:`3px solid ${B.orange}` }}><div style={{ fontSize:11, color:B.textSec, fontWeight:700, textTransform:"uppercase" }}>Vencen en 30 días</div><div style={{ fontSize:24, fontWeight:800, color:B.orange }}>{resumen.pronto}</div></div>
-        <div style={{ ...card, padding:"12px 16px", flex:"1 1 150px", borderTop:`3px solid ${B.navy}` }}><div style={{ fontSize:11, color:B.textSec, fontWeight:700, textTransform:"uppercase" }}>Vehículos</div><div style={{ fontSize:24, fontWeight:800, color:B.navy }}>{placas.length}</div></div>
+        <div style={{ flex:"1 1 150px", minWidth:0, display:"grid" }}><KpiDS icon="alert" label="Vencidos" valor={resumen.venc} color={B.red} cv="#B91C1C"/></div>
+        <div style={{ flex:"1 1 150px", minWidth:0, display:"grid" }}><KpiDS icon="clock" label="Vencen en 30 días" valor={resumen.pronto} color={B.orange} cv="#B45309"/></div>
+        <div style={{ flex:"1 1 150px", minWidth:0, display:"grid" }}><KpiDS icon="truck" label="Vehículos" valor={placas.length} color={B.navy}/></div>
         <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:8 }}>
-          <BtnSec onClick={()=>onIr && onIr("gastos")}>+ Registrar mantenimiento (Gastos)</BtnSec>
-          <BtnPri onClick={()=>nuevo()}>+ Documento</BtnPri>
+          <BtnSec onClick={()=>onIr && onIr("gastos")}><Ico n="plus" size={15}/> Registrar mantenimiento (Gastos)</BtnSec>
+          <BtnPri onClick={()=>nuevo()}><Ico n="plus" size={15} sw={2.4}/> Documento</BtnPri>
         </div>
       </div>
 
@@ -5827,12 +5797,12 @@ function FlotaDocs({ unidades, repartidores, toast, onIr }) {
               <tbody>{docs.filter(d=>(d.placa||"").toUpperCase()===verHist).sort((a,b)=>(b.fecha_vencimiento||"").localeCompare(a.fecha_vencimiento||"")).map(d => (
                 <tr key={d.id}><td style={td}>{d.tipo}</td><td style={td}>{d.numero||"—"}</td><td style={td}>{fmt.fecha(d.fecha_vencimiento)}</td>
                   <td style={{...td,textAlign:"right",whiteSpace:"nowrap"}}>
-                    {d.archivo_url && <a href={d.archivo_url} target="_blank" rel="noreferrer" style={{ fontSize:12, color:B.blue, marginRight:10 }}>📎 Ver</a>}
+                    {d.archivo_url && <a href={d.archivo_url} target="_blank" rel="noreferrer" style={{ fontSize:12, color:B.blue, marginRight:10 }}>Ver</a>}
                     <BtnIco n="edit" title="Editar" onClick={()=>{setVerHist(null);editar(d);}}/>
                     <BtnIco n="trash" title="Eliminar" color="#B91C1C" onClick={()=>setConfirmDel(d)}/></td></tr>))}</tbody>
             </table>
             {docs.filter(d=>(d.placa||"").toUpperCase()===verHist).length===0 && <div style={{ padding:20, textAlign:"center", color:B.textMut, fontSize:13 }}>Sin documentos registrados</div>}
-            <div style={{ marginTop:14, textAlign:"right" }}><BtnPri onClick={()=>{const p=verHist;setVerHist(null);nuevo(p);}}>+ Documento</BtnPri></div>
+            <div style={{ marginTop:14, textAlign:"right" }}><BtnPri onClick={()=>{const p=verHist;setVerHist(null);nuevo(p);}}><Ico n="plus" size={15} sw={2.4}/> Documento</BtnPri></div>
           </div>
         </div>)}
 
@@ -5848,7 +5818,7 @@ function FlotaDocs({ unidades, repartidores, toast, onIr }) {
               <div><label style={lbl}>Fecha de emisión</label><input type="date" style={inp} value={form.fecha_emision} onChange={e=>set("fecha_emision",e.target.value)}/></div>
               <div><label style={lbl}>Fecha de vencimiento</label><input type="date" style={inp} value={form.fecha_vencimiento} onChange={e=>set("fecha_vencimiento",e.target.value)}/></div>
               <div><label style={lbl}>Costo (S/)</label><input type="number" step="0.01" style={inp} value={form.monto} onChange={e=>set("monto",e.target.value)}/></div>
-              <div><label style={lbl}>Archivo (foto o PDF)</label><input type="file" accept="image/*,application/pdf" onChange={e=>subir(e.target.files[0])} style={{ fontSize:12 }}/>{subiendo && <span style={{ fontSize:12, color:B.textSec }}> Subiendo…</span>}{form.archivo_url && <div><a href={form.archivo_url} target="_blank" rel="noreferrer" style={{ fontSize:12, color:B.blue }}>📎 Ver adjunto</a></div>}</div>
+              <div><label style={lbl}>Archivo (foto o PDF)</label><input type="file" accept="image/*,application/pdf" onChange={e=>subir(e.target.files[0])} style={{ fontSize:12 }}/>{subiendo && <span style={{ fontSize:12, color:B.textSec }}> Subiendo…</span>}{form.archivo_url && <div><a href={form.archivo_url} target="_blank" rel="noreferrer" style={{ fontSize:12, color:B.blue }}>Ver adjunto</a></div>}</div>
               <div style={{ gridColumn:"1/-1" }}><label style={lbl}>Notas</label><textarea style={{...inp,minHeight:46}} value={form.notas} onChange={e=>set("notas",e.target.value)}/></div>
             </div>
             <div style={{ fontSize:11, color:B.textMut, marginTop:8 }}>Al renovar, registra un documento nuevo: el anterior queda en el historial.</div>
@@ -6080,7 +6050,7 @@ function DirectorioPersonas({ personal, terceros, repartidores }) {
       </div>
       <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflowX:"auto" }}>
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
-          <thead><tr style={{ background:B.bg }}>{["Nombre","Documento","Registrado en","Rol / detalle","Estado","Alerta"].map(h=><th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:10, color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>)}</tr></thead>
+          <thead><tr style={{ background:"#F6F9FC" }}>{["Nombre","Documento","Registrado en","Rol / detalle","Estado","Alerta"].map(h=><th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>)}</tr></thead>
           <tbody>{vis.map(f => (
             <tr key={f.k}>
               <td style={{...td,fontWeight:600}}>{f.nombre||"—"}</td><td style={td}>{f.doc||"—"}</td>
@@ -6182,7 +6152,7 @@ function Incidencias({ pedidos, empresas, repartidores, usuario, toast }) {
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:14 }}>
         <div style={{ fontSize:12, color:B.textSec }}>Daños, extravíos, reclamos y otros problemas de entrega, con evidencia, responsable y costo.</div>
-        <BtnPri onClick={nueva}>+ Nueva incidencia</BtnPri>
+        <BtnPri onClick={nueva}><Ico n="plus" size={15} sw={2.4}/> Nueva incidencia</BtnPri>
       </div>
       <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:14 }}>
         <Kpi t="Abiertas" v={abiertas} c={B.red}/><Kpi t="En proceso" v={enProceso} c={B.orange}/>
@@ -6205,7 +6175,7 @@ function Incidencias({ pedidos, empresas, repartidores, usuario, toast }) {
                 <td style={{...td,fontWeight:700,color:B.navy}}>{i.omd||"—"}<div style={{ fontSize:11, color:B.textMut, fontWeight:400 }}>{i.repartidor_id?nombreRep(i.repartidor_id):""}</div></td>
                 <td style={td}>{nombreEmp(i.empresa_id)}</td>
                 <td style={td}>{i.tipo}</td>
-                <td style={{...td,maxWidth:320}}>{i.descripcion}{i.evidencia_url && <a href={i.evidencia_url} target="_blank" rel="noreferrer" onClick={ev=>ev.stopPropagation()} style={{ fontSize:11, color:B.blue, marginLeft:8 }}>📎</a>}</td>
+                <td style={{...td,maxWidth:320}}>{i.descripcion}{i.evidencia_url && <a href={i.evidencia_url} target="_blank" rel="noreferrer" onClick={ev=>ev.stopPropagation()} style={{ fontSize:11, color:B.blue, marginLeft:8 }}>Ver</a>}</td>
                 <td style={td}><span style={{ background:e.bg, color:e.c, fontSize:11, fontWeight:700, padding:"2px 10px", borderRadius:20 }}>{e.label}</span></td>
                 <td style={{...td,textAlign:"right"}}>{parseFloat(i.costo_s)>0?solN(parseFloat(i.costo_s)):"—"}</td>
               </tr>); })}</tbody>
@@ -6237,7 +6207,7 @@ function Incidencias({ pedidos, empresas, repartidores, usuario, toast }) {
               <div><label style={lbl}>Responsable del seguimiento</label><input style={inp} value={form.responsable} onChange={e=>set("responsable",e.target.value)}/></div>
               <div><label style={lbl}>Costo para Boaz (S/)</label><input type="number" step="0.01" style={inp} value={form.costo_s} onChange={e=>set("costo_s",e.target.value)}/></div>
               <div style={{ gridColumn:"1/-1" }}><label style={lbl}>Resolución / acuerdo con el cliente</label><textarea style={{...inp,minHeight:50}} value={form.resolucion} onChange={e=>set("resolucion",e.target.value)}/></div>
-              <div style={{ gridColumn:"1/-1" }}><label style={lbl}>Evidencia (foto o PDF)</label><input type="file" accept="image/*,application/pdf" onChange={e=>subir(e.target.files[0])} style={{ fontSize:12 }}/>{subiendo && <span style={{ fontSize:12, color:B.textSec }}> Subiendo…</span>}{form.evidencia_url && <div><a href={form.evidencia_url} target="_blank" rel="noreferrer" style={{ fontSize:12, color:B.blue }}>📎 Ver evidencia</a></div>}</div>
+              <div style={{ gridColumn:"1/-1" }}><label style={lbl}>Evidencia (foto o PDF)</label><input type="file" accept="image/*,application/pdf" onChange={e=>subir(e.target.files[0])} style={{ fontSize:12 }}/>{subiendo && <span style={{ fontSize:12, color:B.textSec }}> Subiendo…</span>}{form.evidencia_url && <div><a href={form.evidencia_url} target="_blank" rel="noreferrer" style={{ fontSize:12, color:B.blue }}>Ver evidencia</a></div>}</div>
             </div>
             <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:16 }}><BtnSec onClick={()=>setForm(null)}>Cancelar</BtnSec><BtnPri onClick={guardar} disabled={subiendo}>Guardar</BtnPri></div>
           </div>
@@ -6379,7 +6349,7 @@ function UsuariosAuditoria({ usuario, navModulos, onPermisosCambio, toast }) {
             {nombresRol.map(r => (<button key={r} onClick={()=>setRolSel(r)} style={{ display:"block", width:"100%", textAlign:"left", padding:"9px 12px", borderRadius:8, border:"none", cursor:"pointer", fontSize:13, fontWeight:rolSel===r?800:500, background:rolSel===r?`${B.gold}22`:"transparent", color:B.textPri, marginBottom:2 }}>{r}</button>))}
             <div style={{ borderTop:`1px solid ${B.border}`, marginTop:8, paddingTop:10 }}>
               <input style={{...inp,marginBottom:6}} placeholder="Nuevo rol…" value={nuevoRol} onChange={e=>setNuevoRol(e.target.value)}/>
-              <BtnSec onClick={crearRol} style={{ width:"100%" }}>+ Crear rol</BtnSec>
+              <BtnSec onClick={crearRol} style={{ width:"100%" }}><Ico n="plus" size={15}/> Crear rol</BtnSec>
             </div>
           </div>
           <div style={{ ...card, padding:18 }}>
@@ -6769,27 +6739,15 @@ function Planilla({ toast, repartidores=[] }) {
   return (
     <div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14, marginBottom:20 }}>
-        <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:18, borderTop:`3px solid ${B.navy}` }}>
-          <div style={{ fontSize:10, color:B.textMut }}>PERSONAL EN PLANILLA (activos)</div>
-          <div style={{ fontSize:20, fontWeight:800, color:B.navy }}>{personal.filter(p=>p.activo).length}</div>
-        </div>
-        <div style={{ background:"#FFF8EF", border:`1px solid ${B.gold}`, borderRadius:12, padding:18 }}>
-          <div style={{ fontSize:10, color:B.textMut }}>NETO MENSUAL ESTIMADO (planilla activa)</div>
-          <div style={{ fontSize:20, fontWeight:800, color:B.gold }}>{fmt.sol(totalMensualPlanilla)}</div>
-        </div>
-        <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:18, borderTop:`3px solid ${B.red}` }}>
-          <div style={{ fontSize:10, color:B.textMut }}>PAGOS PENDIENTES</div>
-          <div style={{ fontSize:20, fontWeight:800, color:B.red }}>{pendientesPlanilla + pendientesTerceros}</div>
-        </div>
+        <Kpi icon="users" label="Personal en planilla (activos)" valor={personal.filter(p=>p.activo).length} color={B.navy}/>
+        <Kpi icon="banknote" label="Neto mensual estimado (planilla activa)" valor={fmt.sol(totalMensualPlanilla)} color={B.gold}/>
+        <Kpi icon="clock" label="Pagos pendientes" valor={pendientesPlanilla + pendientesTerceros} color={B.red} cv="#B91C1C"/>
       </div>
 
-      <div style={{ display:"flex", gap:6, marginBottom:16 }}>
-        {[["planilla","👤 Personal en Planilla"],["terceros","🧾 Terceros (Honorarios/Factura)"],["directorio","🗂️ Directorio y duplicados"]].map(([id,label])=>(
+      <div style={{ ...TAB_CONT, marginBottom:16 }}>
+        {[["planilla","Personal en Planilla"],["terceros","Terceros (Honorarios/Factura)"],["directorio","Directorio y duplicados"]].map(([id,label])=>(
           <button key={id} onClick={()=>setTab(id)}
-            style={{ padding:"8px 16px", borderRadius:8, fontSize:12, cursor:"pointer",
-              border:`1px solid ${tab===id?B.gold:B.border}`,
-              background:tab===id?B.gold:"transparent",
-              color:tab===id?B.navy:B.textSec, fontWeight:tab===id?700:400 }}>
+            style={TAB_SEG(tab===id)}>
             {label}
           </button>
         ))}
@@ -6798,20 +6756,20 @@ function Planilla({ toast, repartidores=[] }) {
       {tab==="directorio" ? <DirectorioPersonas personal={personal} terceros={terceros} repartidores={repartidores}/> : tab==="planilla" ? (
         <>
           <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:12 }}>
-            <BtnPri onClick={()=>{setEditandoPersonal(null); setModalPersonal(true);}}>+ Nuevo trabajador</BtnPri>
+            <BtnPri onClick={()=>{setEditandoPersonal(null); setModalPersonal(true);}}><Ico n="plus" size={15} sw={2.4}/> Nuevo trabajador</BtnPri>
           </div>
           <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden", marginBottom:20 }}>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
-              <thead><tr style={{ background:B.bg }}>
+              <thead><tr style={{ background:"#F6F9FC" }}>
                 {["Nombre","Cargo","Sueldo bruto","Pensión","Descuento","EsSalud (empresa)","Neto","Estado","Acciones"].map(h=>(
-                  <th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:10, color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
+                  <th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
                 ))}
               </tr></thead>
               <tbody>
                 {personal.map((p,i)=>{
                   const calc = calcularNetoPlanilla(p.sueldo_bruto, p.sistema_pension, p.porcentaje_afp);
                   return (
-                    <tr key={p.id} style={{ borderTop:`1px solid ${B.border}`, background:i%2===0?B.white:"#F8FAFC", opacity:p.activo?1:0.5 }}>
+                    <tr key={p.id} style={{ borderTop:`1px solid ${B.border}`, background:B.white, opacity:p.activo?1:0.5 }}>
                       <td style={{ padding:"9px 12px", fontSize:12, fontWeight:700, color:B.navy }}>{p.nombres} {p.apellidos}</td>
                       <td style={{ padding:"9px 12px", fontSize:12, color:B.textSec }}>{p.cargo||"—"}</td>
                       <td style={{ padding:"9px 12px", fontSize:12, color:B.textPri }}>{fmt.sol(p.sueldo_bruto)}</td>
@@ -6830,7 +6788,7 @@ function Planilla({ toast, repartidores=[] }) {
                       <td style={{ padding:"9px 12px" }}>
                         <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
                           <button onClick={()=>setModalPago({ tipo:"planilla", registro:p })}
-                            style={{ fontSize:11, color:B.green, background:"none", border:"none", cursor:"pointer", fontWeight:700 }}>💰 Registrar pago</button>
+                            style={{ fontSize:11, color:B.green, background:"none", border:"none", cursor:"pointer", fontWeight:700 }}>Registrar pago</button>
                           <button onClick={()=>{setEditandoPersonal(p); setModalPersonal(true);}}
                             style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer" }}><Ico n="edit" size={13} style={{ display:"inline-block", verticalAlign:"-2px", marginRight:5 }}/>Editar</button>
                         </div>
@@ -6846,14 +6804,14 @@ function Planilla({ toast, repartidores=[] }) {
           <div style={{ fontSize:13, fontWeight:700, color:B.navy, marginBottom:10 }}>Historial de pagos</div>
           <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden" }}>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
-              <thead><tr style={{ background:B.bg }}>
+              <thead><tr style={{ background:"#F6F9FC" }}>
                 {["Trabajador","Periodo","Neto pagado","Fecha de pago","Estado"].map(h=>(
-                  <th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:10, color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
+                  <th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
                 ))}
               </tr></thead>
               <tbody>
                 {pagosPlanilla.slice(0,20).map((pg,i)=>(
-                  <tr key={pg.id} style={{ borderTop:`1px solid ${B.border}`, background:i%2===0?B.white:"#F8FAFC" }}>
+                  <tr key={pg.id} style={{ borderTop:`1px solid ${B.border}`, background:B.white }}>
                     <td style={{ padding:"9px 12px", fontSize:12, color:B.textPri }}>{pg.personal_planilla?.nombres} {pg.personal_planilla?.apellidos}</td>
                     <td style={{ padding:"9px 12px", fontSize:12, color:B.textSec }}>{pg.periodo}</td>
                     <td style={{ padding:"9px 12px", fontSize:12, fontWeight:700, color:B.gold }}>{fmt.sol(pg.neto_pagar)}</td>
@@ -6874,18 +6832,18 @@ function Planilla({ toast, repartidores=[] }) {
       ) : (
         <>
           <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:12 }}>
-            <BtnPri onClick={()=>{setEditandoTercero(null); setModalTercero(true);}}>+ Nuevo tercero</BtnPri>
+            <BtnPri onClick={()=>{setEditandoTercero(null); setModalTercero(true);}}><Ico n="plus" size={15} sw={2.4}/> Nuevo tercero</BtnPri>
           </div>
           <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden", marginBottom:20 }}>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
-              <thead><tr style={{ background:B.bg }}>
+              <thead><tr style={{ background:"#F6F9FC" }}>
                 {["Nombre","RUC/DNI","Tipo de documento","Servicio","Estado","Acciones"].map(h=>(
-                  <th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:10, color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
+                  <th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
                 ))}
               </tr></thead>
               <tbody>
                 {terceros.map((t,i)=>(
-                  <tr key={t.id} style={{ borderTop:`1px solid ${B.border}`, background:i%2===0?B.white:"#F8FAFC", opacity:t.activo?1:0.5 }}>
+                  <tr key={t.id} style={{ borderTop:`1px solid ${B.border}`, background:B.white, opacity:t.activo?1:0.5 }}>
                     <td style={{ padding:"9px 12px", fontSize:12, fontWeight:700, color:B.navy }}>{t.nombre}</td>
                     <td style={{ padding:"9px 12px", fontSize:12, color:B.textSec }}>{t.ruc_dni||"—"}</td>
                     <td style={{ padding:"9px 12px", fontSize:11, color:B.textSec }}>
@@ -6901,7 +6859,7 @@ function Planilla({ toast, repartidores=[] }) {
                     <td style={{ padding:"9px 12px" }}>
                       <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
                         <button onClick={()=>setModalPago({ tipo:"tercero", registro:t })}
-                          style={{ fontSize:11, color:B.green, background:"none", border:"none", cursor:"pointer", fontWeight:700 }}>💰 Registrar pago</button>
+                          style={{ fontSize:11, color:B.green, background:"none", border:"none", cursor:"pointer", fontWeight:700 }}>Registrar pago</button>
                         <button onClick={()=>{setEditandoTercero(t); setModalTercero(true);}}
                           style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer" }}><Ico n="edit" size={13} style={{ display:"inline-block", verticalAlign:"-2px", marginRight:5 }}/>Editar</button>
                       </div>
@@ -6916,14 +6874,14 @@ function Planilla({ toast, repartidores=[] }) {
           <div style={{ fontSize:13, fontWeight:700, color:B.navy, marginBottom:10 }}>Historial de pagos</div>
           <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden" }}>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
-              <thead><tr style={{ background:B.bg }}>
+              <thead><tr style={{ background:"#F6F9FC" }}>
                 {["Tercero","N° Documento","Bruto","Retención 8%","Neto pagado","Fecha","Estado"].map(h=>(
-                  <th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:10, color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
+                  <th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
                 ))}
               </tr></thead>
               <tbody>
                 {pagosTerceros.slice(0,20).map((pg,i)=>(
-                  <tr key={pg.id} style={{ borderTop:`1px solid ${B.border}`, background:i%2===0?B.white:"#F8FAFC" }}>
+                  <tr key={pg.id} style={{ borderTop:`1px solid ${B.border}`, background:B.white }}>
                     <td style={{ padding:"9px 12px", fontSize:12, color:B.textPri }}>{pg.terceros_planilla?.nombre}</td>
                     <td style={{ padding:"9px 12px", fontSize:11, color:B.textSec }}>{pg.numero_documento||"—"}</td>
                     <td style={{ padding:"9px 12px", fontSize:12, color:B.textSec }}>{fmt.sol(pg.monto_bruto)}</td>
@@ -7042,7 +7000,7 @@ function ModalPersonalPlanilla({ persona, onClose, onSaved, toast }) {
         </div>
 
         {/* Datos personales */}
-        <div style={seccion}>👤 Datos personales</div>
+        <div style={seccion}>Datos personales</div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
           <div><label style={lbl}>Nombres</label><input style={inp} value={f.nombres} onChange={e=>setF(p=>({...p,nombres:e.target.value}))}/></div>
           <div><label style={lbl}>Apellidos</label><input style={inp} value={f.apellidos} onChange={e=>setF(p=>({...p,apellidos:e.target.value}))}/></div>
@@ -7064,7 +7022,7 @@ function ModalPersonalPlanilla({ persona, onClose, onSaved, toast }) {
         </div>
 
         {/* Datos laborales */}
-        <div style={seccion}>💼 Datos laborales</div>
+        <div style={seccion}>Datos laborales</div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
           <div><label style={lbl}>Cargo</label><input style={inp} value={f.cargo||""} onChange={e=>setF(p=>({...p,cargo:e.target.value}))}/></div>
           <div><label style={lbl}>Tipo de contrato</label>
@@ -7114,7 +7072,7 @@ function ModalPersonalPlanilla({ persona, onClose, onSaved, toast }) {
         )}
 
         {/* Datos bancarios */}
-        <div style={seccion}>🏦 Datos bancarios</div>
+        <div style={seccion}>Datos bancarios</div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
           <div><label style={lbl}>Banco</label>
             <select style={inp} value={f.banco||""} onChange={e=>setF(p=>({...p,banco:e.target.value}))}>
@@ -7132,7 +7090,7 @@ function ModalPersonalPlanilla({ persona, onClose, onSaved, toast }) {
         </div>
 
         {/* Cónyuge */}
-        <div style={seccion}>💍 Cónyuge (opcional)</div>
+        <div style={seccion}>Cónyuge (opcional)</div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
           <div><label style={lbl}>Nombres y apellidos</label><input style={inp} value={f.conyuge_nombres||""} onChange={e=>setF(p=>({...p,conyuge_nombres:e.target.value}))}/></div>
           <div><label style={lbl}>DNI</label><input style={inp} value={f.conyuge_dni||""} onChange={e=>setF(p=>({...p,conyuge_dni:e.target.value}))}/></div>
@@ -7140,7 +7098,7 @@ function ModalPersonalPlanilla({ persona, onClose, onSaved, toast }) {
 
         {/* Hijos */}
         <div style={{ ...seccion, display:"flex", justifyContent:"space-between", alignItems:"center", border:"none", paddingBottom:0 }}>
-          <span>👶 Hijos (para asignación familiar)</span>
+          <span>Hijos (para asignación familiar)</span>
           <button onClick={agregarHijo} style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer", fontWeight:700, textTransform:"none", letterSpacing:0 }}>+ Agregar hijo</button>
         </div>
         {cargandoHijos ? (
@@ -7165,7 +7123,7 @@ function ModalPersonalPlanilla({ persona, onClose, onSaved, toast }) {
         )}
 
         {/* Contacto de emergencia */}
-        <div style={seccion}>🚨 Contacto de emergencia</div>
+        <div style={seccion}>Contacto de emergencia</div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16 }}>
           <div><label style={lbl}>Nombre</label><input style={inp} value={f.contacto_emergencia_nombre||""} onChange={e=>setF(p=>({...p,contacto_emergencia_nombre:e.target.value}))}/></div>
           <div><label style={lbl}>Teléfono</label><input style={inp} value={f.contacto_emergencia_telefono||""} onChange={e=>setF(p=>({...p,contacto_emergencia_telefono:e.target.value}))}/></div>
@@ -7259,7 +7217,7 @@ function ModalTerceroPlanilla({ tercero, onClose, onSaved, toast }) {
         </div>
 
         {/* Datos personales */}
-        <div style={seccion}>👤 Datos personales</div>
+        <div style={seccion}>Datos personales</div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
           <div style={{ gridColumn:"span 2" }}><label style={lbl}>Nombre / Razón social</label>
             <input style={inp} value={f.nombre} onChange={e=>setF(p=>({...p,nombre:e.target.value}))}/></div>
@@ -7281,7 +7239,7 @@ function ModalTerceroPlanilla({ tercero, onClose, onSaved, toast }) {
         </div>
 
         {/* Datos del servicio */}
-        <div style={seccion}>💼 Datos del servicio</div>
+        <div style={seccion}>Datos del servicio</div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
           <div><label style={lbl}>Tipo de documento que emite</label>
             <select style={inp} value={f.tipo_documento} onChange={e=>setF(p=>({...p,tipo_documento:e.target.value}))}>
@@ -7295,7 +7253,7 @@ function ModalTerceroPlanilla({ tercero, onClose, onSaved, toast }) {
         </div>
 
         {/* Datos bancarios */}
-        <div style={seccion}>🏦 Datos bancarios</div>
+        <div style={seccion}>Datos bancarios</div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
           <div><label style={lbl}>Banco</label>
             <select style={inp} value={f.banco||""} onChange={e=>setF(p=>({...p,banco:e.target.value}))}>
@@ -7313,7 +7271,7 @@ function ModalTerceroPlanilla({ tercero, onClose, onSaved, toast }) {
         </div>
 
         {/* Cónyuge */}
-        <div style={seccion}>💍 Cónyuge (opcional)</div>
+        <div style={seccion}>Cónyuge (opcional)</div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
           <div><label style={lbl}>Nombres y apellidos</label><input style={inp} value={f.conyuge_nombres||""} onChange={e=>setF(p=>({...p,conyuge_nombres:e.target.value}))}/></div>
           <div><label style={lbl}>DNI</label><input style={inp} value={f.conyuge_dni||""} onChange={e=>setF(p=>({...p,conyuge_dni:e.target.value}))}/></div>
@@ -7321,7 +7279,7 @@ function ModalTerceroPlanilla({ tercero, onClose, onSaved, toast }) {
 
         {/* Hijos */}
         <div style={{ ...seccion, display:"flex", justifyContent:"space-between", alignItems:"center", border:"none", paddingBottom:0 }}>
-          <span>👶 Hijos</span>
+          <span>Hijos</span>
           <button onClick={agregarHijo} style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer", fontWeight:700, textTransform:"none", letterSpacing:0 }}>+ Agregar hijo</button>
         </div>
         {cargandoHijos ? (
@@ -7346,7 +7304,7 @@ function ModalTerceroPlanilla({ tercero, onClose, onSaved, toast }) {
         )}
 
         {/* Contacto de emergencia */}
-        <div style={seccion}>🚨 Contacto de emergencia</div>
+        <div style={seccion}>Contacto de emergencia</div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16 }}>
           <div><label style={lbl}>Nombre</label><input style={inp} value={f.contacto_emergencia_nombre||""} onChange={e=>setF(p=>({...p,contacto_emergencia_nombre:e.target.value}))}/></div>
           <div><label style={lbl}>Teléfono</label><input style={inp} value={f.contacto_emergencia_telefono||""} onChange={e=>setF(p=>({...p,contacto_emergencia_telefono:e.target.value}))}/></div>
@@ -7409,7 +7367,7 @@ function ModalRegistrarPago({ tipo, registro, onClose, onSaved, toast }) {
     <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
       <div style={{ background:B.white, borderRadius:16, padding:28, width:480, boxShadow:"0 20px 60px #0003" }}>
         <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
-          <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>💰 Registrar pago</div>
+          <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>Registrar pago</div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:18, color:B.textSec, cursor:"pointer" }}>✕</button>
         </div>
         <div style={{ fontSize:13, color:B.textSec, marginBottom:16 }}>
@@ -7586,31 +7544,16 @@ function Inventario({ empresas, toast }) {
   return (
     <div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:20 }}>
-        <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:18, borderTop:`3px solid ${B.navy}` }}>
-          <div style={{ fontSize:10, color:B.textMut }}>SKUS ACTIVOS</div>
-          <div style={{ fontSize:20, fontWeight:800, color:B.navy }}>{variantes.filter(v=>v.activo).length}</div>
-        </div>
-        <div style={{ background:"#FFF8EF", border:`1px solid ${B.gold}`, borderRadius:12, padding:18 }}>
-          <div style={{ fontSize:10, color:B.textMut }}>VALOR DE INVENTARIO (costo)</div>
-          <div style={{ fontSize:20, fontWeight:800, color:B.gold }}>{fmt.sol(valorInventario)}</div>
-        </div>
-        <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:18, borderTop:`3px solid ${B.red}` }}>
-          <div style={{ fontSize:10, color:B.textMut }}>STOCK BAJO / AGOTADO</div>
-          <div style={{ fontSize:20, fontWeight:800, color:B.red }}>{stockBajo.length}</div>
-        </div>
-        <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:18, borderTop:`3px solid ${B.blue}` }}>
-          <div style={{ fontSize:10, color:B.textMut }}>ÓRDENES POR DESPACHAR</div>
-          <div style={{ fontSize:20, fontWeight:800, color:B.blue }}>{ordenesPendientes.length}</div>
-        </div>
+        <Kpi icon="package" label="SKU activos" valor={variantes.filter(v=>v.activo).length} color={B.navy}/>
+        <Kpi icon="dollar" label="Valor de inventario (costo)" valor={fmt.sol(valorInventario)} color={B.gold}/>
+        <Kpi icon="alert" label="Stock bajo / agotado" valor={stockBajo.length} color={B.red} cv="#B91C1C"/>
+        <Kpi icon="truck" label="Órdenes por despachar" valor={ordenesPendientes.length} color={B.blue}/>
       </div>
 
-      <div style={{ display:"flex", gap:6, marginBottom:16 }}>
-        {[["productos","📦 Productos"],["movimientos","📑 Movimientos"],["ordenes","🚚 Órdenes"]].map(([id,label])=>(
+      <div style={{ ...TAB_CONT, marginBottom:16 }}>
+        {[["productos","Productos"],["movimientos","Movimientos"],["ordenes","Órdenes"]].map(([id,label])=>(
           <button key={id} onClick={()=>setTab(id)}
-            style={{ padding:"8px 16px", borderRadius:8, fontSize:12, cursor:"pointer",
-              border:`1px solid ${tab===id?B.gold:B.border}`,
-              background:tab===id?B.gold:"transparent",
-              color:tab===id?B.navy:B.textSec, fontWeight:tab===id?700:400 }}>
+            style={TAB_SEG(tab===id)}>
             {label}
           </button>
         ))}
@@ -7621,25 +7564,25 @@ function Inventario({ empresas, toast }) {
           {stockBajo.length>0 && (
             <div style={{ background:"#FEF2F2", border:`1px solid ${B.red}`, borderRadius:10,
               padding:"10px 14px", marginBottom:14, fontSize:12, color:"#991B1B" }}>
-              ⚠️ {stockBajo.length} variante{stockBajo.length===1?"":"s"} con stock bajo o agotado: {stockBajo.slice(0,5).map(v=>v.sku).join(", ")}{stockBajo.length>5?"...":""}
+              {stockBajo.length} variante{stockBajo.length===1?"":"s"} con stock bajo o agotado: {stockBajo.slice(0,5).map(v=>v.sku).join(", ")}{stockBajo.length>5?"...":""}
             </div>
           )}
           <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginBottom:12 }}>
-            <BtnSec onClick={()=>setModalCargaProductos(true)}>📤 Carga masiva</BtnSec>
-            <BtnPri onClick={()=>{setEditandoProducto(null); setModalProducto(true);}}>+ Nuevo producto</BtnPri>
+            <BtnSec onClick={()=>setModalCargaProductos(true)}><Ico n="upload" size={15}/> Carga masiva</BtnSec>
+            <BtnPri onClick={()=>{setEditandoProducto(null); setModalProducto(true);}}><Ico n="plus" size={15} sw={2.4}/> Nuevo producto</BtnPri>
           </div>
           <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden" }}>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
-              <thead><tr style={{ background:B.bg }}>
+              <thead><tr style={{ background:"#F6F9FC" }}>
                 {["Producto","SKU","Variante","Ubicación","Stock","Stock mín.","Estado","Acciones"].map(h=>(
-                  <th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:10, color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
+                  <th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
                 ))}
               </tr></thead>
               <tbody>
                 {variantesConProducto.map((v,i)=>{
                   const bajo = v.stock_actual <= v.stock_minimo;
                   return (
-                    <tr key={v.id} style={{ borderTop:`1px solid ${B.border}`, background:i%2===0?B.white:"#F8FAFC", opacity:v.activo?1:0.5 }}>
+                    <tr key={v.id} style={{ borderTop:`1px solid ${B.border}`, background:B.white, opacity:v.activo?1:0.5 }}>
                       <td style={{ padding:"9px 12px", fontSize:12, fontWeight:700, color:B.navy }}>{v.producto?.nombre||"—"}</td>
                       <td style={{ padding:"9px 12px", fontSize:11, color:B.textSec, fontFamily:"monospace" }}>{v.sku}</td>
                       <td style={{ padding:"9px 12px", fontSize:11, color:B.textSec }}>{[v.talla,v.color,v.atributo_extra].filter(Boolean).join(" / ")||"—"}</td>
@@ -7670,13 +7613,13 @@ function Inventario({ empresas, toast }) {
       {tab==="movimientos" && (
         <>
           <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:12 }}>
-            <BtnPri onClick={()=>setModalMovimiento(true)}>+ Registrar movimiento</BtnPri>
+            <BtnPri onClick={()=>setModalMovimiento(true)}><Ico n="plus" size={15} sw={2.4}/> Registrar movimiento</BtnPri>
           </div>
           <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden" }}>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
-              <thead><tr style={{ background:B.bg }}>
+              <thead><tr style={{ background:"#F6F9FC" }}>
                 {["Fecha","SKU","Tipo","Cantidad","Stock resultante","Motivo","Referencia","Usuario"].map(h=>(
-                  <th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:10, color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
+                  <th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
                 ))}
               </tr></thead>
               <tbody>
@@ -7685,7 +7628,7 @@ function Inventario({ empresas, toast }) {
                   const colorTipo = m.tipo==="ingreso"||m.tipo==="devolucion" ? B.green : m.tipo==="salida" ? B.red : B.gold;
                   const labelTipo = { ingreso:"Ingreso", salida:"Salida", ajuste:"Ajuste", devolucion:"Devolución" }[m.tipo]||m.tipo;
                   return (
-                    <tr key={m.id} style={{ borderTop:`1px solid ${B.border}`, background:i%2===0?B.white:"#F8FAFC" }}>
+                    <tr key={m.id} style={{ borderTop:`1px solid ${B.border}`, background:B.white }}>
                       <td style={{ padding:"9px 12px", fontSize:11, color:B.textMut }}>{fmt.fechaHora?fmt.fechaHora(m.created_at):fmt.fecha(m.created_at)}</td>
                       <td style={{ padding:"9px 12px", fontSize:11, color:B.textSec, fontFamily:"monospace" }}>{v?.sku||"—"}</td>
                       <td style={{ padding:"9px 12px" }}>
@@ -7709,13 +7652,13 @@ function Inventario({ empresas, toast }) {
       {tab==="ordenes" && (
         <>
           <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:12 }}>
-            <BtnPri onClick={()=>setModalOrden(true)}>+ Nueva orden</BtnPri>
+            <BtnPri onClick={()=>setModalOrden(true)}><Ico n="plus" size={15} sw={2.4}/> Nueva orden</BtnPri>
           </div>
           <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden" }}>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
-              <thead><tr style={{ background:B.bg }}>
+              <thead><tr style={{ background:"#F6F9FC" }}>
                 {["N° Orden","Canal","Cliente","Fecha","Estado","Acciones"].map(h=>(
-                  <th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:10, color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
+                  <th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
                 ))}
               </tr></thead>
               <tbody>
@@ -7730,7 +7673,7 @@ function Inventario({ empresas, toast }) {
                   };
                   const est = ESTADOS_ORDEN[o.estado]||ESTADOS_ORDEN.pendiente;
                   return (
-                    <tr key={o.id} style={{ borderTop:`1px solid ${B.border}`, background:i%2===0?B.white:"#F8FAFC" }}>
+                    <tr key={o.id} style={{ borderTop:`1px solid ${B.border}`, background:B.white }}>
                       <td style={{ padding:"9px 12px", fontSize:12, fontWeight:700, color:B.navy }}>{o.numero_orden}</td>
                       <td style={{ padding:"9px 12px", fontSize:11, color:B.textSec }}>{o.canal||"—"}</td>
                       <td style={{ padding:"9px 12px", fontSize:12, color:B.textPri }}>{o.cliente_nombre}</td>
@@ -7906,11 +7849,11 @@ function ModalCargaMasivaProductos({ productosExistentes, onClose, onSaved, toas
         <div style={{ background:B.white, borderRadius:16, padding:28, width:600, maxHeight:"85vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
           <div style={{ fontSize:15, fontWeight:800, color:B.navy, marginBottom:16 }}>Resultado de la carga</div>
           <div style={{ background:"#ECFDF5", border:`1px solid ${B.green}`, borderRadius:10, padding:14, marginBottom:12, fontSize:13, color:"#065F46" }}>
-            ✅ {exitosos} de {resultado.length} variantes cargadas correctamente
+            {exitosos} de {resultado.length} variantes cargadas correctamente
           </div>
           {fallidos.length>0 && (
             <div style={{ background:"#FEF2F2", border:`1px solid ${B.red}`, borderRadius:10, padding:14, marginBottom:16 }}>
-              <div style={{ fontSize:12, fontWeight:700, color:"#991B1B", marginBottom:8 }}>⚠️ {fallidos.length} con error:</div>
+              <div style={{ fontSize:12, fontWeight:700, color:"#991B1B", marginBottom:8 }}>{fallidos.length} con error:</div>
               {fallidos.map((f,i)=>(
                 <div key={i} style={{ fontSize:11, color:"#991B1B", marginBottom:4 }}>
                   {f.sku||"(sin SKU)"} — {f.error || (f.errores||[]).join(", ")}
@@ -7930,7 +7873,7 @@ function ModalCargaMasivaProductos({ productosExistentes, onClose, onSaved, toas
     <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
       <div style={{ background:B.white, borderRadius:16, padding:28, width:640, maxHeight:"85vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
         <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
-          <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>📤 Carga masiva de productos</div>
+          <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>Carga masiva de productos</div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:18, color:B.textSec, cursor:"pointer" }}>✕</button>
         </div>
         <div style={{ fontSize:12, color:B.textMut, marginBottom:16 }}>
@@ -7942,13 +7885,13 @@ function ModalCargaMasivaProductos({ productosExistentes, onClose, onSaved, toas
           style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 16px", borderRadius:10,
             border:`1px dashed ${B.gold}`, background:"#FFF8EF", color:B.goldDk, fontSize:13, fontWeight:700,
             cursor:"pointer", marginBottom:16 }}>
-          📥 Descargar plantilla Excel
+          Descargar plantilla Excel
         </button>
 
         <div onClick={()=>inputRef.current?.click()}
           style={{ border:`2px dashed ${B.border}`, borderRadius:12, padding:24, textAlign:"center",
             cursor:"pointer", marginBottom:16, background:B.bg }}>
-          <div style={{ fontSize:24, marginBottom:6 }}>📎</div>
+          <div style={{ display:"flex", justifyContent:"center", marginBottom:8, color:B.textMut }}><Ico n="upload" size={26}/></div>
           <div style={{ fontSize:13, color:B.textSec }}>{archivo ? archivo.name : "Haz clic para elegir el archivo Excel completado"}</div>
           <input ref={inputRef} type="file" accept=".xlsx,.xls" style={{display:"none"}} onChange={manejarArchivo}/>
         </div>
@@ -7957,7 +7900,7 @@ function ModalCargaMasivaProductos({ productosExistentes, onClose, onSaved, toas
           <>
             <div style={{ display:"flex", gap:10, marginBottom:12 }}>
               <div style={{ fontSize:12, color:B.green, fontWeight:700 }}>✓ {validas.length} listas</div>
-              {conError.length>0 && <div style={{ fontSize:12, color:B.red, fontWeight:700 }}>⚠️ {conError.length} con error</div>}
+              {conError.length>0 && <div style={{ fontSize:12, color:B.red, fontWeight:700 }}>{conError.length} con error</div>}
             </div>
             {conError.length>0 && (
               <div style={{ background:"#FEF2F2", borderRadius:8, padding:10, marginBottom:16, maxHeight:120, overflowY:"auto" }}>
@@ -8041,7 +7984,7 @@ function ModalProductoInventario({ producto, onClose, onSaved, toast }) {
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:18, color:B.textSec, cursor:"pointer" }}>✕</button>
         </div>
 
-        <div style={seccion}>📦 Datos del producto</div>
+        <div style={seccion}>Datos del producto</div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
           <div style={{ gridColumn:"span 2" }}><label style={lbl}>Nombre</label><input style={inp} value={f.nombre} onChange={e=>setF(p=>({...p,nombre:e.target.value}))}/></div>
           <div><label style={lbl}>Categoría</label><input style={inp} value={f.categoria||""} onChange={e=>setF(p=>({...p,categoria:e.target.value}))}/></div>
@@ -8052,7 +7995,7 @@ function ModalProductoInventario({ producto, onClose, onSaved, toast }) {
         </div>
 
         <div style={{ ...seccion, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-          <span>🏷️ Variantes (talla / color)</span>
+          <span>Variantes (talla / color)</span>
           <button onClick={agregarVariante} style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer", fontWeight:700, textTransform:"none", letterSpacing:0 }}>+ Agregar variante</button>
         </div>
         {cargandoVar ? (
@@ -8134,7 +8077,7 @@ function ModalMovimientoInventario({ variantes, onClose, onSaved, toast }) {
     <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
       <div style={{ background:B.white, borderRadius:16, padding:28, width:480, boxShadow:"0 20px 60px #0003" }}>
         <div style={{ display:"flex", justifyContent:"space-between", marginBottom:16 }}>
-          <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>📑 Registrar movimiento</div>
+          <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>Registrar movimiento</div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:18, color:B.textSec, cursor:"pointer" }}>✕</button>
         </div>
 
@@ -8146,7 +8089,7 @@ function ModalMovimientoInventario({ variantes, onClose, onSaved, toast }) {
               <option key={v.id} value={v.id}>{v.producto?.nombre} — {v.sku} ({[v.talla,v.color].filter(Boolean).join("/")||"—"}) · stock: {v.stock_actual}</option>
             ))}
           </select>
-          <button onClick={()=>setEscaneando(true)} style={{ padding:"0 14px", borderRadius:8, border:`1px solid ${B.border}`, background:B.bg, cursor:"pointer", fontSize:16 }}>📷</button>
+          <button onClick={()=>setEscaneando(true)} style={{ padding:"0 14px", borderRadius:8, border:`1px solid ${B.border}`, background:B.bg, cursor:"pointer", fontSize:16 }} title="Escanear código" aria-label="Escanear código"><Ico n="camera" size={18}/></button>
         </div>
 
         <label style={lbl}>Tipo de movimiento</label>
@@ -8220,7 +8163,7 @@ function ModalNuevaOrden({ variantes, onClose, onSaved, toast }) {
     <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
       <div style={{ background:B.white, borderRadius:16, padding:28, width:600, maxHeight:"88vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
         <div style={{ display:"flex", justifyContent:"space-between", marginBottom:16 }}>
-          <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>🚚 Nueva orden</div>
+          <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>Nueva orden</div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:18, color:B.textSec, cursor:"pointer" }}>✕</button>
         </div>
 
@@ -8355,8 +8298,8 @@ function ModalOrdenDetalle({ orden, items, variantes, onClose, onCambio, toast }
         {(orden.estado==="pendiente") && (
           <>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-              <div style={{ fontSize:13, fontWeight:700, color:B.navy }}>📋 Lista de picking</div>
-              <button onClick={()=>setEscaneando(true)} style={{ padding:"6px 12px", borderRadius:8, border:`1px solid ${B.border}`, background:B.bg, cursor:"pointer", fontSize:13 }}>📷 Escanear</button>
+              <div style={{ fontSize:13, fontWeight:700, color:B.navy }}>Lista de picking</div>
+              <button onClick={()=>setEscaneando(true)} style={{ padding:"6px 12px", borderRadius:8, border:`1px solid ${B.border}`, background:B.bg, cursor:"pointer", fontSize:13 }}>Escanear</button>
             </div>
             <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:16 }}>
               {items.map(it=>{
@@ -8381,7 +8324,7 @@ function ModalOrdenDetalle({ orden, items, variantes, onClose, onCambio, toast }
               })}
             </div>
             <BtnPri onClick={confirmarPicking} disabled={!todoPickeado || procesando} style={{ width:"100%" }}>
-              {procesando?"Procesando...":todoPickeado?"✅ Confirmar picking completo":`Falta pickear ${items.reduce((s,it)=>s+Math.max(0,it.cantidad_pedida-(pickeados[it.id]||0)),0)} unidad(es)`}
+              {procesando?"Procesando...":todoPickeado?"Confirmar picking completo":`Falta pickear ${items.reduce((s,it)=>s+Math.max(0,it.cantidad_pedida-(pickeados[it.id]||0)),0)} unidad(es)`}
             </BtnPri>
           </>
         )}
@@ -8389,12 +8332,12 @@ function ModalOrdenDetalle({ orden, items, variantes, onClose, onCambio, toast }
         {/* Estado: Packing */}
         {orden.estado==="picking" && (
           <>
-            <div style={{ fontSize:13, fontWeight:700, color:B.navy, marginBottom:10 }}>📦 Empaque</div>
+            <div style={{ fontSize:13, fontWeight:700, color:B.navy, marginBottom:10 }}>Empaque</div>
             <div style={{ background:"#ECFDF5", border:`1px solid ${B.green}`, borderRadius:10, padding:14, marginBottom:16, fontSize:12, color:"#065F46" }}>
               ✓ Picking completado. Empaca los {items.length} producto{items.length===1?"":"s"} y confirma cuando esté listo.
             </div>
             <BtnPri onClick={confirmarPacking} disabled={procesando} style={{ width:"100%" }}>
-              {procesando?"Procesando...":"✅ Confirmar empaque"}
+              {procesando?"Procesando...":"Confirmar empaque"}
             </BtnPri>
           </>
         )}
@@ -8402,7 +8345,7 @@ function ModalOrdenDetalle({ orden, items, variantes, onClose, onCambio, toast }
         {/* Estado: Despacho */}
         {orden.estado==="listo_despacho" && (
           <>
-            <div style={{ fontSize:13, fontWeight:700, color:B.navy, marginBottom:10 }}>🚚 Despacho</div>
+            <div style={{ fontSize:13, fontWeight:700, color:B.navy, marginBottom:10 }}>Despacho</div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16 }}>
               <div><label style={lbl}>Transportista</label>
                 <select style={inp} value={transportista} onChange={e=>setTransportista(e.target.value)}>
@@ -8415,14 +8358,14 @@ function ModalOrdenDetalle({ orden, items, variantes, onClose, onCambio, toast }
               <div><label style={lbl}>N° de tracking</label><input style={inp} value={tracking} onChange={e=>setTracking(e.target.value)}/></div>
             </div>
             <BtnPri onClick={confirmarDespacho} disabled={procesando} style={{ width:"100%" }}>
-              {procesando?"Procesando...":"✅ Marcar como despachado"}
+              {procesando?"Procesando...":"Marcar como despachado"}
             </BtnPri>
           </>
         )}
 
         {orden.estado==="despachado" && (
           <div style={{ background:"#ECFDF5", border:`1px solid ${B.green}`, borderRadius:10, padding:16, textAlign:"center" }}>
-            <div style={{ fontSize:24, marginBottom:6 }}>✅</div>
+            <div style={{ display:"flex", justifyContent:"center", marginBottom:6, color:"#047857" }}><Ico n="check" size={26}/></div>
             <div style={{ fontSize:13, fontWeight:700, color:"#065F46" }}>Orden despachada</div>
             <div style={{ fontSize:11, color:"#065F46", marginTop:4 }}>{orden.transportista} · {orden.tracking_transportista||"sin tracking"}</div>
           </div>
@@ -8724,17 +8667,7 @@ function Reportes({ pedidos, repartidores, empresas, toast, onIr }) {
   return (
     <div>
       {/* Selector de periodo */}
-      <div style={{ display:"flex", gap:8, marginBottom:6, flexWrap:"wrap" }}>
-        {PRESETS.map(p=>(
-          <button key={p.id} onClick={()=>setPeriodo(p.id)}
-            style={{ padding:"8px 16px", borderRadius:20, fontSize:12, fontWeight:700, cursor:"pointer",
-              border: periodo===p.id ? `2px solid ${B.gold}` : `1px solid ${B.border}`,
-              background: periodo===p.id ? "#FFF7ED" : B.white,
-              color: periodo===p.id ? B.goldDk : B.textSec }}>
-            {p.label}
-          </button>
-        ))}
-      </div>
+      <Tabs valor={periodo} onChange={setPeriodo} tabs={PRESETS.map(p=>({ id:p.id, l:p.label }))} style={{ marginBottom:8 }}/>
       {periodo==="personalizado" && (
         <div style={{ display:"flex", gap:10, marginBottom:16, marginTop:10 }}>
           <input type="date" style={inp} value={fechaInicio} onChange={e=>setFechaInicio(e.target.value)}/>
@@ -8750,28 +8683,19 @@ function Reportes({ pedidos, repartidores, empresas, toast, onIr }) {
       {/* KPIs principales */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(6,1fr)", gap:14, marginBottom:20 }}>
         {[
-          { icon:"📦", label:"Total pedidos", value: filtrados.length, color:B.navy },
-          { icon:"✅", label:"Entregados", value: entregados.length, sub: finalizados>0?`${efectividad}% efect.`:null, color:B.green },
-          { icon:"⚠️", label:"No entregados", value: noEntregados.length, color:B.red },
-          { icon:"🛵", label:"En ruta", value: enRuta.length, color:"#7C3AED" },
-          { icon:"⏳", label:"Por asignar/asig.", value: sinAsignar.length+asignados.length, color:B.gold },
-          { icon:"💰", label:"Ingreso periodo", value: fmt.sol(ingresoTotal), color:B.goldDk, big:true },
-        ].map((k,i)=>(
-          <div key={i} style={{ background:B.white, border:`1px solid ${B.border}`,
-            borderRadius:12, padding:16, borderTop:`3px solid ${k.color}`,
-            boxShadow:"0 2px 8px #0D1E3D0A" }}>
-            <div style={{ fontSize:20, marginBottom:6 }}>{k.icon}</div>
-            <div style={{ fontSize: k.big?16:24, fontWeight:800, color:B.textPri }}>{k.value}</div>
-            <div style={{ fontSize:10, color:B.textMut, textTransform:"uppercase", marginTop:2 }}>{k.label}</div>
-            {k.sub && <div style={{ fontSize:10, color:k.color, fontWeight:700, marginTop:4 }}>{k.sub}</div>}
-          </div>
-        ))}
+          { icon:"package", label:"Total pedidos", value: filtrados.length, color:B.navy },
+          { icon:"check", label:"Entregados", value: entregados.length, sub: finalizados>0?`${efectividad}% efect.`:null, color:B.green },
+          { icon:"alert", label:"No entregados", value: noEntregados.length, color:B.red },
+          { icon:"bike", label:"En ruta", value: enRuta.length, color:"#7C3AED" },
+          { icon:"clock", label:"Por asignar/asig.", value: sinAsignar.length+asignados.length, color:B.gold },
+          { icon:"dollar", label:"Ingreso periodo", value: fmt.sol(ingresoTotal), color:B.goldDk, big:true },
+        ].map((k,i)=><Kpi key={i} icon={k.icon} label={k.label} valor={k.value} sub={k.sub} color={k.color}/>)}
       </div>
 
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:14 }}>
         {/* Estado: donut */}
         <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12,
-          padding:20, boxShadow:"0 2px 8px #0D1E3D0A" }}>
+          padding:20, boxShadow:"0 1px 2px #0D1E3D0D" }}>
           <div style={{ fontSize:13, fontWeight:700, color:B.navy, marginBottom:16 }}>Distribución por estado</div>
           <div style={{ display:"flex", alignItems:"center", gap:20 }}>
             <DonutChart segments={[
@@ -8801,7 +8725,7 @@ function Reportes({ pedidos, repartidores, empresas, toast, onIr }) {
 
         {/* COD */}
         <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12,
-          padding:20, boxShadow:"0 2px 8px #0D1E3D0A" }}>
+          padding:20, boxShadow:"0 1px 2px #0D1E3D0D" }}>
           <div style={{ fontSize:13, fontWeight:700, color:B.navy, marginBottom:16 }}>Cobros en destino (COD)</div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
             <div><div style={{ fontSize:10, color:B.textMut, textTransform:"uppercase" }}>Pedidos COD</div>
@@ -8817,7 +8741,7 @@ function Reportes({ pedidos, repartidores, empresas, toast, onIr }) {
 
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:14 }}>
         <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12,
-          padding:20, boxShadow:"0 2px 8px #0D1E3D0A" }}>
+          padding:20, boxShadow:"0 1px 2px #0D1E3D0D" }}>
           <div style={{ fontSize:13, fontWeight:700, color:B.navy, marginBottom:16 }}>Top distritos</div>
           {topDistritos.map(([d,v])=>(
             <BarraHorizontal key={d} label={d} valor={v} max={maxDistrito} color={B.gold}/>
@@ -8825,7 +8749,7 @@ function Reportes({ pedidos, repartidores, empresas, toast, onIr }) {
           {topDistritos.length===0 && <div style={{ fontSize:12, color:B.textMut, textAlign:"center" }}>Sin datos</div>}
         </div>
         <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12,
-          padding:20, boxShadow:"0 2px 8px #0D1E3D0A" }}>
+          padding:20, boxShadow:"0 1px 2px #0D1E3D0D" }}>
           <div style={{ fontSize:13, fontWeight:700, color:B.navy, marginBottom:16 }}>Tipo de servicio</div>
           <BarraHorizontal label="Same Day" valor={porServicio.same_day} max={filtrados.length} color="#7C3AED"/>
           <BarraHorizontal label="Next Day" valor={porServicio.next_day} max={filtrados.length} color="#0369A1"/>
@@ -8835,7 +8759,7 @@ function Reportes({ pedidos, repartidores, empresas, toast, onIr }) {
 
       {serieDiaria.length>1 && (
         <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12,
-          padding:20, boxShadow:"0 2px 8px #0D1E3D0A", marginBottom:14 }}>
+          padding:20, boxShadow:"0 1px 2px #0D1E3D0D", marginBottom:14 }}>
           <div style={{ fontSize:13, fontWeight:700, color:B.navy, marginBottom:6 }}>Tendencia diaria</div>
           <div style={{ fontSize:11, color:B.textMut, marginBottom:10 }}>
             <span style={{ color:B.green, fontWeight:700 }}>■</span> Entregados · Barra completa = total del día
@@ -8847,11 +8771,11 @@ function Reportes({ pedidos, repartidores, empresas, toast, onIr }) {
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:14 }}>
         {/* Por repartidor */}
         <div style={{ background:B.white, border:`1px solid ${B.border}`,
-          borderRadius:12, overflow:"hidden", boxShadow:"0 2px 8px #0D1E3D0A" }}>
+          borderRadius:12, overflow:"hidden", boxShadow:"0 1px 2px #0D1E3D0D" }}>
           <div style={{ padding:"14px 18px", borderBottom:`1px solid ${B.border}`,
-            fontSize:13, fontWeight:700, color:B.navy }}>📊 Rendimiento por repartidor</div>
+            fontSize:13, fontWeight:700, color:B.navy }}>Rendimiento por repartidor</div>
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
-            <thead><tr style={{ background:B.bg }}>
+            <thead><tr style={{ background:"#F6F9FC" }}>
               {["Repartidor","Total","Entregados","No entreg.","Efectividad","Ingresos"].map(h=>(
                 <th key={h} style={{ padding:"8px 12px", textAlign:"left", fontSize:10,
                   color:B.textMut, fontWeight:700 }}>{h}</th>
@@ -8860,7 +8784,7 @@ function Reportes({ pedidos, repartidores, empresas, toast, onIr }) {
             <tbody>
               {stats.map((r,i)=>(
                 <tr key={r.id} style={{ borderTop:`1px solid ${B.border}`,
-                  background:i%2===0?B.white:"#F8FAFC" }}>
+                  background:B.white }}>
                   <td style={{ padding:"10px 12px", fontSize:12, fontWeight:600, color:B.navy }}>
                     {r.nombres} {r.apellidos}
                   </td>
@@ -8889,9 +8813,9 @@ function Reportes({ pedidos, repartidores, empresas, toast, onIr }) {
         {/* Por zona */}
         <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
           <div style={{ background:B.white, border:`1px solid ${B.border}`,
-            borderRadius:12, overflow:"hidden", boxShadow:"0 2px 8px #0D1E3D0A" }}>
+            borderRadius:12, overflow:"hidden", boxShadow:"0 1px 2px #0D1E3D0D" }}>
             <div style={{ padding:"14px 18px", borderBottom:`1px solid ${B.border}`,
-              fontSize:13, fontWeight:700, color:B.navy }}>🗺️ Pedidos por zona</div>
+              fontSize:13, fontWeight:700, color:B.navy }}>Pedidos por zona</div>
             <div style={{ padding:16 }}>
               {porZona.map(z=>(
                 <div key={z.zona} style={{ marginBottom:14 }}>
@@ -8910,9 +8834,9 @@ function Reportes({ pedidos, repartidores, empresas, toast, onIr }) {
           </div>
 
           <div style={{ background:B.white, border:`1px solid ${B.border}`,
-            borderRadius:12, overflow:"hidden", boxShadow:"0 2px 8px #0D1E3D0A", flex:1 }}>
+            borderRadius:12, overflow:"hidden", boxShadow:"0 1px 2px #0D1E3D0D", flex:1 }}>
             <div style={{ padding:"14px 18px", borderBottom:`1px solid ${B.border}`,
-              fontSize:13, fontWeight:700, color:B.navy }}>🏢 Top clientes</div>
+              fontSize:13, fontWeight:700, color:B.navy }}>Top clientes</div>
             <div style={{ padding:14 }}>
               {porCliente.slice(0,5).map(c=>(
                 <div key={c.id} style={{ display:"flex", alignItems:"center", gap:10,
@@ -8936,8 +8860,8 @@ function Reportes({ pedidos, repartidores, empresas, toast, onIr }) {
 
       {/* Liquidación Documentaria */}
       <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12,
-        padding:20, boxShadow:"0 2px 8px #0D1E3D0A" }}>
-        <div style={{ fontSize:13, fontWeight:700, color:B.navy, marginBottom:14 }}>📄 Liquidación Documentaria (descargo de guías)</div>
+        padding:20, boxShadow:"0 1px 2px #0D1E3D0D" }}>
+        <div style={{ fontSize:13, fontWeight:700, color:B.navy, marginBottom:14 }}>Liquidación Documentaria (descargo de guías)</div>
         <div style={{ display:"flex", gap:12, alignItems:"flex-end", flexWrap:"wrap" }}>
           <div style={{ minWidth:260 }}>
             <label style={lbl}>Cliente</label>
@@ -9079,9 +9003,9 @@ function Configuracion({ onRefresh, toast }) {
     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
       {/* Datos empresa */}
       <div style={{ background:B.white, border:`1px solid ${B.border}`,
-        borderRadius:12, padding:20, boxShadow:"0 2px 8px #0D1E3D0A", gridColumn:"span 2" }}>
+        borderRadius:12, padding:20, boxShadow:"0 1px 2px #0D1E3D0D", gridColumn:"span 2" }}>
         <div style={{ fontSize:14, fontWeight:800, color:B.navy, marginBottom:16,
-          paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>🏢 Datos de Grupo Boaz S.A.C.</div>
+          paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>Datos de Grupo Boaz S.A.C.</div>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14 }}>
           {[
             ["Razón Social","Grupo Boaz S.A.C."],
@@ -9104,9 +9028,9 @@ function Configuracion({ onRefresh, toast }) {
 
       {/* Zonas */}
       <div style={{ background:B.white, border:`1px solid ${B.border}`,
-        borderRadius:12, padding:20, boxShadow:"0 2px 8px #0D1E3D0A", gridColumn:"span 2" }}>
+        borderRadius:12, padding:20, boxShadow:"0 1px 2px #0D1E3D0D", gridColumn:"span 2" }}>
         <div style={{ fontSize:14, fontWeight:800, color:B.navy, marginBottom:16,
-          paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>📍 Zonas de cobertura</div>
+          paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>Zonas de cobertura</div>
         {Object.entries(ZONAS).map(([ambito,distritos])=>(
           <div key={ambito} style={{ marginBottom:16 }}>
             <div style={{ fontSize:11, fontWeight:700, color:B.navy, textTransform:"capitalize",
@@ -9123,9 +9047,9 @@ function Configuracion({ onRefresh, toast }) {
       </div>
 
       <div style={{ background:B.white, border:`1px solid ${B.border}`,
-        borderRadius:12, padding:20, boxShadow:"0 2px 8px #0D1E3D0A", gridColumn:"span 2" }}>
+        borderRadius:12, padding:20, boxShadow:"0 1px 2px #0D1E3D0D", gridColumn:"span 2" }}>
         <div style={{ fontSize:14, fontWeight:800, color:B.navy, marginBottom:16,
-          paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>🔌 Integraciones API</div>
+          paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>Integraciones API</div>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
           {[
             { name:"VTEX", desc:"Ecommerce enterprise", color:"#F71963", ready:false },
@@ -9200,9 +9124,9 @@ function Catalogo({ lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVe
   return (
     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
       {/* Tarifas por cliente (centralizado) */}
-      <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:20, boxShadow:"0 2px 8px #0D1E3D0A", gridColumn:"span 2" }}>
+      <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:20, boxShadow:"0 1px 2px #0D1E3D0D", gridColumn:"span 2" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, paddingBottom:8, borderBottom:`2px solid ${B.gold}`, gap:12, flexWrap:"wrap" }}>
-          <div style={{ fontSize:14, fontWeight:800, color:B.navy }}>👥 Tarifas por cliente</div>
+          <div style={{ fontSize:14, fontWeight:800, color:B.navy }}>Tarifas por cliente</div>
           <input style={{ ...inp, width:220 }} placeholder="Buscar cliente…" value={busqCli} onChange={e=>setBusqCli(e.target.value)}/>
         </div>
         <div style={{ maxHeight:320, overflowY:"auto" }}>
@@ -9218,9 +9142,9 @@ function Catalogo({ lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVe
               <div key={e.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 4px", borderBottom:`1px solid ${B.border}`, flexWrap:"wrap" }}>
                 <div style={{ flex:"1 1 200px", fontSize:13, fontWeight:600, color:B.textPri }}>{e.nombre}</div>
                 {mods.length===0 && <span style={{ fontSize:11, color:B.textMut, fontStyle:"italic" }}>Sin tarifario habilitado (se elige en Clientes → Editar)</span>}
-                {mods.includes("pedido")   && pill(aP, `💰 Por pedido: ${aP} tarifa${aP===1?"":"s"}`, ()=>setModalTarCli(e))}
-                {mods.includes("vehiculo") && pill(aV, `🚛 Por vehículo: ${aV}`, ()=>setModalTarVeh(e))}
-                {mods.includes("viaje")    && pill(aJ, `🧭 Por viaje: ${aJ} tarifa${aJ===1?"":"s"}`, ()=>setModalTarViaje(e))}
+                {mods.includes("pedido")   && pill(aP, `Por pedido: ${aP} tarifa${aP===1?"":"s"}`, ()=>setModalTarCli(e))}
+                {mods.includes("vehiculo") && pill(aV, `Por vehículo: ${aV}`, ()=>setModalTarVeh(e))}
+                {mods.includes("viaje")    && pill(aJ, `Por viaje: ${aJ} tarifa${aJ===1?"":"s"}`, ()=>setModalTarViaje(e))}
               </div>);
           })}
           {empresas.length===0 && <div style={{ fontSize:12, color:B.textMut, padding:12 }}>Sin clientes registrados</div>}
@@ -9228,9 +9152,9 @@ function Catalogo({ lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVe
       </div>
       {/* Recargo por feriados */}
       <div style={{ background:B.white, border:`1px solid ${B.border}`,
-        borderRadius:12, padding:20, boxShadow:"0 2px 8px #0D1E3D0A", gridColumn:"span 2" }}>
+        borderRadius:12, padding:20, boxShadow:"0 1px 2px #0D1E3D0D", gridColumn:"span 2" }}>
         <div style={{ fontSize:14, fontWeight:800, color:B.navy, marginBottom:12,
-          paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>📅 Recargo por feriados</div>
+          paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>Recargo por feriados</div>
         <div style={{ fontSize:12, color:B.textMut, marginBottom:12 }}>
           Se aplica automáticamente sobre la tarifa/día de Transporte y Carga cuando un día marcado como activo en el calendario de servicio cae en un feriado oficial de Perú.
         </div>
@@ -9246,10 +9170,10 @@ function Catalogo({ lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVe
 
       {/* Tarifario estándar por pedido (editable) */}
       <div style={{ background:B.white, border:`1px solid ${B.border}`,
-        borderRadius:12, padding:20, boxShadow:"0 2px 8px #0D1E3D0A" }}>
+        borderRadius:12, padding:20, boxShadow:"0 1px 2px #0D1E3D0D" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
           marginBottom:12, paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>
-          <div style={{ fontSize:14, fontWeight:800, color:B.navy }}>💰 Tarifario estándar por pedido</div>
+          <div style={{ fontSize:14, fontWeight:800, color:B.navy }}>Tarifario estándar por pedido</div>
           <button onClick={()=>setModalTarifarioEstandar(true)}
             style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer", fontWeight:700 }}>
             <Ico n="edit" size={13} style={{ display:"inline-block", verticalAlign:"-2px", marginRight:5 }}/>Editar
@@ -9268,10 +9192,9 @@ function Catalogo({ lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVe
         </div>
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
           <thead>
-            <tr style={{ background:B.bg }}>
+            <tr style={{ background:"#F6F9FC" }}>
               {["Ámbito","XS (0-1kg)","S (1-3kg)","M (3-7kg)"].map(h=>(
-                <th key={h} style={{ padding:"8px 12px", textAlign:"left", fontSize:10,
-                  color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
+                <th key={h} style={{ padding:"8px 12px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -9280,7 +9203,7 @@ function Catalogo({ lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVe
               const fila = filaEstandar(ambito, tabEstandar);
               return (
                 <tr key={ambito} style={{ borderTop:`1px solid ${B.border}`,
-                  background:i%2===0?B.white:"#F8FAFC" }}>
+                  background:B.white }}>
                   <td style={{ padding:"10px 12px", fontSize:12, fontWeight:600, color:B.navy }}>{AMBITOS_LABEL[ambito]}</td>
                   {fila ? (
                     <>
@@ -9303,10 +9226,10 @@ function Catalogo({ lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVe
 
       {/* Tarifario estándar por unidad (transporte y carga) */}
       <div style={{ background:B.white, border:`1px solid ${B.border}`,
-        borderRadius:12, padding:20, boxShadow:"0 2px 8px #0D1E3D0A" }}>
+        borderRadius:12, padding:20, boxShadow:"0 1px 2px #0D1E3D0D" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
           marginBottom:16, paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>
-          <div style={{ fontSize:14, fontWeight:800, color:B.navy }}>🚛 Tarifario estándar por unidad</div>
+          <div style={{ fontSize:14, fontWeight:800, color:B.navy }}>Tarifario estándar por unidad</div>
           <button onClick={()=>setModalTarifarioVehiculoEstandar(true)}
             style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer", fontWeight:700 }}>
             <Ico n="edit" size={13} style={{ display:"inline-block", verticalAlign:"-2px", marginRight:5 }}/>Editar
@@ -9314,10 +9237,9 @@ function Catalogo({ lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVe
         </div>
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
           <thead>
-            <tr style={{ background:B.bg }}>
+            <tr style={{ background:"#F6F9FC" }}>
               {["Tipo de vehículo","Tarifa base (día)","Recargo periférico"].map(h=>(
-                <th key={h} style={{ padding:"8px 12px", textAlign:"left", fontSize:10,
-                  color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
+                <th key={h} style={{ padding:"8px 12px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -9326,7 +9248,7 @@ function Catalogo({ lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVe
               const fila = tarifarioVehiculoEstandar.find(t=>t.tipo_vehiculo===tv && t.activo);
               return (
                 <tr key={tv} style={{ borderTop:`1px solid ${B.border}`,
-                  background:i%2===0?B.white:"#F8FAFC" }}>
+                  background:B.white }}>
                   <td style={{ padding:"10px 12px", fontSize:12, fontWeight:600, color:B.navy }}>{TIPOS_VEHICULO_LABEL[tv]}</td>
                   {fila ? (
                     <>
@@ -9347,9 +9269,9 @@ function Catalogo({ lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVe
       </div>
 
       {/* Tarifario estándar por viaje */}
-      <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:20, boxShadow:"0 2px 8px #0D1E3D0A", gridColumn:"span 2" }}>
+      <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:20, boxShadow:"0 1px 2px #0D1E3D0D", gridColumn:"span 2" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>
-          <div style={{ fontSize:14, fontWeight:800, color:B.navy }}>🧭 Tarifario estándar por viaje</div>
+          <div style={{ fontSize:14, fontWeight:800, color:B.navy }}>Tarifario estándar por viaje</div>
           <button onClick={()=>setModalViajeEstandar(true)} style={{ fontSize:11, color:B.blue, background:"none", border:`1px solid ${B.border}`, borderRadius:8, padding:"5px 12px", cursor:"pointer", fontWeight:700 }}><Ico n="edit" size={13} style={{ display:"inline-block", verticalAlign:"-2px", marginRight:5 }}/>Editar</button>
         </div>
         {tarifarioViajeEstandar.filter(t=>t.activo).length===0 ? (
@@ -9369,11 +9291,11 @@ function Catalogo({ lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVe
 
       {/* Catálogo de servicios: líneas de negocio + tipos de servicio */}
       <div style={{ background:B.white, border:`1px solid ${B.border}`,
-        borderRadius:12, padding:20, boxShadow:"0 2px 8px #0D1E3D0A", gridColumn:"span 2" }}>
+        borderRadius:12, padding:20, boxShadow:"0 1px 2px #0D1E3D0D", gridColumn:"span 2" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
           marginBottom:16, paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>
-          <div style={{ fontSize:14, fontWeight:800, color:B.navy }}>🗂️ Líneas de negocio y tipos de servicio</div>
-          <BtnPri onClick={()=>setModalLinea(true)} style={{ fontSize:12, padding:"7px 14px" }}>+ Nueva línea de negocio</BtnPri>
+          <div style={{ fontSize:14, fontWeight:800, color:B.navy }}>Líneas de negocio y tipos de servicio</div>
+          <BtnPri onClick={()=>setModalLinea(true)} style={{ fontSize:12, padding:"7px 14px" }}><Ico n="plus" size={15} sw={2.4}/> Nueva línea de negocio</BtnPri>
         </div>
         <div style={{ fontSize:12, color:B.textMut, marginBottom:16 }}>
           Clasifica tus servicios por línea de negocio (ej. Transporte y Carga, Distribución y Última Milla) y sus tipos específicos, cada uno con su propio código — útil para asignar a clientes y para armar facturas de forma consistente.
@@ -9500,8 +9422,8 @@ function Login({ onLogin }) {
           borderRadius:8, padding:"10px 12px", color:"#FCA5A5", fontSize:12,
           marginBottom:14, textAlign:"center" }}>{error}</div>}
         <button onClick={entrar} disabled={cargando}
-          style={{ width:"100%", background:`linear-gradient(135deg,${B.gold},${B.goldDk})`,
-            border:"none", color:B.navy, padding:"11px", borderRadius:8,
+          style={{ width:"100%", background:"#D46A08",
+            border:"none", color:"#fff", padding:"11px", borderRadius:8,
             cursor:cargando?"not-allowed":"pointer", fontSize:13, fontWeight:800 }}>
           {cargando?"Ingresando...":"Ingresar"}
         </button>
@@ -9722,7 +9644,7 @@ if (verificando) {
         <div style={{ padding:"18px 14px 14px", borderBottom:"1px solid #1E3560",
           display:"flex", alignItems:"center", gap:10, minHeight:70 }}>
           <div style={{ width:36, height:36, flexShrink:0,
-            background:`linear-gradient(135deg,${B.gold},${B.goldDk})`,
+            background:"#D46A08",
             borderRadius:10, display:"flex", alignItems:"center",
             justifyContent:"center", fontSize:18, fontWeight:800 }}>B</div>
           {navAbierto && (
@@ -9804,7 +9726,7 @@ if (verificando) {
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
           padding: esMovil ? "10px 12px" : "12px 24px", gap: esMovil ? 8 : 0, background:B.white,
           borderBottom:`1px solid ${B.border}`,
-          boxShadow:"0 2px 8px #0D1E3D0A", flexShrink:0 }}>
+          boxShadow:"0 1px 2px #0D1E3D0D", flexShrink:0 }}>
           {esMovil && <button onClick={()=>setDrawerNav(true)} aria-label="Menú"
             style={{ background:B.bg, border:`1px solid ${B.border}`, borderRadius:8, padding:"7px 9px", cursor:"pointer", color:B.navy, display:"flex", flexShrink:0 }}><Ico n="menu" size={20}/></button>}
           <div style={{ minWidth:0, flex: esMovil ? 1 : "none" }}>
@@ -9851,9 +9773,9 @@ if (verificando) {
             <div style={{ display:"flex", flexDirection:"column", alignItems:"center",
               justifyContent:"center", height:"100%", gap:16 }}>
               <div style={{ width:48, height:48,
-                background:`linear-gradient(135deg,${B.gold},${B.goldDk})`,
+                background:"#D46A08",
                 borderRadius:12, display:"flex", alignItems:"center",
-                justifyContent:"center", color:B.navy, animation:"spin 1s linear infinite" }}><Ico n="package" size={26}/></div>
+                justifyContent:"center", color:"#fff", animation:"spin 1s linear infinite" }}><Ico n="package" size={26}/></div>
               <div style={{ fontSize:14, color:B.textMut }}>Cargando Boaz ERP...</div>
             </div>
           ) : (
