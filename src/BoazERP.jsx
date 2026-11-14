@@ -273,6 +273,8 @@ const ICONOS = {
   grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
   list:'<path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/>',
   message:'<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
+  columns:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/>',
+  printer:'<path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/>',
   inbox:'<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
 };
 const diaLocal = (d=new Date()) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
@@ -340,6 +342,9 @@ if (typeof document !== "undefined" && !document.getElementById("bz-css")) {
       .bz-th-orden:hover { color:#0D1E3D !important; }
       button:focus-visible, a:focus-visible { outline:2px solid #E8780A; outline-offset:2px; }
       .bz-tabla td, .bz-tabla th { border-bottom:1px solid #E3EAF2; } .bz-tabla tbody tr:last-child td { border-bottom:none; }
+      @keyframes bz-slide { from{transform:translateX(40px); opacity:0} to{transform:none; opacity:1} }
+      .bz-panel { animation:bz-slide .18s ease-out; }
+      .bz-fila-sel td { background:#FFF7ED !important; }
       .bz-card-hover { transition:box-shadow .15s, transform .15s; } .bz-card-hover:hover { box-shadow:0 8px 24px #0D1E3D1A !important; transform:translateY(-1px); }
     `;
     document.head.appendChild(st);
@@ -1211,6 +1216,7 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, tarifario
   const VALOR_COL = {
     tracking: p => p.omd || "",
     orden_cliente: p => p.cliente_referencia || "",
+    cliente: p => nomEmp[p.empresa_id] || "",
     destinatario: p => p.dest_nombre || "",
     direccion: p => p.dest_direccion || "",
     peso: p => parseFloat(p.peso_kg) || 0,
@@ -1222,7 +1228,27 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, tarifario
     fecha: p => p.created_at || "",
   };
 
+  // Filtros avanzados
+  const [verFiltros, setVerFiltros] = useState(false);
+  const [fEmp, setFEmp] = useState(""); const [fRep, setFRep] = useState("");
+  const [fDesde, setFDesde] = useState(""); const [fHasta, setFHasta] = useState("");
+  const nFiltros = [fEmp,fRep,fDesde,fHasta].filter(Boolean).length;
+  const limpiarFiltros = () => { setFEmp(""); setFRep(""); setFDesde(""); setFHasta(""); };
+  // Columnas visibles (se recuerda en este navegador)
+  const COLS_PED = [["tracking","Tracking",true],["orden_cliente","N° orden"],["cliente","Cliente"],["destinatario","Destinatario",true],["direccion","Dirección"],["peso","Peso"],["tamano","Tamaño"],["servicio","Servicio"],["ambito","Ámbito"],["repartidor","Repartidor"],["estado","Estado",true],["fecha","Fecha"]];
+  const [ocultas, setOcultas] = useState(() => { try { const v = JSON.parse(localStorage.getItem("boaz_ped_cols")); return Array.isArray(v) ? v : ["tamano","ambito"]; } catch { return ["tamano","ambito"]; } });
+  const [verCols, setVerCols] = useState(false);
+  const toggleCol = (id) => setOcultas(prev => { const n = prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id]; try { localStorage.setItem("boaz_ped_cols", JSON.stringify(n)); } catch {} return n; });
+  // Selección múltiple
+  const [sel, setSel] = useState(() => new Set());
+  const [confirmar, setConfirmar] = useState(null);
+  const [modalEtiq, setModalEtiq] = useState(false);
+  const nomEmp = useMemo(() => { const m = {}; for (const e of empresas||[]) m[e.id] = e.nombre; return m; }, [empresas]);
+
   const filtrados = pedidos.filter(p => {
+    if (fEmp && p.empresa_id!==fEmp) return false;
+    if (fRep && (fRep==="_sin" ? !!p.repartidor_id : p.repartidor_id!==fRep)) return false;
+    if ((fDesde||fHasta) && p.created_at) { const d = diaLocal(new Date(p.created_at)); if ((fDesde && d<fDesde) || (fHasta && d>fHasta)) return false; }
     const okE = filtroEstado==="todos" || p.estado===filtroEstado;
     const okB = !busqueda ||
       p.omd?.toLowerCase().includes(busqueda.toLowerCase()) ||
@@ -1244,6 +1270,46 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, tarifario
     for (const p of pedidos) { c[p.estado] = (c[p.estado]||0)+1; if (!p.dest_lat) g++; }
     return { conteo:c, sinGeo:g };
   }, [pedidos]);
+
+  const selFilas = filtrados.filter(p => sel.has(p.id));
+  const toggleSel = (id) => setSel(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const pagSel = pg.visibles.length>0 && pg.visibles.every(p => sel.has(p.id));
+  const togglePag = () => setSel(prev => { const n = new Set(prev); pg.visibles.forEach(p => pagSel ? n.delete(p.id) : n.add(p.id)); return n; });
+  const masivoEstado = (estado) => {
+    const ids = selFilas.map(p=>p.id); if (!ids.length) return;
+    setConfirmar({ msg:`Se cambiará el estado de ${ids.length} pedido${ids.length===1?"":"s"} a «${ESTADOS_PEDIDO[estado].label}».`, ok: async () => {
+      const extra = estado==="entregado" ? { fecha_entrega:new Date().toISOString() } : estado==="en_ruta" ? { fecha_asignacion:new Date().toISOString() } : {};
+      const { error } = await sb.from("pedidos").update({ estado, ...extra }).in("id", ids);
+      setConfirmar(null);
+      if (error) { toast("Error: "+error.message,"error"); return; }
+      toast(`${ids.length} pedido${ids.length===1?"":"s"} actualizado${ids.length===1?"":"s"} ✓`); setSel(new Set()); onRefresh();
+    }});
+  };
+  const masivoRep = (repId) => {
+    const r = repartidores.find(x=>x.id===repId); if (!r || !selFilas.length) return;
+    const nuevos = selFilas.filter(p=>p.estado==="sin_asignar").map(p=>p.id), otros = selFilas.filter(p=>p.estado!=="sin_asignar").map(p=>p.id);
+    setConfirmar({ msg:`Se asignará a ${r.nombres} ${r.apellidos} ${selFilas.length} pedido${selFilas.length===1?"":"s"}.`, ok: async () => {
+      let error = null;
+      if (nuevos.length) ({ error } = await sb.from("pedidos").update({ repartidor_id:repId, estado:"asignado", fecha_asignacion:new Date().toISOString() }).in("id", nuevos));
+      if (!error && otros.length) ({ error } = await sb.from("pedidos").update({ repartidor_id:repId }).in("id", otros));
+      setConfirmar(null);
+      if (error) { toast("Error: "+error.message,"error"); return; }
+      toast(`${selFilas.length} pedido${selFilas.length===1?"":"s"} asignado${selFilas.length===1?"":"s"} ✓`); setSel(new Set()); onRefresh();
+    }});
+  };
+  const exportarPedidos = async (filas) => {
+    try {
+      await asegurarXLSX();
+      const nomRep = (id) => { const r = repartidores.find(x=>x.id===id); return r ? `${r.nombres} ${r.apellidos}` : ""; };
+      const datos = filas.map(p => ({ Tracking:p.omd, "N° orden":p.cliente_referencia||"", Cliente:nomEmp[p.empresa_id]||"", Destinatario:p.dest_nombre||"", Teléfono:p.dest_telefono||"",
+        Dirección:p.dest_direccion||"", Distrito:p.dest_distrito||"", "Peso (kg)":parseFloat(p.peso_kg)||"", Servicio:(BADGE_SERVICIO[p.tipo_servicio]||{}).label||"", Ámbito:(p.ambito||"").replace("_"," "),
+        Repartidor:nomRep(p.repartidor_id), Estado:(ESTADOS_PEDIDO[p.estado]||{}).label||p.estado, "Tarifa (S/)":parseFloat(p.tarifa_s)||0, "Cobro en destino (S/)":p.cobro_destino ? (parseFloat(p.monto_cobrar)||0) : "",
+        "Fecha de registro":p.created_at ? diaLocal(new Date(p.created_at)) : "", "Fecha de entrega":p.fecha_entrega ? diaLocal(new Date(p.fecha_entrega)) : "" }));
+      const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(datos), "Pedidos");
+      XLSX.writeFile(wb, `pedidos_boaz_${diaLocal()}.xlsx`);
+      toast(`${datos.length} pedido${datos.length===1?"":"s"} exportado${datos.length===1?"":"s"} ✓`);
+    } catch (e) { toast("No se pudo exportar: "+(e.message||e), "error"); }
+  };
 
   const cambiarEstado = async (id, nuevoEstado) => {
     const extra = nuevoEstado==="entregado" ? {fecha_entrega:new Date().toISOString()} :
@@ -1273,25 +1339,71 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, tarifario
       {/* Barra de herramientas */}
       <div style={{ display:"flex", gap:10, marginBottom:12, flexWrap:"wrap", alignItems:"center" }}>
         <Buscador value={busqueda} onChange={setBusqueda} placeholder="Buscar por tracking, N° de orden, nombre, teléfono o distrito" width={380}/>
+        <BtnSec onClick={()=>setVerFiltros(v=>!v)} style={verFiltros||nFiltros ? { borderColor:B.gold, color:B.goldDk } : {}}>
+          <Ico n="filter" size={15}/> Filtros{nFiltros>0 && <span style={{ background:B.gold, color:"#fff", fontSize:11, fontWeight:700, padding:"0 6px", borderRadius:10 }}>{nFiltros}</span>}
+        </BtnSec>
         <div style={{ marginLeft:"auto", display:"flex", gap:8, flexWrap:"wrap" }}>
           {sinGeo > 0 && (
-            <BtnSec onClick={()=>setModalGeocodificar(true)}><Ico n="pin" size={15}/> Geocodificar pendientes ({sinGeo})</BtnSec>
+            <BtnSec onClick={()=>setModalGeocodificar(true)}><Ico n="pin" size={15}/> Geocodificar ({sinGeo})</BtnSec>
           )}
+          <div style={{ position:"relative" }}>
+            <BtnSec onClick={()=>setVerCols(v=>!v)}><Ico n="columns" size={15}/> Columnas</BtnSec>
+            {verCols && (<>
+              <div onClick={()=>setVerCols(false)} style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:50 }}/>
+              <div style={{ ...CARD, position:"absolute", right:0, top:"calc(100% + 6px)", zIndex:51, padding:10, width:200, boxShadow:"0 12px 32px #0D1E3D26" }}>
+                <div style={{ fontSize:11, fontWeight:700, color:B.textMut, padding:"2px 6px 6px" }}>COLUMNAS VISIBLES</div>
+                {COLS_PED.map(([id,l,fija]) => (
+                  <label key={id} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 6px", fontSize:13, color:fija?B.textMut:B.textPri, cursor:fija?"default":"pointer", borderRadius:6 }}>
+                    <input type="checkbox" checked={!ocultas.includes(id)} disabled={!!fija} onChange={()=>toggleCol(id)}/>{l}
+                  </label>))}
+              </div></>)}
+          </div>
+          <BtnSec onClick={()=>exportarPedidos(filtrados)}><Ico n="download" size={15}/> Exportar</BtnSec>
           <BtnSec onClick={()=>setModalCarga(true)}><Ico n="upload" size={15}/> Carga masiva</BtnSec>
           <BtnPri onClick={()=>setModalNuevo(true)}><Ico n="plus" size={15} sw={2.4}/> Nuevo pedido</BtnPri>
         </div>
       </div>
+      {verFiltros && (
+        <div style={{ ...CARD, padding:14, marginBottom:12, display:"flex", gap:12, flexWrap:"wrap", alignItems:"flex-end" }}>
+          <div style={{ flex:"1 1 200px", minWidth:0 }}><label style={lbl}>Cliente</label>
+            <select style={{ ...inp, background:B.white }} value={fEmp} onChange={e=>setFEmp(e.target.value)}><option value="">Todos</option>{(empresas||[]).map(e=><option key={e.id} value={e.id}>{e.nombre}</option>)}</select></div>
+          <div style={{ flex:"1 1 200px", minWidth:0 }}><label style={lbl}>Repartidor</label>
+            <select style={{ ...inp, background:B.white }} value={fRep} onChange={e=>setFRep(e.target.value)}><option value="">Todos</option><option value="_sin">Sin repartidor</option>{repartidores.map(r=><option key={r.id} value={r.id}>{r.nombres} {r.apellidos}</option>)}</select></div>
+          <div><label style={lbl}>Registrado desde</label><input type="date" style={{ ...inp, background:B.white, width:160 }} value={fDesde} onChange={e=>setFDesde(e.target.value)}/></div>
+          <div><label style={lbl}>Hasta</label><input type="date" style={{ ...inp, background:B.white, width:160 }} value={fHasta} onChange={e=>setFHasta(e.target.value)}/></div>
+          {nFiltros>0 && <BtnSec onClick={limpiarFiltros}>Limpiar</BtnSec>}
+        </div>
+      )}
       <Tabs valor={filtroEstado} onChange={setFiltroEstado} style={{ marginBottom:12 }}
         tabs={[{ id:"todos", l:"Todos", n:pedidos.length }, ...Object.keys(ESTADOS_PEDIDO).map(e=>({ id:e, l:ESTADOS_PEDIDO[e].label, n:conteo[e]||0 }))]}/>
 
+      {/* Acciones masivas */}
+      {selFilas.length>0 && (
+        <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", background:B.navy, color:"#fff", borderRadius:12, padding:"10px 14px", marginBottom:12 }}>
+          <span style={{ fontSize:13, fontWeight:700 }}>{selFilas.length} seleccionado{selFilas.length===1?"":"s"}</span>
+          {selFilas.length<filtrados.length && <button onClick={()=>setSel(new Set(filtrados.map(p=>p.id)))} style={{ background:"none", border:"none", color:B.goldLt, fontSize:12, fontWeight:600, cursor:"pointer", textDecoration:"underline" }}>Seleccionar los {filtrados.length} de esta vista</button>}
+          <div style={{ marginLeft:"auto", display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+            <select value="" onChange={e=>e.target.value && masivoRep(e.target.value)} aria-label="Asignar repartidor a los seleccionados" style={{ ...inp, width:"auto", background:B.white, padding:"7px 10px" }}>
+              <option value="">Asignar repartidor…</option>{repartidores.filter(r=>r.activo).map(r=><option key={r.id} value={r.id}>{r.nombres} {r.apellidos}</option>)}</select>
+            <select value="" onChange={e=>e.target.value && masivoEstado(e.target.value)} aria-label="Cambiar estado de los seleccionados" style={{ ...inp, width:"auto", background:B.white, padding:"7px 10px" }}>
+              <option value="">Cambiar estado…</option>{Object.entries(ESTADOS_PEDIDO).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}</select>
+            <BtnSec onClick={()=>setModalEtiq(true)}><Ico n="printer" size={15}/> Etiquetas</BtnSec>
+            <BtnSec onClick={()=>exportarPedidos(selFilas)}><Ico n="download" size={15}/> Exportar</BtnSec>
+            <button onClick={()=>setSel(new Set())} title="Quitar selección" aria-label="Quitar selección" style={{ background:"none", border:"none", color:"#B9C6D6", cursor:"pointer", display:"inline-flex", padding:4 }}><Ico n="x" size={18}/></button>
+          </div>
+        </div>
+      )}
+
       {/* Tabla */}
       <div style={{ ...CARD, overflow:"hidden" }}>
+        <style>{ocultas.map(c => { const i = COLS_PED.findIndex(x=>x[0]===c)+2; return i>1 ? `.bz-ped th:nth-child(${i}),.bz-ped tbody tr:not(.bz-vacio) td:nth-child(${i}){display:none}` : ""; }).join("")}</style>
         <div style={{ overflowX:"auto" }}>
-        <table className="bz-tabla" style={{ width:"100%", borderCollapse:"collapse" }}>
+        <table className="bz-tabla bz-ped" style={{ width:"100%", borderCollapse:"collapse" }}>
           <thead>
             <tr>
+              <Th style={{ width:36, paddingRight:0 }}><input type="checkbox" checked={pagSel} onChange={togglePag} aria-label="Seleccionar los pedidos de esta página"/></Th>
               {[
-                ["Tracking","tracking"],["N° orden","orden_cliente"],["Destinatario","destinatario"],["Dirección","direccion"],
+                ["Tracking","tracking"],["N° orden","orden_cliente"],["Cliente","cliente"],["Destinatario","destinatario"],["Dirección","direccion"],
                 ["Peso","peso","right"],["Tamaño","tamano"],["Servicio","servicio"],["Ámbito","ambito"],["Repartidor","repartidor"],
                 ["Estado","estado"],["Fecha","fecha"],["",null],
               ].map(([h,col,al],k)=>(
@@ -1304,10 +1416,12 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, tarifario
               const rep = repartidores.find(r=>r.id===p.repartidor_id);
               const est = ESTADOS_PEDIDO[p.estado] || { bg:"#F1F5F9", color:"#475569" };
               return (
-                <tr key={p.id} style={{ cursor:"pointer" }}
+                <tr key={p.id} style={{ cursor:"pointer" }} className={sel.has(p.id)?"bz-fila-sel":undefined}
                   onClick={()=>setModalDetalle(p)}>
+                  <td style={{ ...TD, paddingRight:0, width:36 }} onClick={e=>e.stopPropagation()}><input type="checkbox" checked={sel.has(p.id)} onChange={()=>toggleSel(p.id)} aria-label={`Seleccionar ${p.omd}`}/></td>
                   <td style={{ ...TD, fontWeight:700, color:B.navy, whiteSpace:"nowrap" }}>{p.omd}</td>
                   <td style={{ ...TDS, whiteSpace:"nowrap" }}>{p.cliente_referencia||"—"}</td>
+                  <td style={TDS}><div title={nomEmp[p.empresa_id]||""} style={{ maxWidth:160, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{nomEmp[p.empresa_id]||"—"}</div></td>
                   <td style={TD}>
                     <div style={{ fontWeight:600 }}>{p.dest_nombre}</div>
                     {p.dest_telefono && <div style={{ fontSize:12, color:B.textMut }}>{p.dest_telefono}</div>}
@@ -1374,10 +1488,10 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, tarifario
                 </tr>
               );
             })}
-            {filtrados.length===0&&<tr><td colSpan={12}>
+            {filtrados.length===0&&<tr className="bz-vacio"><td colSpan={14}>
               <EstadoVacio icono="package" titulo={pedidos.length===0 ? "Aún no hay pedidos" : "Ningún pedido coincide"}
                 texto={pedidos.length===0 ? "Registra el primero o súbelos en bloque desde un Excel." : "Prueba con otro estado o cambia el texto de búsqueda."}>
-                {pedidos.length>0 && (busqueda || filtroEstado!=="todos") && <BtnSec onClick={()=>{ setBusqueda(""); setFiltroEstado("todos"); }}>Quitar filtros</BtnSec>}
+                {pedidos.length>0 && (busqueda || filtroEstado!=="todos" || nFiltros>0) && <BtnSec onClick={()=>{ setBusqueda(""); setFiltroEstado("todos"); limpiarFiltros(); }}>Quitar filtros</BtnSec>}
               </EstadoVacio></td></tr>}
           </tbody>
         </table>
@@ -1393,6 +1507,8 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, tarifario
         onClose={()=>setModalGeocodificar(false)} onDone={onRefresh} toast={toast}/>}
       {modalDetalle && <ModalDetallePedido pedido={modalDetalle} repartidores={repartidores}
         onClose={()=>setModalDetalle(null)} onRefresh={onRefresh} toast={toast}/>}
+      {modalEtiq && <ModalEtiquetas pedidos={selFilas} empresas={empresas} onClose={()=>setModalEtiq(false)}/>}
+      {confirmar && <Confirm msg={confirmar.msg} onOk={confirmar.ok} onCancel={()=>setConfirmar(null)}/>}
     </div>
   );
 }
@@ -2248,10 +2364,10 @@ function ModalDetallePedido({ pedido: p, repartidores, onClose, onRefresh, toast
   };
 
   return (
-    <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000,
-      display:"flex", alignItems:"center", justifyContent:"center" }}>
-      <div style={{ background:B.white, borderRadius:16, padding:28, width:580,
-        maxHeight:"90vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
+    <div onMouseDown={e=>{ if (e.target===e.currentTarget) onClose(); }} style={{ position:"fixed", inset:0, background:"#0D1E3D66", zIndex:1000,
+      display:"flex", alignItems:"stretch", justifyContent:"flex-end" }}>
+      <div className="bz-panel" style={{ background:B.white, padding:28, width:600, maxWidth:"100vw",
+        height:"100%", overflowY:"auto", boxShadow:"-12px 0 40px #0D1E3D33" }}>
         <div style={{ display:"flex", justifyContent:"space-between", marginBottom:20 }}>
           <div>
             <div style={{ fontSize:20, fontWeight:800, color:B.navy }}>{p.omd}</div>
@@ -5404,6 +5520,7 @@ function Cobranza({ pedidos, empresas, repartidores, onRefresh, toast }) {
       (!q || `${f.serie}-${f.numero} ${f.empresas?.nombre||""} ${f.descripcion||""}`.toLowerCase().includes(q))
     ).sort((a,b) => b.dias-a.dias);
   }, [pend, bucket, fEmpresa, busq]);
+  const pgCxc = usePaginacion(lista, 25, "facturas");
 
   const porCliente = useMemo(() => {
     const m = {};
@@ -5521,9 +5638,9 @@ function Cobranza({ pedidos, empresas, repartidores, onRefresh, toast }) {
           <div style={{ ...card, overflowX:"auto" }}>
             {cargando ? <Cargando filas={5}/> : lista.length===0 ?
               <EstadoVacio icono="check" titulo="Sin facturas pendientes" texto="No hay facturas por cobrar con estos filtros."/> :
-              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+              <><table style={{ width:"100%", borderCollapse:"collapse" }}>
                 <thead><tr><th style={th}>Cliente</th><th style={th}>Factura</th><th style={th}>Emisión</th><th style={{...th,textAlign:"right"}}>Días</th><th style={{...th,textAlign:"right"}}>Total</th><th style={{...th,textAlign:"right"}}>Neto a cobrar</th><th style={th}></th></tr></thead>
-                <tbody>{lista.map(f => {
+                <tbody>{pgCxc.visibles.map(f => {
                   const b = BUCKETS_CXC.find(x => f.dias>=x.min && f.dias<=x.max) || BUCKETS_CXC[0];
                   return (
                     <tr key={f.id}>
@@ -5539,7 +5656,7 @@ function Cobranza({ pedidos, empresas, repartidores, onRefresh, toast }) {
                       </td>
                     </tr>);
                 })}</tbody>
-              </table>}
+              </table>{pgCxc.pie}</>}
           </div>
           <div style={{ ...card, padding:16 }}>
             <div style={{ fontSize:13, fontWeight:700, color:B.navy, marginBottom:12 }}>Quién más te debe</div>
@@ -6099,6 +6216,7 @@ function Incidencias({ pedidos, empresas, repartidores, usuario, toast }) {
     return lista.filter(i => (!fEstado || i.estado===fEstado) && (!fTipo || i.tipo===fTipo) &&
       (!q || `${i.omd||""} ${i.descripcion||""} ${nombreEmp(i.empresa_id)}`.toLowerCase().includes(q)));
   }, [lista, fEstado, fTipo, busq, empresas]);
+  const pgInc = usePaginacion(filtradas, 25, "incidencias");
 
   const mesActual = diaLocal().slice(0,7);
   const abiertas = lista.filter(i=>i.estado==="abierta").length;
@@ -6167,9 +6285,9 @@ function Incidencias({ pedidos, empresas, repartidores, usuario, toast }) {
       <div style={{ ...card, overflowX:"auto" }}>
         {cargando ? <Cargando filas={5}/> : filtradas.length===0 ?
           <EstadoVacio icono="check" titulo="Sin incidencias" texto="No hay incidencias con estos filtros."><BtnPri onClick={nueva}>Registrar una</BtnPri></EstadoVacio> :
-          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+          <><table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead><tr><th style={th}>Fecha</th><th style={th}>Pedido</th><th style={th}>Cliente</th><th style={th}>Tipo</th><th style={th}>Detalle</th><th style={th}>Estado</th><th style={{...th,textAlign:"right"}}>Costo</th></tr></thead>
-            <tbody>{filtradas.map(i => { const e = ESTADOS_INC[i.estado]; return (
+            <tbody>{pgInc.visibles.map(i => { const e = ESTADOS_INC[i.estado]; return (
               <tr key={i.id} onClick={()=>editar(i)} style={{ cursor:"pointer" }}>
                 <td style={td}>{fmt.fecha(i.created_at)}</td>
                 <td style={{...td,fontWeight:700,color:B.navy}}>{i.omd||"—"}<div style={{ fontSize:11, color:B.textMut, fontWeight:400 }}>{i.repartidor_id?nombreRep(i.repartidor_id):""}</div></td>
@@ -6179,7 +6297,7 @@ function Incidencias({ pedidos, empresas, repartidores, usuario, toast }) {
                 <td style={td}><span style={{ background:e.bg, color:e.c, fontSize:11, fontWeight:700, padding:"2px 10px", borderRadius:20 }}>{e.label}</span></td>
                 <td style={{...td,textAlign:"right"}}>{parseFloat(i.costo_s)>0?solN(parseFloat(i.costo_s)):"—"}</td>
               </tr>); })}</tbody>
-          </table>}
+          </table>{pgInc.pie}</>}
       </div>
 
       {form && (
@@ -6305,6 +6423,7 @@ function UsuariosAuditoria({ usuario, navModulos, onPermisosCambio, toast }) {
   };
   const fmtVal = (v) => v==null ? "∅" : typeof v==="object" ? JSON.stringify(v).slice(0,24) : String(v).slice(0,28);
   const audFilt = audit.filter(a => { const q = fBusq.trim().toLowerCase(); return !q || `${nombreDe(a)} ${ETIQ_TABLA[a.tabla]||a.tabla} ${resumen(a)}`.toLowerCase().includes(q); });
+  const pgAud = usePaginacion(audFilt, 25, "registros");
 
   const card = CARD;
   const th = { textAlign:"left", padding:"10px 14px", fontSize:11, fontWeight:700, color:B.textSec, background:"#F6F9FC", letterSpacing:".3px", borderBottom:"1px solid #E3EAF2", whiteSpace:"nowrap" };
@@ -6374,9 +6493,9 @@ function UsuariosAuditoria({ usuario, navModulos, onPermisosCambio, toast }) {
         </div>
         <div style={{ ...card, overflowX:"auto" }}>
           {cargandoAud ? <Cargando filas={6}/> : audFilt.length===0 ? <EstadoVacio icono="shield" titulo="Sin movimientos" texto="No hay cambios registrados con estos filtros. La auditoría empieza a registrar desde que ejecutaste el SQL de la Fase 4."/> :
-            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <><table style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead><tr><th style={th}>Cuándo</th><th style={th}>Quién</th><th style={th}>Acción</th><th style={th}>Módulo</th><th style={th}>Detalle</th></tr></thead>
-              <tbody>{audFilt.map(a => { const o = ETIQ_OP[a.operacion] || [a.operacion,"#000","#eee"]; return (
+              <tbody>{pgAud.visibles.map(a => { const o = ETIQ_OP[a.operacion] || [a.operacion,"#000","#eee"]; return (
                 <tr key={a.id}>
                   <td style={{...td,whiteSpace:"nowrap"}}>{fmt.fechaHora(a.created_at)}</td>
                   <td style={{...td,fontWeight:600}}>{nombreDe(a)}</td>
@@ -6384,7 +6503,7 @@ function UsuariosAuditoria({ usuario, navModulos, onPermisosCambio, toast }) {
                   <td style={td}>{ETIQ_TABLA[a.tabla]||a.tabla}</td>
                   <td style={{...td,color:B.textSec,fontSize:12,maxWidth:420}}>{resumen(a)}</td>
                 </tr>); })}</tbody>
-            </table>}
+            </table>{pgAud.pie}</>}
         </div>
         <div style={{ fontSize:11, color:B.textMut, marginTop:8 }}>Se muestran los últimos 300 movimientos. Los cambios de estado de pedidos no se registran (son muy frecuentes); sí la eliminación de pedidos. Las claves y PIN nunca se guardan en la auditoría.</div>
       </>)}
@@ -9460,6 +9579,7 @@ export default function BoazERP() {
   const [empresas, setEmpresas] = useState([]);
   const [liquidaciones, setLiquidaciones] = useState([]);
   const [cotizNuevas, setCotizNuevas] = useState(0);
+  const [incAbiertasNav, setIncAbiertasNav] = useState(0);
   const [lineasNegocio, setLineasNegocio] = useState([]);
   const [tiposServicio, setTiposServicio] = useState([]);
   const [unidades, setUnidades] = useState([]);
@@ -9527,6 +9647,7 @@ export default function BoazERP() {
     const contar = async () => {
       const { count } = await sb.from("cotizaciones").select("id", { count:"exact", head:true }).eq("estado","nueva");
       if (vivo && count != null) setCotizNuevas(count);
+      try { const r = await sb.from("incidencias").select("id", { count:"exact", head:true }).eq("estado","abierta"); if (vivo && r.count != null) setIncAbiertasNav(r.count); } catch {}
     };
     contar();
     const t = setInterval(contar, 60000);
@@ -9551,7 +9672,7 @@ export default function BoazERP() {
       badge: pedidos.filter(p=>p.estado==="sin_asignar").length || null },
     { id:"repartidores", icon:"bike",      label:"Repartidores" },
     { id:"unidades",     icon:"truck",     label:"Flota" },
-    { id:"incidencias",  icon:"alert",     label:"Incidencias" },
+    { id:"incidencias",  icon:"alert",     label:"Incidencias", badge: incAbiertasNav || null },
     { section:"ALMACÉN" },
     { id:"inventario",   icon:"warehouse", label:"Inventario" },
     { section:"COMERCIAL" },
@@ -9701,8 +9822,8 @@ if (verificando) {
                 <Ico n={n.icon} size={18}/>
                 {navAbierto && <span style={{ flex:1, whiteSpace:"nowrap" }}>{n.label}</span>}
                 {navAbierto && n.badge ? (
-                  <span style={{ background:B.red, color:"#fff", fontSize:9,
-                    fontWeight:700, padding:"2px 6px", borderRadius:10 }}>{n.badge}</span>
+                  <span style={{ background:B.red, color:"#fff", fontSize:10, minWidth:18, textAlign:"center",
+                    fontWeight:700, padding:"2px 6px", borderRadius:10 }}>{n.badge>99?"99+":n.badge}</span>
                 ) : null}
               </div>
             );
