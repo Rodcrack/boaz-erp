@@ -267,6 +267,9 @@ const ICONOS = {
   chevup:'<path d="m18 15-6-6-6 6"/>',
   clock:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
   sparkles:'<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>',
+  user:'<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  phone:'<path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384"/>',
+  filter:'<path d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z"/>',
   inbox:'<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
 };
 const diaLocal = (d=new Date()) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
@@ -379,13 +382,14 @@ if (typeof document !== "undefined" && !window.__bzEsc) {
     const capas = [...document.querySelectorAll('div[style*="inset: 0"]')].filter(d => d.style.position==="fixed");
     const capa = capas[capas.length-1];
     if (!capa) return;
-    const cerrar = [...capa.querySelectorAll("button")].find(b => b.textContent.trim()==="✕" || b.getAttribute("aria-label")==="Cerrar");
+    const bs = [...capa.querySelectorAll("button")];
+    const cerrar = bs.find(b => b.textContent.trim()==="✕" || b.getAttribute("aria-label")==="Cerrar") || bs.find(b => /^(Cancelar|Cerrar)$/.test(b.textContent.trim()));
     if (cerrar) { e.preventDefault(); cerrar.click(); }
   });
 }
 
 // Tarjeta de indicador (única para todo el ERP)
-function Kpi({ icon, label, valor, sub, color=B.navy, delta, deltaTxt="", invertir=false, serie }) {
+function Kpi({ icon, label, valor, sub, color=B.navy, cv, delta, deltaTxt="", invertir=false, serie }) {
   const bueno = delta==null ? null : (invertir ? delta<=0 : delta>=0);
   return (
     <div className="bz-card-hover" style={{ ...CARD, padding:"16px 18px", minWidth:0 }}>
@@ -395,13 +399,23 @@ function Kpi({ icon, label, valor, sub, color=B.navy, delta, deltaTxt="", invert
         {delta!=null && <span style={{ fontSize:11, fontWeight:700, padding:"2px 7px", borderRadius:8, whiteSpace:"nowrap", background: bueno?"#ECFDF5":"#FEF2F2", color: bueno?"#047857":"#B91C1C" }}>{delta>=0?"▲":"▼"} {Math.abs(delta)}%{deltaTxt}</span>}
       </div>
       <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", gap:8 }}>
-        <div style={{ fontSize:24, fontWeight:800, color:B.textPri, lineHeight:1.1, whiteSpace:"nowrap" }}>{valor}</div>
+        <div style={{ fontSize:24, fontWeight:800, color:cv||B.textPri, lineHeight:1.1, whiteSpace:"nowrap" }}>{valor}</div>
         {serie && <Sparkline datos={serie} color={color}/>}
       </div>
       {sub && <div style={{ fontSize:12, color:B.textSec, marginTop:6 }}>{sub}</div>}
     </div>
   );
 }
+
+const KpiDS = Kpi;
+// Tarjeta compacta para módulos con su propio atajo Kpi({t,v,c,s}): mismo diseño, valor en verde/rojo solo si significa algo
+const kpiMini = ({ t, v, c, s, i }) => (
+  <div style={{ flex:"1 1 170px", minWidth:0, display:"grid" }}>
+    <KpiDS icon={i} label={t} valor={v} sub={s} color={c||B.navy} cv={c===B.green?"#047857":c===B.red?"#B91C1C":c===B.orange?"#B45309":undefined}/>
+  </div>);
+const TAB_SEG = (on) => ({ display:"flex", alignItems:"center", gap:7, padding:"6px 14px", borderRadius:8, border:"none", cursor:"pointer", whiteSpace:"nowrap",
+  fontSize:13, fontWeight:on?700:500, background:on?B.white:"transparent", color:on?B.navy:B.textSec, boxShadow:on?"0 1px 2px #0D1E3D22":"none" });
+const TAB_CONT = { display:"inline-flex", gap:2, padding:3, background:"#E3EAF2", borderRadius:10, maxWidth:"100%", overflowX:"auto" };
 
 // Pestañas: tipo "linea" (secciones de una pantalla) o "segmento" (filtros de una lista)
 function Tabs({ tabs, valor, onChange, tipo="segmento", style }) {
@@ -2527,7 +2541,7 @@ function Repartidores({ repartidores, pedidos, onRefresh, toast }) {
                 <div style={{ display:"flex", gap:6 }}>
                   <button onClick={()=>abrirEditar(r)} style={{ flex:1, background:B.bg,
                     border:`1px solid ${B.border}`, color:B.textSec, padding:"7px",
-                    borderRadius:7, cursor:"pointer", fontSize:11 }}>✏️ Editar</button>
+                    borderRadius:7, cursor:"pointer", fontSize:11 }}><Ico n="edit" size={13} style={{ display:"inline-block", verticalAlign:"-2px", marginRight:5 }}/>Editar</button>
                   <button onClick={()=>toggle(r)} style={{ flex:1, background:"transparent",
                     border:`1px solid ${B.border}`, color:B.textSec, padding:"7px",
                     borderRadius:7, cursor:"pointer", fontSize:11 }}>
@@ -2711,98 +2725,105 @@ function Clientes({ empresas, pedidos, lineasNegocio, tarifariosCliente, tarifar
     setModal(false); setEditando(null); setF(empty); onRefresh();
   };
 
+  const [busq, setBusq] = useState("");
+  const statsEmp = useMemo(() => {
+    const m = {};
+    for (const p of pedidos) { if (!p.empresa_id) continue; const g = m[p.empresa_id] || (m[p.empresa_id] = { n:0, ing:0 }); g.n++; g.ing += parseFloat(p.tarifa_s)||0; }
+    return m;
+  }, [pedidos]);
+  const qc = busq.trim().toLowerCase();
+  const lista = !qc ? empresas : empresas.filter(e => `${e.nombre||""} ${e.ruc||""} ${e.codigo_interno||""} ${e.contacto||""}`.toLowerCase().includes(qc));
+  const editar = (e, extra={}) => { setEditando(e); setF({ ...e, ...extra }); setModal(true); };
+
   return (
     <div>
-      <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:16 }}>
-        <BtnPri onClick={()=>{setEditando(null);setF(empty);setModal(true);}}>+ Nueva empresa</BtnPri>
+      <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap", marginBottom:16 }}>
+        <Buscador value={busq} onChange={setBusq} placeholder="Buscar por nombre, RUC, código o contacto" width={360}/>
+        <span style={{ fontSize:12, color:B.textSec }}>{lista.length} cliente{lista.length===1?"":"s"}</span>
+        <BtnPri style={{ marginLeft:"auto" }} onClick={()=>{setEditando(null);setF(empty);setModal(true);}}><Ico n="plus" size={15} sw={2.4}/> Nuevo cliente</BtnPri>
       </div>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))", gap:14 }}>
-        {empresas.map(e => {
-          const misP = pedidos.filter(p=>p.empresa_id===e.id);
-          const ingreso = misP.reduce((a,p)=>a+(parseFloat(p.tarifa_s)||0),0);
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))", gap:14 }}>
+        {lista.map(e => {
+          const st = statsEmp[e.id] || { n:0, ing:0 };
+          const linea = lineasNegocio.find(ln=>ln.id===e.linea_negocio_id);
+          const mods = modalidadesDe(e, tarifariosCliente, tarifarioVehiculoCliente, tarifasViajeCliente);
+          const info = {
+            pedido:   { n: tarifariosCliente.filter(t=>t.empresa_id===e.id && t.activo).length, uno:"tarifa", otro:"tarifas", abrir:()=>setModalTarifario(e) },
+            vehiculo: { n: tarifarioVehiculoCliente.filter(t=>t.empresa_id===e.id && t.activo).length, uno:"vehículo", otro:"vehículos", abrir:()=>setModalTarifarioVehiculo(e) },
+            viaje:    { n: tarifasViajeCliente.filter(t=>t.empresa_id===e.id && t.activo).length, uno:"tarifa", otro:"tarifas", abrir:()=>setModalTarifarioViaje(e) },
+          };
+          const dato = (ico, v) => (
+            <div style={{ display:"flex", alignItems:"center", gap:7, fontSize:12, color:v?B.textSec:B.textMut, minWidth:0 }}>
+              <Ico n={ico} size={14} color={B.textMut}/><span title={v||""} style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{v||"Sin registrar"}</span>
+            </div>);
+          const permiso = (ok, txt) => (
+            <span style={{ display:"inline-flex", alignItems:"center", gap:5, fontSize:12, color:ok?"#047857":B.textMut }}>
+              <Ico n={ok?"check":"xcircle"} size={14}/>{txt}
+            </span>);
           return (
-            <div key={e.id} style={{ background:B.white, border:`1px solid ${B.border}`,
-              borderRadius:12, padding:20, boxShadow:"0 2px 8px #0D1E3D0A",
-              borderLeft:`4px solid ${B.gold}` }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:14 }}>
-                <div>
-                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                    <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>{e.nombre}</div>
-                    {e.codigo_interno && (
-                      <span style={{ fontSize:10, fontWeight:800, color:B.gold, background:`${B.gold}18`,
-                        padding:"2px 8px", borderRadius:8, border:`1px solid ${B.gold}44` }}>{e.codigo_interno}</span>
-                    )}
-                  </div>
-                  <div style={{ fontSize:11, color:B.textMut }}>RUC: {e.ruc||"—"}</div>
-                  {e.linea_negocio_id && (
-                    <div style={{ marginTop:4 }}>
-                      <span style={{ fontSize:10, fontWeight:700, color:B.navy, background:`${B.navy}10`,
-                        padding:"2px 8px", borderRadius:8 }}>
-                        {(lineasNegocio.find(ln=>ln.id===e.linea_negocio_id)||{}).codigo} — {(lineasNegocio.find(ln=>ln.id===e.linea_negocio_id)||{}).nombre}
-                      </span>
-                    </div>
-                  )}
+            <div key={e.id} className="bz-card-hover" style={{ ...CARD, padding:18, display:"flex", flexDirection:"column", gap:14 }}>
+              <div style={{ display:"flex", alignItems:"flex-start", gap:12 }}>
+                <div style={{ width:40, height:40, borderRadius:10, background:B.navy, color:B.goldLt, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:800, flexShrink:0 }}>
+                  {(e.nombre||"?").trim().split(/\s+/).slice(0,2).map(w=>w[0]).join("").toUpperCase()}
                 </div>
-                <button onClick={()=>{setEditando(e);setF({...e});setModal(true);}}
-                  style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer" }}>✏️ Editar</button>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                    <span style={{ fontSize:15, fontWeight:800, color:B.navy }}>{e.nombre}</span>
+                    {e.codigo_interno && <span style={{ fontSize:11, fontWeight:700, color:B.textSec, background:"#F1F5F9", padding:"1px 7px", borderRadius:6 }}>{e.codigo_interno}</span>}
+                  </div>
+                  <div style={{ fontSize:12, color:B.textMut, marginTop:2 }}>RUC {e.ruc||"—"}{linea ? ` · ${linea.nombre}` : ""}</div>
+                </div>
+                <BtnIco n="edit" title="Editar cliente" onClick={()=>editar(e)}/>
               </div>
-              <div style={{ display:"flex", gap:8, marginBottom:12, flexWrap:"wrap" }}>
-                {(() => {
-                  const mods = modalidadesDe(e, tarifariosCliente, tarifarioVehiculoCliente, tarifasViajeCliente);
-                  const info = {
-                    pedido:   { n: tarifariosCliente.filter(t=>t.empresa_id===e.id && t.activo).length, uno:"tarifa", otro:"tarifas", abrir:()=>setModalTarifario(e) },
-                    vehiculo: { n: tarifarioVehiculoCliente.filter(t=>t.empresa_id===e.id && t.activo).length, uno:"vehículo", otro:"vehículos", abrir:()=>setModalTarifarioVehiculo(e) },
-                    viaje:    { n: tarifasViajeCliente.filter(t=>t.empresa_id===e.id && t.activo).length, uno:"tarifa", otro:"tarifas", abrir:()=>setModalTarifarioViaje(e) },
-                  };
-                  if (!mods.length) return (
-                    <button onClick={()=>{setEditando(e);setF({...e, modalidades_tarifa:[]});setModal(true);}}
-                      style={{ fontSize:10, fontWeight:700, padding:"4px 10px", borderRadius:20, cursor:"pointer", border:`1px dashed ${B.orange}`, background:"#FFF7ED", color:B.orange }}>
-                      ⚠️ Sin tarifario habilitado — elegir
-                    </button>);
-                  return MODALIDADES_TARIFA.filter(m=>mods.includes(m.id)).map(m => {
-                    const x = info[m.id];
+
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px 12px" }}>
+                {dato("user", e.contacto)}{dato("phone", e.telefono)}{dato("mail", e.email)}{dato("pin", e.direccion)}
+              </div>
+
+              <div>
+                <div style={{ fontSize:11, fontWeight:700, color:B.textMut, letterSpacing:"0.3px", marginBottom:6 }}>TARIFARIO</div>
+                <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                  {!mods.length ? (
+                    <button onClick={()=>editar(e, { modalidades_tarifa:[] })}
+                      style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:12, fontWeight:600, padding:"5px 10px", borderRadius:8, cursor:"pointer", border:`1px dashed #B4530988`, background:"#FFF7ED", color:"#B45309" }}>
+                      <Ico n="alert" size={14}/> Sin tarifario habilitado · elegir
+                    </button>
+                  ) : MODALIDADES_TARIFA.filter(m=>mods.includes(m.id)).map(m => {
+                    const x = info[m.id], ok = x.n>0;
                     return (
-                      <button key={m.id} onClick={x.abrir}
-                        style={{ fontSize:10, fontWeight:700, padding:"4px 10px", borderRadius:20, cursor:"pointer",
-                          border:`1px solid ${x.n>0?B.green:B.orange}`, background:x.n>0?"#ECFDF5":"#FFF7ED", color:x.n>0?B.green:B.orange }}>
-                        {m.icon} {m.label}: {x.n>0 ? `${x.n} ${x.n===1?x.uno:x.otro} activa${x.n===1?"":"s"}` : "configurar tarifas"}
+                      <button key={m.id} onClick={x.abrir} className="bz-btn-sec" title={ok ? "Ver o editar tarifas" : "Configurar tarifas"}
+                        style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:12, fontWeight:600, padding:"5px 10px", borderRadius:8, cursor:"pointer",
+                          border:`1px solid ${ok?B.border:"#B4530966"}`, background:ok?B.white:"#FFF7ED", color:ok?B.textPri:"#B45309" }}>
+                        <Ico n={m.ico} size={14} color={ok?"#047857":"#B45309"}/>{m.label}
+                        <span style={{ fontWeight:500, color:ok?B.textMut:"#B45309" }}>{ok ? `${x.n} ${x.n===1?x.uno:x.otro}` : "configurar"}</span>
                       </button>
                     );
-                  });
-                })()}
-              </div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:14 }}>
-                {[["👤",e.contacto||"—"],["📱",e.telefono||"—"],
-                  ["✉️",e.email||"—"],["📍",e.direccion||"—"]].map(([ic,v],i)=>(
-                  <div key={i} style={{ fontSize:11, color:B.textSec, overflow:"hidden",
-                    textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{ic} {v}</div>
-                ))}
-              </div>
-              <div style={{ fontSize:11, marginBottom:10,
-                color: e.puede_generar_etiquetas ? B.green : B.textMut }}>
-                {e.puede_generar_etiquetas ? "🏷️ Puede generar etiquetas" : "🏷️ Etiquetas deshabilitadas"}
-                {" · "}
-                <span style={{ color: e.puede_ver_liquidacion ? B.green : B.textMut }}>
-                  {e.puede_ver_liquidacion ? "📄 Puede generar liquidación" : "📄 Liquidación deshabilitada"}
-                </span>
-              </div>
-              <div style={{ background:B.bg, borderRadius:8, padding:10,
-                display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-                <div style={{ textAlign:"center" }}>
-                  <div style={{ fontSize:20, fontWeight:800, color:B.gold }}>{misP.length}</div>
-                  <div style={{ fontSize:9, color:B.textMut, textTransform:"uppercase" }}>Pedidos</div>
+                  })}
                 </div>
-                <div style={{ textAlign:"center" }}>
-                  <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>{fmt.sol(ingreso)}</div>
-                  <div style={{ fontSize:9, color:B.textMut, textTransform:"uppercase" }}>Ingresos</div>
+              </div>
+
+              <div style={{ display:"flex", gap:14, flexWrap:"wrap" }}>
+                {permiso(e.puede_generar_etiquetas, "Etiquetas en portal")}{permiso(e.puede_ver_liquidacion, "Liquidación en portal")}
+              </div>
+
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, borderTop:`1px solid ${B.border}`, paddingTop:12, marginTop:"auto" }}>
+                <div>
+                  <div style={{ fontSize:12, color:B.textSec }}>Pedidos</div>
+                  <div style={{ fontSize:18, fontWeight:800, color:B.textPri }}>{st.n.toLocaleString("en-US")}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize:12, color:B.textSec }}>Ingresos (sin IGV)</div>
+                  <div style={{ fontSize:18, fontWeight:800, color:B.textPri }}>{fmt.sol(st.ing)}</div>
                 </div>
               </div>
             </div>
           );
         })}
-        {empresas.length===0&&(
-          <div style={{ gridColumn:"1/-1", padding:40, textAlign:"center",
-            color:B.textMut, fontSize:13 }}>No hay empresas registradas</div>
+        {lista.length===0&&(
+          <div style={{ gridColumn:"1/-1", ...CARD }}>
+            <EstadoVacio icono="building" titulo={empresas.length===0 ? "Aún no hay clientes" : "Ningún cliente coincide"}
+              texto={empresas.length===0 ? "Registra tu primer cliente y habilita cómo se le cobra: por pedido, por vehículo o por viaje." : "Prueba con otro nombre, RUC o código."}/>
+          </div>
         )}
       </div>
 
@@ -2845,7 +2866,7 @@ function Clientes({ empresas, pedidos, lineasNegocio, tarifariosCliente, tarifar
               </div>
             </div>
             <div style={{ marginTop:16, padding:"12px 14px", background:"#FFF8EF", border:`1px solid ${B.gold}55`, borderRadius:10 }}>
-              <div style={{ fontSize:12, fontWeight:800, color:B.navy, marginBottom:4 }}>💰 Tarifario habilitado para este cliente</div>
+              <div style={{ fontSize:12, fontWeight:800, color:B.navy, marginBottom:4 }}>Tarifario habilitado para este cliente</div>
               <div style={{ fontSize:11, color:B.textMut, marginBottom:10 }}>Marca cómo se le cobra según el acuerdo comercial. Puedes habilitar más de una; después configuras las tarifas de cada una desde su tarjeta.</div>
               <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                 {MODALIDADES_TARIFA.map(m => {
@@ -2854,7 +2875,7 @@ function Clientes({ empresas, pedidos, lineasNegocio, tarifariosCliente, tarifar
                     <label key={m.id} style={{ display:"flex", alignItems:"center", gap:8, fontSize:12.5, color:B.textPri, cursor:"pointer" }}>
                       <input type="checkbox" checked={on} style={{ width:16, height:16 }}
                         onChange={ev=>setF(p=>{ const cur = p.modalidades_tarifa||[]; return { ...p, modalidades_tarifa: ev.target.checked ? [...cur, m.id] : cur.filter(x=>x!==m.id) }; })}/>
-                      <span><b>{m.icon} {m.label}</b> <span style={{ color:B.textMut }}>— {m.ayuda}</span></span>
+                      <Ico n={m.ico} size={15} color={on?B.goldDk:B.textMut}/><span><b>{m.label}</b> <span style={{ color:B.textMut }}>— {m.ayuda}</span></span>
                     </label>);
                 })}
               </div>
@@ -2865,7 +2886,7 @@ function Clientes({ empresas, pedidos, lineasNegocio, tarifariosCliente, tarifar
                 onChange={e=>setF(p=>({...p,puede_generar_etiquetas:e.target.checked}))}
                 style={{ width:16, height:16 }}/>
               <label htmlFor="etiquetas" style={{ fontSize:13, color:B.textPri, cursor:"pointer" }}>
-                🏷️ Permitir que este cliente genere sus propias etiquetas en su portal
+                Permitir que este cliente genere sus propias etiquetas en su portal
               </label>
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:10,
@@ -2874,7 +2895,7 @@ function Clientes({ empresas, pedidos, lineasNegocio, tarifariosCliente, tarifar
                 onChange={e=>setF(p=>({...p,puede_ver_liquidacion:e.target.checked}))}
                 style={{ width:16, height:16 }}/>
               <label htmlFor="liquidacion" style={{ fontSize:13, color:B.textPri, cursor:"pointer" }}>
-                📄 Permitir que este cliente genere su propia Liquidación de Entregas en su portal
+                Permitir que este cliente genere su propia Liquidación de Entregas en su portal
               </label>
             </div>
             <div style={{ display:"flex", gap:10, marginTop:20, justifyContent:"flex-end" }}>
@@ -2902,9 +2923,9 @@ function Clientes({ empresas, pedidos, lineasNegocio, tarifariosCliente, tarifar
 
 // ── Modalidades de tarifario que se pueden habilitar por cliente ──
 const MODALIDADES_TARIFA = [
-  { id:"pedido",   icon:"💰", label:"Por pedido",   ayuda:"Se cobra cada entrega según ámbito, servicio y peso" },
-  { id:"vehiculo", icon:"🚛", label:"Por vehículo", ayuda:"Se cobra por día de unidad según el tipo de vehículo" },
-  { id:"viaje",    icon:"🧭", label:"Por viaje",    ayuda:"Se cobra por viaje o recojo según ruta o concepto acordado" },
+  { id:"pedido",   ico:"package", icon:"💰", label:"Por pedido",   ayuda:"Se cobra cada entrega según ámbito, servicio y peso" },
+  { id:"vehiculo", ico:"truck", icon:"🚛", label:"Por vehículo", ayuda:"Se cobra por día de unidad según el tipo de vehículo" },
+  { id:"viaje",    ico:"map", icon:"🧭", label:"Por viaje",    ayuda:"Se cobra por viaje o recojo según ruta o concepto acordado" },
 ];
 // Modalidades habilitadas de un cliente. Si todavía no se marcó ninguna, se infieren de las tarifas que ya tiene.
 const modalidadesDe = (e, tarPedido=[], tarVeh=[], tarViaje=[]) => {
@@ -2977,7 +2998,7 @@ function ModalTarifarioViaje({ empresa, filas, estandar=[], onClose, onSaved, to
                 </select></div>
               <div><label style={{ ...lbl, marginBottom:3 }}>Tarifa (S/)</label><input type="number" style={inp} value={r.tarifa} onChange={e=>set(i,"tarifa",e.target.value)}/></div>
               <label style={{ display:"flex", alignItems:"center", gap:5, fontSize:11, color:B.textSec, paddingBottom:8, cursor:"pointer" }}><input type="checkbox" checked={r.activo} onChange={e=>set(i,"activo",e.target.checked)}/>Activa</label>
-              <button onClick={()=>quitar(i)} title="Quitar" style={{ background:"none", border:"none", color:B.red, cursor:"pointer", fontSize:16, paddingBottom:6 }}>🗑</button>
+              <BtnIco n="trash" title="Quitar" color="#B91C1C" onClick={()=>quitar(i)}/>
             </div>
           ))}
         </div>
@@ -3627,7 +3648,7 @@ function Unidades({ unidades, asignaciones, empresas, tiposServicio, repartidore
                     </td>
                     <td style={{ padding:"10px 12px" }}>
                       <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                        <button onClick={()=>{setEditandoAsignacion(a); setModalAsignacion(true);}} style={{ fontSize:11, color:B.gold, background:"none", border:"none", cursor:"pointer" }}>✏️ Editar</button>
+                        <button onClick={()=>{setEditandoAsignacion(a); setModalAsignacion(true);}} style={{ fontSize:11, color:B.gold, background:"none", border:"none", cursor:"pointer" }}><Ico n="edit" size={13} style={{ display:"inline-block", verticalAlign:"-2px", marginRight:5 }}/>Editar</button>
                         {a.estado==="activa" && (
                           <button onClick={()=>finalizarAsignacion(a)} style={{ fontSize:11, color:B.red, background:"none", border:"none", cursor:"pointer" }}>Finalizar</button>
                         )}
@@ -5023,14 +5044,11 @@ function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesUnidad, 
 
   return (
     <div>
-      <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
-        <div style={{ fontSize:18, fontWeight:800, color:B.navy }}>💼 Liquidación de Clientes</div>
-      </div>
-      <div style={{ fontSize:12, color:B.textMut, marginBottom:16 }}>
-        Elige un cliente y un rango de fechas para ver qué guías/pedidos (o placas y días de transporte) entran en la facturación de ese periodo.
+      <div style={{ fontSize:13, color:B.textSec, marginBottom:14, maxWidth:720 }}>
+        Elige un cliente y un rango de fechas para ver qué pedidos (o placas y días de transporte) entran en la facturación de ese período.
       </div>
 
-      <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr 1fr auto", gap:10, marginBottom:16, alignItems:"end" }}>
+      <div style={{ ...CARD, padding:16, display:"grid", gridTemplateColumns:"1.4fr 1fr 1fr auto", gap:10, marginBottom:16, alignItems:"end" }}>
         <div><label style={lbl}>Cliente</label>
           <select style={inp} value={empresaId} onChange={e=>{setEmpresaId(e.target.value); setGenerado(false);}}>
             <option value="todas">Todos los clientes</option>
@@ -5041,38 +5059,29 @@ function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesUnidad, 
           <input type="date" style={inp} value={fechaInicio} onChange={e=>{setFechaInicio(e.target.value); setGenerado(false);}}/></div>
         <div><label style={lbl}>Hasta</label>
           <input type="date" style={inp} value={fechaFin} onChange={e=>{setFechaFin(e.target.value); setGenerado(false);}}/></div>
-        <BtnPri onClick={()=>setGenerado(true)}>Generar</BtnPri>
+        <BtnPri onClick={()=>setGenerado(true)}>Generar pre-facturación</BtnPri>
       </div>
+
+      {!generado && (
+        <div style={CARD}>
+          <EstadoVacio icono="filetext" titulo="Genera la pre-facturación de un período"
+            texto="Selecciona el cliente y las fechas, y pulsa «Generar pre-facturación». Verás el detalle, los totales con IGV y podrás exportarlo a Excel o PDF."/>
+        </div>
+      )}
 
       {generado && (
           <>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, marginBottom:16 }}>
-              <div style={{ background:B.bg, borderRadius:10, padding:14 }}>
-                <div style={{ fontSize:10, color:B.textMut }}>{esClienteTransporte ? "UNIDADES" : "PEDIDOS"}</div>
-                <div style={{ fontSize:18, fontWeight:800, color:B.navy }}>
-                  {esClienteTransporte ? filasTransporte.length : filtrados.length}
-                </div>
-              </div>
-              <div style={{ background:B.bg, borderRadius:10, padding:14 }}>
-                <div style={{ fontSize:10, color:B.textMut }}>SUBTOTAL + IGV</div>
-                <div style={{ fontSize:14, color:B.textSec }}>
-                  {esClienteTransporte
-                    ? `${fmt.sol(subtotalTransporte)} + ${fmt.sol(igvTransporte)}`
-                    : `${fmt.sol(subtotal)} + ${fmt.sol(igv)}`}
-                </div>
-              </div>
-              <div style={{ background:"#FFF8EF", borderRadius:10, padding:14, border:`1px solid ${B.gold}` }}>
-                <div style={{ fontSize:10, color:B.textMut }}>TOTAL A FACTURAR</div>
-                <div style={{ fontSize:18, fontWeight:800, color:B.gold }}>
-                  {fmt.sol(esClienteTransporte ? totalTransporte : total)}
-                </div>
-              </div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14, marginBottom:16 }}>
+              <Kpi icon={esClienteTransporte?"truck":"package"} label={esClienteTransporte ? "Unidades" : "Pedidos"} valor={(esClienteTransporte ? filasTransporte.length : filtrados.length).toLocaleString("en-US")}/>
+              <Kpi icon="receipt" label="Subtotal + IGV" color={B.textSec}
+                valor={fmt.sol(esClienteTransporte ? subtotalTransporte : subtotal)} sub={`+ ${fmt.sol(esClienteTransporte ? igvTransporte : igv)} de IGV`}/>
+              <Kpi icon="dollar" label="Total a facturar" color={B.gold} valor={fmt.sol(esClienteTransporte ? totalTransporte : total)} sub="con IGV"/>
             </div>
 
             {esClienteTransporte && (
               <div style={{ background:"#EFF6FF", border:"1px solid #BFDBFE", borderRadius:10,
                 padding:"10px 14px", marginBottom:16, fontSize:12, color:"#1E40AF" }}>
-                🚛 Este cliente se liquida por <strong>días de transporte trabajados</strong> (Unidades), no por pedidos — por eso la tabla de abajo muestra placas en vez de guías.
+                Este cliente se liquida por <strong>días de transporte trabajados</strong> (Unidades), no por pedidos — por eso la tabla de abajo muestra placas en vez de guías.
               </div>
             )}
 
@@ -5089,15 +5098,15 @@ function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesUnidad, 
             <div style={{ display:"flex", gap:10, marginBottom:14, flexWrap:"wrap" }}>
               {!esClienteTransporte && (
                 <>
-                  <BtnSec onClick={exportarExcel}>📥 Exportar a Excel</BtnSec>
-                  <BtnSec onClick={imprimir}>🖨️ Imprimir / PDF</BtnSec>
+                  <BtnSec onClick={exportarExcel}><Ico n="download" size={15}/> Exportar a Excel</BtnSec>
+                  <BtnSec onClick={imprimir}><Ico n="filetext" size={15}/> Imprimir / PDF</BtnSec>
                 </>
               )}
               {empresaId!=="todas" && (
                 <BtnPri onClick={generarLiquidacion} disabled={generandoLiquidacion}>
                   {generandoLiquidacion ? "Generando..." : esClienteTransporte
-                    ? "📄 Generar Liquidación de Transporte (formato Boaz)"
-                    : "📄 Generar Liquidación de Entregas (formato Boaz)"}
+                    ? "Generar Liquidación de Transporte (formato Boaz)"
+                    : "Generar Liquidación de Entregas (formato Boaz)"}
                 </BtnPri>
               )}
             </div>
@@ -5185,7 +5194,7 @@ function ModalMarcarPagada({ factura, onClose, onConfirmar }) {
       display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
       <div style={{ background:B.white, borderRadius:16, padding:28, width:420, boxShadow:"0 20px 60px #0003" }}>
         <div style={{ display:"flex", justifyContent:"space-between", marginBottom:16 }}>
-          <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>💰 Marcar factura como pagada</div>
+          <div style={{ fontSize:15, fontWeight:800, color:B.navy }}>Registrar pago de factura</div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:18, color:B.textSec, cursor:"pointer" }}>✕</button>
         </div>
         <div style={{ fontSize:13, color:B.textSec, marginBottom:16 }}>
@@ -5363,10 +5372,10 @@ function Cotizaciones({ toast, onCambio }) {
 
 // ── COBRANZA: cuentas por cobrar, detracciones y contraentrega (COD) ──
 const BUCKETS_CXC = [
-  { id:"b0", label:"0–30 días",      min:0,  max:30,    color:B.green  },
-  { id:"b1", label:"31–60 días",     min:31, max:60,    color:B.gold   },
-  { id:"b2", label:"61–90 días",     min:61, max:90,    color:B.orange },
-  { id:"b3", label:"Más de 90 días", min:91, max:99999, color:B.red    },
+  { id:"b0", label:"0–30 días",      min:0,  max:30,    color:"#047857" },
+  { id:"b1", label:"31–60 días",     min:31, max:60,    color:"#B45309" },
+  { id:"b2", label:"61–90 días",     min:61, max:90,    color:"#C2410C" },
+  { id:"b3", label:"Más de 90 días", min:91, max:99999, color:"#B91C1C" },
 ];
 const diasDesdeFecha = (f) => f ? Math.floor((new Date(diaLocal()+"T00:00:00") - new Date(String(f).slice(0,10)+"T00:00:00"))/86400000) : 0;
 
@@ -5476,13 +5485,12 @@ function Cobranza({ pedidos, empresas, repartidores, onRefresh, toast }) {
     XLSX.writeFile(wb, `cobranza_boaz_${diaLocal()}.xlsx`);
   };
 
-  const th = { textAlign:"left", padding:"10px 12px", fontSize:11, color:B.textSec, textTransform:"uppercase", letterSpacing:".6px", borderBottom:`1px solid ${B.border}`, whiteSpace:"nowrap" };
-  const td = { padding:"10px 12px", fontSize:13, borderBottom:`1px solid ${B.border}`, color:B.textPri, verticalAlign:"middle" };
-  const card = { background:B.white, border:`1px solid ${B.border}`, borderRadius:12, boxShadow:"0 2px 8px #0D1E3D0A" };
+  const th = { textAlign:"left", padding:"10px 14px", fontSize:11, fontWeight:700, color:B.textSec, background:"#F6F9FC", letterSpacing:".3px", borderBottom:"1px solid #E3EAF2", whiteSpace:"nowrap" };
+  const td = { padding:"12px 14px", fontSize:13, borderBottom:"1px solid #E3EAF2", color:B.textPri, verticalAlign:"middle" };
+  const card = CARD;
   const TabBtn = ({ id, children, n }) => (
-    <button onClick={()=>setTab(id)} style={{ padding:"8px 16px", borderRadius:8, border:"none", cursor:"pointer", fontSize:13, fontWeight:700,
-      background: tab===id ? B.navy : "transparent", color: tab===id ? "#fff" : B.textSec, display:"flex", alignItems:"center", gap:8 }}>
-      {children}{n ? <span style={{ background:tab===id?B.gold:B.red, color:tab===id?B.navy:"#fff", fontSize:10, padding:"1px 7px", borderRadius:10 }}>{n}</span> : null}
+    <button onClick={()=>setTab(id)} style={TAB_SEG(tab===id)}>
+      {children}{n ? <span style={{ background:"#FEE2E2", color:"#B91C1C", fontSize:11, fontWeight:700, padding:"1px 7px", borderRadius:10 }}>{n}</span> : null}
     </button>
   );
 
@@ -5492,10 +5500,10 @@ function Cobranza({ pedidos, empresas, repartidores, onRefresh, toast }) {
         <div>
           <div style={{ fontSize:12, color:B.textSec }}>Seguimiento de lo que te deben: facturas por cobrar con antigüedad, detracciones y cobros contraentrega.</div>
         </div>
-        <BtnSec onClick={exportar}>⬇ Excel</BtnSec>
+        <BtnSec onClick={exportar}><Ico n="download" size={15}/> Excel</BtnSec>
       </div>
 
-      <div style={{ display:"flex", gap:6, marginBottom:14, flexWrap:"wrap" }}>
+      <div style={{ ...TAB_CONT, marginBottom:14 }}>
         <TabBtn id="cxc" n={pend.filter(f=>f.dias>60).length}>Cuentas por cobrar</TabBtn>
         <TabBtn id="det" n={detPend.length}>Detracciones</TabBtn>
         <TabBtn id="cod" n={codPend.length}>Contraentrega (COD)</TabBtn>
@@ -5504,16 +5512,16 @@ function Cobranza({ pedidos, empresas, repartidores, onRefresh, toast }) {
       {tab==="cxc" && (<>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:12, marginBottom:14 }}>
           <div style={{ ...card, padding:"14px 16px" }}>
-            <div style={{ fontSize:11, color:B.textSec, fontWeight:700, textTransform:"uppercase", letterSpacing:".6px" }}>Total por cobrar</div>
-            <div style={{ fontSize:22, fontWeight:800, color:B.navy, marginTop:4 }}>{solN(totalPend)}</div>
-            <div style={{ fontSize:11, color:B.textMut }}>{pend.length} factura{pend.length===1?"":"s"} · cobrado este mes {solN(cobradoMes)}</div>
+            <div style={{ fontSize:12, color:B.textSec, fontWeight:600 }}>Total por cobrar</div>
+            <div style={{ fontSize:22, fontWeight:800, color:B.navy, marginTop:6 }}>{solN(totalPend)}</div>
+            <div style={{ fontSize:12, color:B.textSec, marginTop:4 }}>{pend.length} factura{pend.length===1?"":"s"} · cobrado este mes {solN(cobradoMes)}</div>
           </div>
           {resumenBuckets.map(b => (
             <button key={b.id} onClick={()=>setBucket(bucket===b.id?"":b.id)} className="bz-card-hover"
-              style={{ ...card, padding:"14px 16px", textAlign:"left", cursor:"pointer", borderTop:`3px solid ${b.color}`, outline: bucket===b.id?`2px solid ${b.color}`:"none" }}>
-              <div style={{ fontSize:11, color:B.textSec, fontWeight:700, textTransform:"uppercase", letterSpacing:".6px" }}>{b.label}</div>
-              <div style={{ fontSize:20, fontWeight:800, color:b.color, marginTop:4 }}>{solN(b.total)}</div>
-              <div style={{ fontSize:11, color:B.textMut }}>{b.n} factura{b.n===1?"":"s"}</div>
+              title="Filtrar por esta antigüedad" style={{ ...card, padding:"14px 16px", textAlign:"left", cursor:"pointer", outline: bucket===b.id?`2px solid ${b.color}`:"none" }}>
+              <div style={{ fontSize:12, color:B.textSec, fontWeight:600, display:"flex", alignItems:"center", gap:7 }}><span style={{ width:8, height:8, borderRadius:"50%", background:b.color }}/>{b.label}</div>
+              <div style={{ fontSize:22, fontWeight:800, color:b.total>0?b.color:B.textMut, marginTop:6 }}>{solN(b.total)}</div>
+              <div style={{ fontSize:12, color:B.textSec, marginTop:4 }}>{b.n} factura{b.n===1?"":"s"}</div>
             </button>
           ))}
         </div>
@@ -5542,8 +5550,8 @@ function Cobranza({ pedidos, empresas, repartidores, onRefresh, toast }) {
                       <td style={{...td,textAlign:"right",fontWeight:700}}>{solN(numV(f.total_s))}</td>
                       <td style={{...td,textAlign:"right"}}>{solN(numV(f.total_s)-numV(f.monto_detraccion))}</td>
                       <td style={{...td,whiteSpace:"nowrap",textAlign:"right"}}>
-                        <button onClick={()=>recordatorio(f)} title="Enviar recordatorio por WhatsApp" style={{ background:"#ECFDF5", border:"1px solid #A7F3D0", color:"#047857", borderRadius:8, padding:"5px 10px", fontSize:12, cursor:"pointer", marginRight:6 }}>💬 Recordar</button>
-                        <button onClick={()=>setModalPago(f)} style={{ background:B.gold, border:"none", color:B.navy, borderRadius:8, padding:"5px 10px", fontSize:12, fontWeight:700, cursor:"pointer" }}>Marcar pagada</button>
+                        <button onClick={()=>recordatorio(f)} title="Enviar recordatorio por WhatsApp" className="bz-btn-sec" style={{ background:B.white, border:`1px solid ${B.border}`, color:B.textPri, borderRadius:8, padding:"5px 10px", fontSize:12, fontWeight:600, cursor:"pointer", marginRight:6, display:"inline-flex", alignItems:"center", gap:5, verticalAlign:"middle" }}><Ico n="phone" size={13} color="#047857"/> Recordar</button>
+                        <button className="bz-btn-sec" onClick={()=>setModalPago(f)} style={{ background:B.white, border:`1px solid ${B.border}`, color:"#047857", borderRadius:8, padding:"5px 10px", fontSize:12, fontWeight:600, cursor:"pointer" }}>Registrar pago</button>
                       </td>
                     </tr>);
                 })}</tbody>
@@ -5770,12 +5778,12 @@ function FlotaDocs({ unidades, repartidores, toast, onIr }) {
     setConfirmDel(null);
   };
 
-  const th = { textAlign:"left", padding:"10px 12px", fontSize:11, color:B.textSec, textTransform:"uppercase", letterSpacing:".6px", borderBottom:`1px solid ${B.border}`, whiteSpace:"nowrap" };
-  const td = { padding:"10px 12px", fontSize:13, borderBottom:`1px solid ${B.border}`, verticalAlign:"middle" };
+  const th = { textAlign:"left", padding:"10px 14px", fontSize:11, fontWeight:700, color:B.textSec, background:"#F6F9FC", letterSpacing:".3px", borderBottom:"1px solid #E3EAF2", whiteSpace:"nowrap" };
+  const td = { padding:"12px 14px", fontSize:13, borderBottom:"1px solid #E3EAF2", verticalAlign:"middle" };
   const Pill = ({ e, onClick }) => (
     <button onClick={onClick} style={{ background:e.bg, color:e.color, border:`1px solid ${e.color}33`, borderRadius:20, padding:"3px 10px", fontSize:11, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>{e.txt}</button>
   );
-  const card = { background:B.white, border:`1px solid ${B.border}`, borderRadius:12, boxShadow:"0 2px 8px #0D1E3D0A" };
+  const card = CARD;
 
   return (
     <div>
@@ -5820,8 +5828,8 @@ function FlotaDocs({ unidades, repartidores, toast, onIr }) {
                 <tr key={d.id}><td style={td}>{d.tipo}</td><td style={td}>{d.numero||"—"}</td><td style={td}>{fmt.fecha(d.fecha_vencimiento)}</td>
                   <td style={{...td,textAlign:"right",whiteSpace:"nowrap"}}>
                     {d.archivo_url && <a href={d.archivo_url} target="_blank" rel="noreferrer" style={{ fontSize:12, color:B.blue, marginRight:10 }}>📎 Ver</a>}
-                    <button onClick={()=>{setVerHist(null);editar(d);}} style={{ background:"none", border:"none", cursor:"pointer" }}>✏️</button>
-                    <button onClick={()=>setConfirmDel(d)} style={{ background:"none", border:"none", cursor:"pointer" }}>🗑️</button></td></tr>))}</tbody>
+                    <BtnIco n="edit" title="Editar" onClick={()=>{setVerHist(null);editar(d);}}/>
+                    <BtnIco n="trash" title="Eliminar" color="#B91C1C" onClick={()=>setConfirmDel(d)}/></td></tr>))}</tbody>
             </table>
             {docs.filter(d=>(d.placa||"").toUpperCase()===verHist).length===0 && <div style={{ padding:20, textAlign:"center", color:B.textMut, fontSize:13 }}>Sin documentos registrados</div>}
             <div style={{ marginTop:14, textAlign:"right" }}><BtnPri onClick={()=>{const p=verHist;setVerHist(null);nuevo(p);}}>+ Documento</BtnPri></div>
@@ -5986,10 +5994,10 @@ function Rentabilidad({ pedidos, empresas, repartidores, unidades, asignaciones,
     XLSX.writeFile(wb, `rentabilidad_boaz_${desde}_a_${hasta}.xlsx`);
   };
 
-  const card = { background:B.white, border:`1px solid ${B.border}`, borderRadius:12, boxShadow:"0 2px 8px #0D1E3D0A" };
-  const th = { textAlign:"right", padding:"10px 12px", fontSize:11, color:B.textSec, textTransform:"uppercase", letterSpacing:".6px", borderBottom:`1px solid ${B.border}`, whiteSpace:"nowrap" };
-  const td = { padding:"10px 12px", fontSize:13, borderBottom:`1px solid ${B.border}`, textAlign:"right" };
-  const Kpi = ({ t, v, c, s }) => (<div style={{ ...card, padding:"14px 16px", flex:"1 1 170px", borderTop:`3px solid ${c}` }}><div style={{ fontSize:11, color:B.textSec, fontWeight:700, textTransform:"uppercase", letterSpacing:".6px" }}>{t}</div><div style={{ fontSize:21, fontWeight:800, color:c, marginTop:4 }}>{v}</div>{s && <div style={{ fontSize:11, color:B.textMut }}>{s}</div>}</div>);
+  const card = CARD;
+  const th = { textAlign:"right", padding:"10px 14px", fontSize:11, fontWeight:700, color:B.textSec, background:"#F6F9FC", letterSpacing:".3px", borderBottom:"1px solid #E3EAF2", whiteSpace:"nowrap" };
+  const td = { padding:"12px 14px", fontSize:13, borderBottom:"1px solid #E3EAF2", textAlign:"right" };
+  const Kpi = kpiMini;
 
   return (
     <div>
@@ -5997,7 +6005,7 @@ function Rentabilidad({ pedidos, empresas, repartidores, unidades, asignaciones,
         <div><label style={lbl}>Desde</label><input type="date" style={{...inp,width:150}} value={desde} onChange={e=>setDesde(e.target.value)}/></div>
         <div><label style={lbl}>Hasta</label><input type="date" style={{...inp,width:150}} value={hasta} onChange={e=>setHasta(e.target.value)}/></div>
         <BtnSec onClick={()=>mes(0)}>Este mes</BtnSec><BtnSec onClick={()=>mes(-1)}>Mes anterior</BtnSec>
-        <div style={{ marginLeft:"auto" }}><BtnSec onClick={exportar}>⬇ Excel</BtnSec></div>
+        <div style={{ marginLeft:"auto" }}><BtnSec onClick={exportar}><Ico n="download" size={15}/> Excel</BtnSec></div>
       </div>
 
       <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:14 }}>
@@ -6061,7 +6069,7 @@ function DirectorioPersonas({ personal, terceros, repartidores }) {
   const q = busq.trim().toLowerCase();
   const vis = filas.filter(f => (!soloDup || f.dup) && (!q || `${f.nombre} ${f.doc} ${f.rol}`.toLowerCase().includes(q)));
   const colores = { Planilla:[B.navy,"#E8EEF7"], Tercero:["#7C3AED","#F3EEFF"], Repartidor:[B.goldDk,"#FFF4E5"] };
-  const td = { padding:"9px 12px", fontSize:13, borderBottom:`1px solid ${B.border}` };
+  const td = { padding:"12px 14px", fontSize:13, borderBottom:"1px solid #E3EAF2" };
   return (
     <div>
       <div style={{ fontSize:12, color:B.textSec, marginBottom:12 }}>Vista unificada de todas las personas del sistema: planilla, terceros y repartidores. Detecta a quien está registrado en más de un lugar por su DNI o RUC.</div>
@@ -6165,10 +6173,10 @@ function Incidencias({ pedidos, empresas, repartidores, usuario, toast }) {
     toast("Incidencia guardada ✓"); setForm(null); cargar();
   };
 
-  const card = { background:B.white, border:`1px solid ${B.border}`, borderRadius:12, boxShadow:"0 2px 8px #0D1E3D0A" };
-  const th = { textAlign:"left", padding:"10px 12px", fontSize:11, color:B.textSec, textTransform:"uppercase", letterSpacing:".6px", borderBottom:`1px solid ${B.border}`, whiteSpace:"nowrap" };
-  const td = { padding:"10px 12px", fontSize:13, borderBottom:`1px solid ${B.border}`, verticalAlign:"top" };
-  const Kpi = ({ t, v, c, s }) => (<div style={{ ...card, padding:"12px 16px", flex:"1 1 150px", borderTop:`3px solid ${c}` }}><div style={{ fontSize:11, color:B.textSec, fontWeight:700, textTransform:"uppercase" }}>{t}</div><div style={{ fontSize:22, fontWeight:800, color:c, marginTop:2 }}>{v}</div>{s && <div style={{ fontSize:11, color:B.textMut }}>{s}</div>}</div>);
+  const card = CARD;
+  const th = { textAlign:"left", padding:"10px 14px", fontSize:11, fontWeight:700, color:B.textSec, background:"#F6F9FC", letterSpacing:".3px", borderBottom:"1px solid #E3EAF2", whiteSpace:"nowrap" };
+  const td = { padding:"12px 14px", fontSize:13, borderBottom:"1px solid #E3EAF2", verticalAlign:"top" };
+  const Kpi = kpiMini;
 
   return (
     <div>
@@ -6328,15 +6336,15 @@ function UsuariosAuditoria({ usuario, navModulos, onPermisosCambio, toast }) {
   const fmtVal = (v) => v==null ? "∅" : typeof v==="object" ? JSON.stringify(v).slice(0,24) : String(v).slice(0,28);
   const audFilt = audit.filter(a => { const q = fBusq.trim().toLowerCase(); return !q || `${nombreDe(a)} ${ETIQ_TABLA[a.tabla]||a.tabla} ${resumen(a)}`.toLowerCase().includes(q); });
 
-  const card = { background:B.white, border:`1px solid ${B.border}`, borderRadius:12, boxShadow:"0 2px 8px #0D1E3D0A" };
-  const th = { textAlign:"left", padding:"10px 12px", fontSize:11, color:B.textSec, textTransform:"uppercase", letterSpacing:".6px", borderBottom:`1px solid ${B.border}`, whiteSpace:"nowrap" };
-  const td = { padding:"10px 12px", fontSize:13, borderBottom:`1px solid ${B.border}`, verticalAlign:"top" };
-  const TabBtn = ({ id, children }) => (<button onClick={()=>setTab(id)} style={{ padding:"8px 16px", borderRadius:8, border:"none", cursor:"pointer", fontSize:13, fontWeight:700, background:tab===id?B.navy:"transparent", color:tab===id?"#fff":B.textSec }}>{children}</button>);
+  const card = CARD;
+  const th = { textAlign:"left", padding:"10px 14px", fontSize:11, fontWeight:700, color:B.textSec, background:"#F6F9FC", letterSpacing:".3px", borderBottom:"1px solid #E3EAF2", whiteSpace:"nowrap" };
+  const td = { padding:"12px 14px", fontSize:13, borderBottom:"1px solid #E3EAF2", verticalAlign:"top" };
+  const TabBtn = ({ id, children }) => (<button onClick={()=>setTab(id)} style={TAB_SEG(tab===id)}>{children}</button>);
 
   return (
     <div>
-      <div style={{ display:"flex", gap:6, marginBottom:14 }}>
-        <TabBtn id="usuarios">Usuarios{pendientes.length>0 && <span style={{ marginLeft:8, background:B.red, color:"#fff", fontSize:10, padding:"1px 7px", borderRadius:10 }}>{pendientes.length}</span>}</TabBtn>
+      <div style={{ ...TAB_CONT, marginBottom:14 }}>
+        <TabBtn id="usuarios">Usuarios{pendientes.length>0 && <span style={{ background:"#FEE2E2", color:"#B91C1C", fontSize:11, fontWeight:700, padding:"1px 7px", borderRadius:10 }}>{pendientes.length}</span>}</TabBtn>
         <TabBtn id="roles">Roles y permisos</TabBtn><TabBtn id="auditoria">Auditoría</TabBtn>
       </div>
 
@@ -6587,39 +6595,31 @@ function Gastos({ unidades, repartidores, toast, usuario }) {
     XLSX.writeFile(wb, `gastos_boaz_${desde}_a_${hasta}.xlsx`);
   };
 
-  const Kpi = ({ t, v, c }) => (
-    <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:"14px 16px", flex:"1 1 150px" }}>
-      <div style={{ fontSize:11, color:B.textSec, fontWeight:700, textTransform:"uppercase", letterSpacing:".6px" }}>{t}</div>
-      <div style={{ fontSize:20, fontWeight:800, color:c||B.textPri, marginTop:4 }}>{v}</div>
-    </div>
-  );
+  const Kpi = kpiMini;
   const TabBtn = ({ id, children }) => (
-    <button onClick={()=>setTab(id)} style={{ padding:"8px 16px", borderRadius:8, border:"none", cursor:"pointer", fontSize:13, fontWeight:700,
-      background: tab===id ? B.navy : "transparent", color: tab===id ? "#fff" : B.textSec }}>{children}</button>
+    <button onClick={()=>setTab(id)} style={TAB_SEG(tab===id)}>{children}</button>
   );
+  const pgMov = usePaginacion(filtrados, 25, "movimientos");
   const esComb = form && form.tipo==="egreso" && form.categoria==="Combustible";
   const esMant = form && form.tipo==="egreso" && ["Mantenimiento","Reparación"].includes(form.categoria);
-  const th = { textAlign:"left", padding:"10px 12px", fontSize:11, color:B.textSec, textTransform:"uppercase", letterSpacing:".6px", borderBottom:`1px solid ${B.border}`, whiteSpace:"nowrap" };
-  const td = { padding:"10px 12px", fontSize:13, borderBottom:`1px solid ${B.border}`, color:B.textPri, verticalAlign:"top" };
+  const th = { textAlign:"left", padding:"10px 14px", fontSize:11, fontWeight:700, color:B.textSec, background:"#F6F9FC", letterSpacing:".3px", borderBottom:"1px solid #E3EAF2", whiteSpace:"nowrap" };
+  const td = { padding:"12px 14px", fontSize:13, borderBottom:"1px solid #E3EAF2", color:B.textPri, verticalAlign:"top" };
 
   return (
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:16 }}>
-        <div>
-          <div style={{ fontSize:22, fontWeight:800, color:B.navy }}>💸 Control de gastos e ingresos</div>
-          <div style={{ fontSize:12, color:B.textSec }}>Combustible, mantenimiento, reparaciones y otros movimientos. Los ingresos por facturas se suman automáticamente.</div>
-        </div>
+        <div style={{ fontSize:13, color:B.textSec, maxWidth:620 }}>Combustible, mantenimiento, reparaciones y otros movimientos. Los ingresos por facturas se suman automáticamente.</div>
         <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-          <BtnSec onClick={exportar}>⬇ Excel</BtnSec>
-          <BtnSec onClick={()=>nuevo("ingreso")}>+ Ingreso</BtnSec>
-          <BtnPri onClick={()=>nuevo("egreso")}>+ Gasto</BtnPri>
+          <BtnSec onClick={exportar}><Ico n="download" size={15}/> Excel</BtnSec>
+          <BtnSec onClick={()=>nuevo("ingreso")}><Ico n="plus" size={15}/> Ingreso</BtnSec>
+          <BtnPri onClick={()=>nuevo("egreso")}><Ico n="plus" size={15} sw={2.4}/> Registrar gasto</BtnPri>
         </div>
       </div>
 
       {alertas.length>0 && (
         <div style={{ background:"#FFF7ED", border:"1px solid #FDBA74", borderRadius:12, padding:"10px 14px", marginBottom:14 }}>
-          <div style={{ fontWeight:800, fontSize:13, color:"#9A3412", marginBottom:4 }}>🔧 Alertas de mantenimiento</div>
-          {alertas.map((a,i)=><div key={i} style={{ fontSize:13, color:a.rojo?B.red:"#9A3412" }}>• <b>{a.placa}</b>: {a.msg}</div>)}
+          <div style={{ fontWeight:700, fontSize:13, color:"#9A3412", marginBottom:4, display:"flex", alignItems:"center", gap:7 }}><Ico n="wrench" size={15}/> Alertas de mantenimiento</div>
+          {alertas.map((a,i)=><div key={i} style={{ fontSize:13, color:a.rojo?"#B91C1C":"#9A3412", paddingLeft:22 }}><b>{a.placa}</b>: {a.msg}</div>)}
         </div>
       )}
 
@@ -6636,39 +6636,39 @@ function Gastos({ unidades, repartidores, toast, usuario }) {
       </div>
 
       <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginBottom:16 }}>
-        <Kpi t="Ingresos" v={solN(ingresos)} c={B.green}/>
-        <Kpi t="Egresos" v={solN(egresos)} c={B.red}/>
-        <Kpi t="Resultado" v={solN(ingresos-egresos)} c={ingresos-egresos>=0?B.green:B.red}/>
-        <Kpi t="Combustible" v={solN(combustible)}/>
-        <Kpi t="Mant. y reparaciones" v={solN(mant)}/>
+        <Kpi i="trend" t="Ingresos" v={solN(ingresos)} c={B.green}/>
+        <Kpi i="banknote" t="Egresos" v={solN(egresos)} c={B.red}/>
+        <Kpi i="chart" t="Resultado" v={solN(ingresos-egresos)} c={ingresos-egresos>=0?B.green:B.red}/>
+        <Kpi i="truck" t="Combustible" v={solN(combustible)}/>
+        <Kpi i="wrench" t="Mantenimiento y reparaciones" v={solN(mant)}/>
       </div>
 
-      <div style={{ display:"flex", gap:6, marginBottom:12 }}>
+      <div style={{ ...TAB_CONT, marginBottom:12 }}>
         <TabBtn id="mov">Movimientos</TabBtn><TabBtn id="veh">Por vehículo</TabBtn><TabBtn id="cat">Por categoría</TabBtn>
       </div>
 
-      <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflowX:"auto" }}>
-        {cargando ? <div style={{ padding:30, textAlign:"center", color:B.textSec }}>Cargando…</div> :
+      <div style={{ ...CARD, overflow:"hidden" }}>
+        {cargando ? <Cargando filas={5}/> :
         tab==="mov" ? (
-          filtrados.length===0 ? <div style={{ padding:30, textAlign:"center", color:B.textSec }}>Sin movimientos en este período.</div> :
-          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+          filtrados.length===0 ? <EstadoVacio icono="banknote" titulo="Sin movimientos en este período" texto="Cambia las fechas o los filtros, o registra un gasto."/> :
+          <><div style={{ overflowX:"auto" }}><table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead><tr><th style={th}>Fecha</th><th style={th}>Categoría</th><th style={th}>Vehículo</th><th style={th}>Detalle</th><th style={{...th,textAlign:"right"}}>Monto</th><th style={th}></th></tr></thead>
-            <tbody>{filtrados.map(g => (
+            <tbody>{pgMov.visibles.map(g => (
               <tr key={g.id}>
-                <td style={td}>{fmt.fecha(g.fecha)}</td>
-                <td style={td}><span style={{ background:g.tipo==="ingreso"?"#D1FAE5":"#FEE2E2", color:g.tipo==="ingreso"?"#065F46":"#991B1B", padding:"2px 9px", borderRadius:20, fontSize:11, fontWeight:700 }}>{g.categoria}</span></td>
+                <td style={{...td,whiteSpace:"nowrap"}}>{fmt.fecha(g.fecha)}</td>
+                <td style={td}><Etiqueta tono={g.tipo==="ingreso"?"ok":"neutro"}>{g.categoria}</Etiqueta></td>
                 <td style={td}>{g.placa||"—"}</td>
                 <td style={td}>{g.descripcion||"—"}{g.proveedor && <div style={{ fontSize:11, color:B.textSec }}>{g.proveedor}</div>}
                   {g.galones ? <div style={{ fontSize:11, color:B.textSec }}>{g.galones} gal{g.km?` · ${Number(g.km).toLocaleString()} km`:""}</div> : (g.km ? <div style={{ fontSize:11, color:B.textSec }}>{Number(g.km).toLocaleString()} km</div> : null)}
-                  {g.comprobante_url && <a href={g.comprobante_url} target="_blank" rel="noreferrer" style={{ fontSize:11, color:B.blue }}>📎 comprobante</a>}</td>
-                <td style={{...td,textAlign:"right",fontWeight:800,color:g.tipo==="ingreso"?B.green:B.red,whiteSpace:"nowrap"}}>{g.tipo==="ingreso"?"+":"−"} {solN(parseFloat(g.monto))}</td>
+                  {g.comprobante_url && <a href={g.comprobante_url} target="_blank" rel="noreferrer" style={{ fontSize:12, color:B.blue, display:"block" }}>Ver comprobante</a>}</td>
+                <td style={{...td,textAlign:"right",fontWeight:700,color:g.tipo==="ingreso"?"#047857":"#B91C1C",whiteSpace:"nowrap"}}>{g.tipo==="ingreso"?"+":"−"} {solN(parseFloat(g.monto))}</td>
                 <td style={{...td,whiteSpace:"nowrap"}}>{g.auto ? <span style={{ fontSize:11, color:B.textMut }}>automático</span> : <>
-                  <button onClick={()=>editar(g)} style={{ background:"none", border:"none", cursor:"pointer", fontSize:15 }} title="Editar">✏️</button>
-                  <button onClick={()=>setConfirmDel(g)} style={{ background:"none", border:"none", cursor:"pointer", fontSize:15 }} title="Eliminar">🗑️</button></>}</td>
+                  <BtnIco n="edit" title="Editar" onClick={()=>editar(g)}/>
+                  <BtnIco n="trash" title="Eliminar" color="#B91C1C" onClick={()=>setConfirmDel(g)}/></>}</td>
               </tr>))}</tbody>
-          </table>
+          </table></div>{pgMov.pie}</>
         ) : tab==="veh" ? (
-          porVehiculo.length===0 ? <div style={{ padding:30, textAlign:"center", color:B.textSec }}>Registra gastos con placa para ver el costo por vehículo.</div> :
+          porVehiculo.length===0 ? <EstadoVacio icono="truck" titulo="Aún no hay costos por vehículo" texto="Registra gastos indicando la placa para ver el costo de cada unidad."/> :
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead><tr><th style={th}>Placa</th>{["Combustible","Mantenimiento","Otros","Total","Galones","Km recorr.","Costo/km"].map(h=><th key={h} style={{...th,textAlign:"right"}}>{h}</th>)}</tr></thead>
             <tbody>{porVehiculo.map(v=>(
@@ -6679,7 +6679,7 @@ function Gastos({ unidades, repartidores, toast, usuario }) {
                 <td style={{...td,textAlign:"right"}}>{v.ckm?`S/ ${v.ckm.toFixed(2)}`:"—"}</td></tr>))}</tbody>
           </table>
         ) : (
-          porCategoria.length===0 ? <div style={{ padding:30, textAlign:"center", color:B.textSec }}>Sin egresos en el período.</div> :
+          porCategoria.length===0 ? <EstadoVacio icono="chart" titulo="Sin egresos en el período"/> :
           <div style={{ padding:16 }}>{porCategoria.map(([c,v])=>(
             <div key={c} style={{ marginBottom:12 }}>
               <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, marginBottom:4 }}><span style={{ fontWeight:700 }}>{c}</span><span>{solN(v)} · {egresos?Math.round(v/egresos*100):0}%</span></div>
@@ -6715,7 +6715,7 @@ function Gastos({ unidades, repartidores, toast, usuario }) {
               <div style={{ gridColumn:"1/-1" }}><label style={lbl}>Foto / PDF del comprobante</label>
                 <input type="file" accept="image/*,application/pdf" onChange={e=>subirComprobante(e.target.files[0])} style={{ fontSize:12 }}/>
                 {subiendo && <span style={{ fontSize:12, color:B.textSec }}> Subiendo…</span>}
-                {form.comprobante_url && <div><a href={form.comprobante_url} target="_blank" rel="noreferrer" style={{ fontSize:12, color:B.blue }}>📎 Ver comprobante adjunto</a></div>}</div>
+                {form.comprobante_url && <div><a href={form.comprobante_url} target="_blank" rel="noreferrer" style={{ fontSize:12, color:B.blue }}>Ver comprobante adjunto</a></div>}</div>
               <div style={{ gridColumn:"1/-1" }}><label style={lbl}>Notas</label><textarea style={{...inp,minHeight:50}} value={form.notas} onChange={e=>set("notas",e.target.value)}/></div>
             </div>
             <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:18 }}>
@@ -6832,7 +6832,7 @@ function Planilla({ toast, repartidores=[] }) {
                           <button onClick={()=>setModalPago({ tipo:"planilla", registro:p })}
                             style={{ fontSize:11, color:B.green, background:"none", border:"none", cursor:"pointer", fontWeight:700 }}>💰 Registrar pago</button>
                           <button onClick={()=>{setEditandoPersonal(p); setModalPersonal(true);}}
-                            style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer" }}>✏️ Editar</button>
+                            style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer" }}><Ico n="edit" size={13} style={{ display:"inline-block", verticalAlign:"-2px", marginRight:5 }}/>Editar</button>
                         </div>
                       </td>
                     </tr>
@@ -6903,7 +6903,7 @@ function Planilla({ toast, repartidores=[] }) {
                         <button onClick={()=>setModalPago({ tipo:"tercero", registro:t })}
                           style={{ fontSize:11, color:B.green, background:"none", border:"none", cursor:"pointer", fontWeight:700 }}>💰 Registrar pago</button>
                         <button onClick={()=>{setEditandoTercero(t); setModalTercero(true);}}
-                          style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer" }}>✏️ Editar</button>
+                          style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer" }}><Ico n="edit" size={13} style={{ display:"inline-block", verticalAlign:"-2px", marginRight:5 }}/>Editar</button>
                       </div>
                     </td>
                   </tr>
@@ -7655,7 +7655,7 @@ function Inventario({ empresas, toast }) {
                       </td>
                       <td style={{ padding:"9px 12px" }}>
                         <button onClick={()=>{setEditandoProducto(v.producto); setModalProducto(true);}}
-                          style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer" }}>✏️ Editar</button>
+                          style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer" }}><Ico n="edit" size={13} style={{ display:"inline-block", verticalAlign:"-2px", marginRight:5 }}/>Editar</button>
                       </td>
                     </tr>
                   );
@@ -9252,7 +9252,7 @@ function Catalogo({ lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVe
           <div style={{ fontSize:14, fontWeight:800, color:B.navy }}>💰 Tarifario estándar por pedido</div>
           <button onClick={()=>setModalTarifarioEstandar(true)}
             style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer", fontWeight:700 }}>
-            ✏️ Editar
+            <Ico n="edit" size={13} style={{ display:"inline-block", verticalAlign:"-2px", marginRight:5 }}/>Editar
           </button>
         </div>
         <div style={{ display:"flex", gap:6, marginBottom:12 }}>
@@ -9309,7 +9309,7 @@ function Catalogo({ lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVe
           <div style={{ fontSize:14, fontWeight:800, color:B.navy }}>🚛 Tarifario estándar por unidad</div>
           <button onClick={()=>setModalTarifarioVehiculoEstandar(true)}
             style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer", fontWeight:700 }}>
-            ✏️ Editar
+            <Ico n="edit" size={13} style={{ display:"inline-block", verticalAlign:"-2px", marginRight:5 }}/>Editar
           </button>
         </div>
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
@@ -9350,7 +9350,7 @@ function Catalogo({ lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVe
       <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:20, boxShadow:"0 2px 8px #0D1E3D0A", gridColumn:"span 2" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>
           <div style={{ fontSize:14, fontWeight:800, color:B.navy }}>🧭 Tarifario estándar por viaje</div>
-          <button onClick={()=>setModalViajeEstandar(true)} style={{ fontSize:11, color:B.blue, background:"none", border:`1px solid ${B.border}`, borderRadius:8, padding:"5px 12px", cursor:"pointer", fontWeight:700 }}>✏️ Editar</button>
+          <button onClick={()=>setModalViajeEstandar(true)} style={{ fontSize:11, color:B.blue, background:"none", border:`1px solid ${B.border}`, borderRadius:8, padding:"5px 12px", cursor:"pointer", fontWeight:700 }}><Ico n="edit" size={13} style={{ display:"inline-block", verticalAlign:"-2px", marginRight:5 }}/>Editar</button>
         </div>
         {tarifarioViajeEstandar.filter(t=>t.activo).length===0 ? (
           <div style={{ fontSize:12, color:B.textMut }}>Sin tarifas estándar aún. Es la propuesta base para clientes que se cobran por viaje o por recojo (ruta o concepto, vehículo y precio).</div>
