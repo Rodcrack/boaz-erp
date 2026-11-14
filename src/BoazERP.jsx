@@ -24,7 +24,7 @@ const B = {
   border:   "#D1DCE8",
   textPri:  "#0D1E3D",
   textSec:  "#4A6080",
-  textMut:  "#8FA3BA",
+  textMut:  "#6F849E",
   green:    "#10B981",
   red:      "#EF4444",
   orange:   "#F97316",
@@ -39,11 +39,11 @@ const fmt = {
     // en hora local en vez de UTC — si no, JS la corre un día hacia atrás en
     // zonas horarias negativas como Perú (UTC-5).
     const str = typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d+"T00:00:00" : d;
-    return new Date(str).toLocaleDateString("es-PE");
+    return new Date(str).toLocaleDateString("es-PE",{day:"2-digit",month:"2-digit",year:"numeric"});
   },
   hora:  (d) => d ? new Date(d).toLocaleTimeString("es-PE", {hour:"2-digit",minute:"2-digit"}) : "—",
   fechaHora: (d) => d ? new Date(d).toLocaleString("es-PE",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}) : "—",
-  sol:   (n) => n != null ? `S/ ${parseFloat(n).toFixed(2)}` : "—",
+  sol:   (n) => n != null ? `S/ ${(parseFloat(n)||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}` : "—",
 };
 
 const ICONOS_HIST = {
@@ -168,7 +168,7 @@ function Toast({ msg, tipo, onClose }) {
       background: tipo==="error" ? B.red : tipo==="warn" ? B.orange : B.green,
       color:"#fff", padding:"14px 22px", borderRadius:12, fontWeight:600,
       fontSize:13, boxShadow:"0 8px 32px #0003", display:"flex", alignItems:"center", gap:10 }}>
-      <span>{tipo==="error"?"❌":tipo==="warn"?"⚠️":"✅"}</span> {msg}
+      <Ico n={tipo==="error"?"xcircle":tipo==="warn"?"alert":"check"} size={18} color="#fff"/> {msg}
     </div>
   );
 }
@@ -200,18 +200,20 @@ const lbl = { fontSize:11, color:B.textSec, fontWeight:700,
   textTransform:"uppercase", letterSpacing:"0.7px", marginBottom:4, display:"block" };
 const BtnPri = ({ children, onClick, disabled, style={} }) => (
   <button onClick={onClick} disabled={disabled}
-    style={{ background:`linear-gradient(135deg,${B.gold},${B.goldDk})`,
-      border:"none", color:B.navy, padding:"9px 20px", borderRadius:8,
-      cursor: disabled?"not-allowed":"pointer", fontSize:13, fontWeight:800,
-      opacity: disabled?0.6:1, letterSpacing:"0.3px", ...style }}>
+    className="bz-btn-pri" style={{ background:"#D46A08",
+      border:"none", color:"#fff", padding:"9px 16px", borderRadius:8,
+      cursor: disabled?"not-allowed":"pointer", fontSize:13, fontWeight:700,
+      opacity: disabled?0.6:1, display:"inline-flex", alignItems:"center", justifyContent:"center", gap:7,
+      whiteSpace:"nowrap", ...style }}>
     {children}
   </button>
 );
 const BtnSec = ({ children, onClick, style={} }) => (
   <button onClick={onClick}
-    style={{ background:"transparent", border:`1px solid ${B.border}`,
-      color:B.textSec, padding:"8px 18px", borderRadius:8,
-      cursor:"pointer", fontSize:13, ...style }}>
+    className="bz-btn-sec" style={{ background:B.white, border:`1px solid ${B.border}`,
+      color:B.textPri, padding:"8px 14px", borderRadius:8, fontWeight:600,
+      cursor:"pointer", fontSize:13, display:"inline-flex", alignItems:"center", justifyContent:"center", gap:7,
+      whiteSpace:"nowrap", ...style }}>
     {children}
   </button>
 );
@@ -252,6 +254,19 @@ const ICONOS = {
   x:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   arrow:'<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
   shield:'<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
+  xcircle:'<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>',
+  edit:'<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>',
+  trash:'<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6"/><path d="M14 11v6"/>',
+  upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>',
+  download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
+  pin:'<path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/>',
+  plus:'<path d="M5 12h14"/><path d="M12 5v14"/>',
+  eye:'<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>',
+  chevleft:'<path d="m15 18-6-6 6-6"/>',
+  chevright:'<path d="m9 18 6-6-6-6"/>',
+  chevup:'<path d="m18 15-6-6-6 6"/>',
+  clock:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  sparkles:'<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>',
   inbox:'<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
 };
 const diaLocal = (d=new Date()) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
@@ -313,6 +328,12 @@ if (typeof document !== "undefined" && !document.getElementById("bz-css")) {
       }
       @media (max-width:900px) { .bz-mapa-grid { grid-template-columns:1fr !important; } .bz-oculta-movil { display:none !important; } }
       .bz-overlay-nav { position:fixed; inset:0; background:#0D1E3D88; z-index:40; }
+      .bz-btn-pri { transition:background .12s, box-shadow .12s; } .bz-btn-pri:hover:not(:disabled) { background:#B95C07 !important; box-shadow:0 2px 8px #E8780A44; }
+      .bz-btn-sec { transition:background .12s, border-color .12s; } .bz-btn-sec:hover { background:#F0F4F8 !important; border-color:#B4C4D6 !important; }
+      .bz-btnico { transition:background .12s, color .12s; } .bz-btnico:hover { background:#E6EDF5 !important; color:#0D1E3D !important; }
+      .bz-th-orden:hover { color:#0D1E3D !important; }
+      button:focus-visible, a:focus-visible { outline:2px solid #E8780A; outline-offset:2px; }
+      .bz-tabla td, .bz-tabla th { border-bottom:1px solid #E3EAF2; } .bz-tabla tbody tr:last-child td { border-bottom:none; }
       .bz-card-hover { transition:box-shadow .15s, transform .15s; } .bz-card-hover:hover { box-shadow:0 8px 24px #0D1E3D1A !important; transform:translateY(-1px); }
     `;
     document.head.appendChild(st);
@@ -339,6 +360,144 @@ function EstadoVacio({ icono="inbox", titulo, texto, children }) {
       {children && <div style={{ marginTop:14 }}>{children}</div>}
     </div>
   );
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// SISTEMA DE DISEÑO v2: piezas únicas que usan todos los módulos
+// ══════════════════════════════════════════════════════════════
+const CARD = { background:B.white, border:`1px solid ${B.border}`, borderRadius:12, boxShadow:"0 1px 2px #0D1E3D0D" };
+const TD  = { padding:"12px 14px", fontSize:13, color:B.textPri, verticalAlign:"middle" };
+const TDN = { ...TD, textAlign:"right", whiteSpace:"nowrap" };   // celdas numéricas: a la derecha, sin partir
+const TDS = { ...TD, color:B.textSec };
+
+// Cerrar la ventana emergente superior con la tecla Esc (vale para todas las ventanas del ERP)
+if (typeof document !== "undefined" && !window.__bzEsc) {
+  window.__bzEsc = true;
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    const capas = [...document.querySelectorAll('div[style*="inset: 0"]')].filter(d => d.style.position==="fixed");
+    const capa = capas[capas.length-1];
+    if (!capa) return;
+    const cerrar = [...capa.querySelectorAll("button")].find(b => b.textContent.trim()==="✕" || b.getAttribute("aria-label")==="Cerrar");
+    if (cerrar) { e.preventDefault(); cerrar.click(); }
+  });
+}
+
+// Tarjeta de indicador (única para todo el ERP)
+function Kpi({ icon, label, valor, sub, color=B.navy, delta, deltaTxt="", invertir=false, serie }) {
+  const bueno = delta==null ? null : (invertir ? delta<=0 : delta>=0);
+  return (
+    <div className="bz-card-hover" style={{ ...CARD, padding:"16px 18px", minWidth:0 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
+        {icon && <div style={{ width:28, height:28, borderRadius:8, background:`${color}14`, color, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><Ico n={icon} size={16}/></div>}
+        <div style={{ fontSize:12, fontWeight:600, color:B.textSec, flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={label}>{label}</div>
+        {delta!=null && <span style={{ fontSize:11, fontWeight:700, padding:"2px 7px", borderRadius:8, whiteSpace:"nowrap", background: bueno?"#ECFDF5":"#FEF2F2", color: bueno?"#047857":"#B91C1C" }}>{delta>=0?"▲":"▼"} {Math.abs(delta)}%{deltaTxt}</span>}
+      </div>
+      <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", gap:8 }}>
+        <div style={{ fontSize:24, fontWeight:800, color:B.textPri, lineHeight:1.1, whiteSpace:"nowrap" }}>{valor}</div>
+        {serie && <Sparkline datos={serie} color={color}/>}
+      </div>
+      {sub && <div style={{ fontSize:12, color:B.textSec, marginTop:6 }}>{sub}</div>}
+    </div>
+  );
+}
+
+// Pestañas: tipo "linea" (secciones de una pantalla) o "segmento" (filtros de una lista)
+function Tabs({ tabs, valor, onChange, tipo="segmento", style }) {
+  if (tipo==="linea") return (
+    <div style={{ display:"flex", gap:4, borderBottom:`1px solid ${B.border}`, overflowX:"auto", ...style }}>
+      {tabs.map(t => { const on = valor===t.id; return (
+        <button key={t.id} onClick={()=>onChange(t.id)}
+          style={{ display:"flex", alignItems:"center", gap:7, padding:"10px 14px", background:"none", border:"none", cursor:"pointer", whiteSpace:"nowrap",
+            fontSize:13, fontWeight:on?700:500, color:on?B.navy:B.textSec, borderBottom:`2px solid ${on?B.gold:"transparent"}`, marginBottom:-1 }}>
+          {t.i && <Ico n={t.i} size={16} color={on?B.gold:B.textMut}/>}{t.l}
+          {t.n!=null && <span style={{ fontSize:11, fontWeight:700, padding:"1px 7px", borderRadius:10, background:on?`${B.gold}1F`:"#E6EDF5", color:on?B.goldDk:B.textSec }}>{t.n}</span>}
+        </button>); })}
+    </div>
+  );
+  return (
+    <div style={{ display:"inline-flex", gap:2, padding:3, background:"#E3EAF2", borderRadius:10, maxWidth:"100%", overflowX:"auto", ...style }}>
+      {tabs.map(t => { const on = valor===t.id; return (
+        <button key={t.id} onClick={()=>onChange(t.id)}
+          style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 12px", borderRadius:8, border:"none", cursor:"pointer", whiteSpace:"nowrap",
+            fontSize:12, fontWeight:on?700:500, background:on?B.white:"transparent", color:on?B.navy:B.textSec, boxShadow:on?"0 1px 2px #0D1E3D22":"none" }}>
+          {t.l}
+          {t.n!=null && <span style={{ fontSize:11, fontWeight:700, color:on?B.goldDk:B.textMut }}>{t.n}</span>}
+        </button>); })}
+    </div>
+  );
+}
+
+// Etiqueta de estado
+const TONOS = { ok:["#ECFDF5","#047857"], warn:["#FFF7ED","#B45309"], error:["#FEF2F2","#B91C1C"], info:["#EFF6FF","#1D4ED8"], neutro:["#F1F5F9","#475569"] };
+function Etiqueta({ tono="neutro", children }) {
+  const [bg,c] = TONOS[tono] || TONOS.neutro;
+  return <span style={{ display:"inline-flex", alignItems:"center", gap:6, background:bg, color:c, padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:700, whiteSpace:"nowrap" }}>
+    <span style={{ width:6, height:6, borderRadius:"50%", background:c }}/>{children}</span>;
+}
+
+// Botón de ícono para acciones de fila
+function BtnIco({ n, title, onClick, color=B.textSec }) {
+  return <button className="bz-btnico" onClick={onClick} title={title} aria-label={title}
+    style={{ width:30, height:30, borderRadius:8, border:"none", background:"transparent", color, cursor:"pointer", display:"inline-flex", alignItems:"center", justifyContent:"center" }}>
+    <Ico n={n} size={16}/></button>;
+}
+
+// Buscador con ícono
+function Buscador({ value, onChange, placeholder="Buscar…", width=320 }) {
+  return (
+    <div style={{ position:"relative", width, maxWidth:"100%" }}>
+      <Ico n="search" size={16} color={B.textMut} style={{ position:"absolute", left:11, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}/>
+      <input value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} aria-label={placeholder}
+        style={{ ...inp, background:B.white, paddingLeft:34 }}/>
+    </div>
+  );
+}
+
+// Encabezado de columna (con orden opcional)
+function Th({ children, col, orden, onOrden, align="left", style }) {
+  const on = col && orden && orden.col===col;
+  return (
+    <th onClick={()=>col && onOrden && onOrden(col)} className={col?"bz-th-orden":undefined}
+      style={{ padding:"10px 14px", textAlign:align, fontSize:11, fontWeight:700, color:on?B.navy:B.textSec, background:"#F6F9FC",
+        letterSpacing:"0.3px", whiteSpace:"nowrap", userSelect:"none", cursor:col?"pointer":"default", ...style }}>
+      <span style={{ display:"inline-flex", alignItems:"center", gap:4 }}>
+        {children}
+        {col && <Ico n={on && orden.dir==="desc" ? "chevdown" : "chevup"} size={12} sw={2.4} style={{ opacity:on?1:0.25 }}/>}
+      </span>
+    </th>
+  );
+}
+
+// Paginación: devuelve las filas visibles y el pie listo para poner bajo la tabla
+function usePaginacion(filas, tamInicial=25, nombre="registros") {
+  const [pag, setPag] = useState(1);
+  const [tam, setTam] = useState(tamInicial);
+  const total = filas.length, paginas = Math.max(1, Math.ceil(total/tam)), p = Math.min(pag, paginas);
+  const visibles = filas.slice((p-1)*tam, p*tam);
+  const btn = (dis) => ({ width:30, height:30, borderRadius:8, border:`1px solid ${B.border}`, background:B.white, color:dis?B.border:B.textPri, cursor:dis?"default":"pointer", display:"inline-flex", alignItems:"center", justifyContent:"center" });
+  const pie = (
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap", padding:"10px 14px", borderTop:`1px solid ${B.border}`, background:"#FBFCFE", fontSize:12, color:B.textSec }}>
+      <span>{total===0 ? `Sin ${nombre}` : <>Mostrando <b style={{ color:B.textPri }}>{(p-1)*tam+1}–{Math.min(p*tam,total)}</b> de <b style={{ color:B.textPri }}>{total.toLocaleString("en-US")}</b> {nombre}</>}</span>
+      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+        <span>Filas</span>
+        <select value={tam} onChange={e=>{ setTam(parseInt(e.target.value)); setPag(1); }} aria-label="Filas por página"
+          style={{ ...inp, width:"auto", padding:"5px 8px", fontSize:12, background:B.white }}>
+          {[25,50,100,200].map(n=><option key={n} value={n}>{n}</option>)}
+        </select>
+        <button style={btn(p<=1)} disabled={p<=1} onClick={()=>setPag(p-1)} aria-label="Página anterior"><Ico n="chevleft" size={15}/></button>
+        <span style={{ minWidth:64, textAlign:"center" }}>Pág. <b style={{ color:B.textPri }}>{p}</b> de {paginas}</span>
+        <button style={btn(p>=paginas)} disabled={p>=paginas} onClick={()=>setPag(p+1)} aria-label="Página siguiente"><Ico n="chevright" size={15}/></button>
+      </div>
+    </div>
+  );
+  return { visibles, pie, irA:setPag };
+}
+
+// Título de sección dentro de una pantalla
+function SeccionTitulo({ children, nota }) {
+  return <div style={{ fontSize:13, fontWeight:700, color:B.textPri, margin:"0 0 10px" }}>{children}{nota && <span style={{ fontWeight:400, color:B.textMut }}> · {nota}</span>}</div>;
 }
 
 // ── BÚSQUEDA GLOBAL (Ctrl+K) ──────────────────────────────────
@@ -497,20 +656,7 @@ function BarrasAgrupadas({ etiquetas, series, alto=190, formato=(v)=>String(Math
 
 function KpiComparado({ icon, label, valor, previo, valorFmt, serie, color, invertir=false }) {
   const delta = previo ? Math.round(((valor-previo)/previo)*100) : null;
-  const bueno = delta==null ? null : (invertir ? delta<=0 : delta>=0);
-  return (
-    <div className="bz-card-hover" style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:16, borderTop:`3px solid ${color}`, boxShadow:"0 2px 8px #0D1E3D0A" }}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-        <div style={{ width:32, height:32, borderRadius:9, background:`${color}15`, color, display:"flex", alignItems:"center", justifyContent:"center" }}><Ico n={icon} size={18}/></div>
-        {delta!=null && <span style={{ fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:8, background: bueno?"#ECFDF5":"#FEF2F2", color: bueno?B.green:B.red }}>{delta>=0?"▲":"▼"} {Math.abs(delta)}% vs mes ant.</span>}
-      </div>
-      <div style={{ fontSize:10, color:B.textMut, textTransform:"uppercase", letterSpacing:"0.8px", marginBottom:3 }}>{label}</div>
-      <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", gap:8 }}>
-        <div style={{ fontSize:22, fontWeight:800, color:B.textPri, lineHeight:1.1 }}>{valorFmt}</div>
-        <Sparkline datos={serie} color={color}/>
-      </div>
-    </div>
-  );
+  return <Kpi icon={icon} label={label} valor={valorFmt} delta={delta} invertir={invertir} serie={serie} color={color} sub={delta!=null ? "vs. mismo período del mes anterior" : null}/>;
 }
 
 const nombreMes = (d) => d.toLocaleDateString("es-PE",{month:"short"}).replace(".","");
@@ -540,12 +686,12 @@ function ComparativoMes({ pedidos }) {
   }, [pedidos]);
   return (
     <div style={{ marginBottom:20 }}>
-      <div style={{ fontSize:12, fontWeight:700, color:B.textPri, marginBottom:8 }}>Este mes vs. mismo período del mes anterior <span style={{ fontWeight:400, color:B.textMut }}>· tendencia de 30 días</span></div>
+      <SeccionTitulo nota="tendencia de 30 días">Este mes</SeccionTitulo>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14 }}>
         <KpiComparado icon="package" label="Pedidos del mes" valor={a.n} previo={b.n} valorFmt={a.n} serie={sPed} color={B.navy}/>
         <KpiComparado icon="check" label="Entregados" valor={a.ent} previo={b.ent} valorFmt={a.ent} serie={sEnt} color={B.green}/>
         <KpiComparado icon="trend" label="Efectividad" valor={a.ef} previo={b.ef} valorFmt={a.ef+"%"} serie={sEf} color={B.gold}/>
-        <KpiComparado icon="dollar" label="Ingresos est. (sin IGV)" valor={a.ing} previo={b.ing} valorFmt={fmt.sol(a.ing)} serie={sIng} color={B.goldDk}/>
+        <KpiComparado icon="dollar" label="Ingresos estimados (sin IGV)" valor={a.ing} previo={b.ing} valorFmt={fmt.sol(a.ing)} serie={sIng} color={B.goldDk}/>
       </div>
     </div>
   );
@@ -748,17 +894,8 @@ function Dashboard(props) {
   const tabs = [{ id:"operacion", l:"Operación", i:"package" }, ...(veFin?[{ id:"finanzas", l:"Finanzas", i:"dollar" }]:[]), { id:"mapa", l:"Mapa de flota", i:"map" }];
   return (
     <div>
-      <div style={{ display:"flex", gap:6, marginBottom:16, borderBottom:`1px solid ${B.border}`, overflowX:"auto" }}>
-        {tabs.map(t => (
-          <button key={t.id} onClick={()=>cambiar(t.id)}
-            style={{ display:"flex", alignItems:"center", gap:7, padding:"10px 16px", background:"none", border:"none", cursor:"pointer", whiteSpace:"nowrap",
-              fontSize:13, fontWeight:tabOk===t.id?700:500, color:tabOk===t.id?B.navy:B.textMut,
-              borderBottom:`3px solid ${tabOk===t.id?B.gold:"transparent"}`, marginBottom:-1 }}>
-            <Ico n={t.i} size={16} color={tabOk===t.id?B.gold:B.textMut}/>{t.l}
-          </button>
-        ))}
-      </div>
-      {tabOk==="operacion" && <><ComparativoMes pedidos={pedidos}/><DashboardOperacion {...props}/></>}
+      <Tabs tipo="linea" tabs={tabs} valor={tabOk} onChange={cambiar} style={{ marginBottom:18 }}/>
+      {tabOk==="operacion" && <DashboardOperacion {...props}/>}
       {tabOk==="finanzas" && <DashboardFinanzas/>}
       {tabOk==="mapa" && <MapaFlota pedidos={pedidos} repartidores={repartidores}/>}
     </div>
@@ -838,11 +975,10 @@ function DashboardOperacion({ pedidos, repartidores, liquidaciones, cotizNuevas=
 
   const kpis = [
     { icon:"package", label:"Pedidos hoy", value: hoyP.length, sub:`${pedidos.length} total`, color: B.navy, delta: deltaPedidos },
-    { icon:"check", label:"Entregados", value: entregados.length, sub:`${efectividad}% efectividad`, color: B.green },
-    { icon:"bike", label:"En ruta", value: enRuta.length, sub:"activos ahora", color: B.gold },
+    { icon:"check", label:"Entregados hoy", value: pedidos.filter(p=>p.estado==="entregado" && p.fecha_entrega && diaLocal(new Date(p.fecha_entrega))===hoy).length, sub:`${efectividad}% efectividad general`, color: B.green },
+    { icon:"bike", label:"En ruta", value: enRuta.length, sub:`${repartidores.filter(r=>r.activo).length} repartidores activos`, color: B.gold },
     { icon:"alert", label:"Sin asignar", value: sinAsignar.length, sub: sinAsignar.length>0?"requieren atención":"todo OK", color: sinAsignar.length>0?B.red:B.green },
-    { icon:"dollar", label:"Ingresos hoy (est.)", value: fmt.sol(ingresoHoy), sub:"tarifas de pedidos, sin IGV", color: B.goldDk, big:true, delta: deltaIngreso },
-    { icon:"users", label:"Repartidores", value: repartidores.filter(r=>r.activo).length, sub:"activos", color: B.navy },
+    { icon:"dollar", label:"Ingresos de hoy (est.)", value: fmt.sol(ingresoHoy), sub:"tarifas de pedidos, sin IGV", color: B.goldDk, delta: deltaIngreso },
   ];
 
   const porEstado = Object.entries(ESTADOS_PEDIDO).map(([k,v])=>({
@@ -869,18 +1005,13 @@ function DashboardOperacion({ pedidos, repartidores, liquidaciones, cotizNuevas=
 
   return (
     <div>
-      {/* Resumen automático */}
-      <div style={{ background:`linear-gradient(135deg,${B.navy},${B.navyLt||"#1E3A6E"})`, borderRadius:14,
-        padding:"16px 20px", marginBottom:20, boxShadow:"0 4px 16px #0D1E3D22" }}>
-        <div style={{ fontSize:11, fontWeight:700, color:B.gold, textTransform:"uppercase",
-          letterSpacing:"0.8px", marginBottom:10 }}>🔎 Resumen del día</div>
-        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-          {insights.map((frase,i)=>(
-            <div key={i} style={{ fontSize:13, color:"#E8EAF0" }}>{frase}</div>
-          ))}
-        </div>
+      {/* Indicadores del día */}
+      <SeccionTitulo nota={new Date().toLocaleDateString("es-PE",{weekday:"long", day:"numeric", month:"long"})}>Hoy</SeccionTitulo>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:14, marginBottom:20 }}>
+        {kpis.map((k,i) => <Kpi key={i} icon={k.icon} label={k.label} valor={k.value} sub={k.sub} color={k.color} delta={k.delta} deltaTxt=" vs ayer"/>)}
       </div>
 
+      <div className="bz-mapa-grid" style={{ display:"grid", gridTemplateColumns:"minmax(0,1.7fr) minmax(0,1fr)", gap:14, marginBottom:20, alignItems:"stretch" }}>
       {/* Atención requerida */}
       {(() => {
         const items = [];
@@ -894,8 +1025,8 @@ function DashboardOperacion({ pedidos, repartidores, liquidaciones, cotizNuevas=
         if (veFlota && docsFlota.pronto>0) items.push({ ico:"truck", c:B.orange, t:`${docsFlota.pronto} documento${docsFlota.pronto===1?"":"s"} de flota vence${docsFlota.pronto===1?"":"n"} en 30 días`, ir:"unidades" });
         if (veFinanzas && alertasFin.mant.length>0) items.push({ ico:"wrench", c:B.red, t:`Mantenimiento vencido: ${alertasFin.mant.slice(0,4).join(", ")}${alertasFin.mant.length>4?"…":""}`, ir:"gastos" });
         return (
-          <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:"14px 18px", marginBottom:20, boxShadow:"0 2px 8px #0D1E3D0A" }}>
-            <div style={{ fontSize:12, fontWeight:700, color:B.textPri, marginBottom:items.length?10:0, display:"flex", alignItems:"center", gap:8 }}>
+          <div style={{ ...CARD, padding:"16px 18px" }}>
+            <div style={{ fontSize:13, fontWeight:700, color:B.textPri, marginBottom:items.length?12:0, display:"flex", alignItems:"center", gap:8 }}>
               <Ico n={items.length?"alert":"check"} size={16} color={items.length?B.orange:B.green}/> {items.length?"Atención requerida":"Todo en orden: sin alertas pendientes"}
             </div>
             <div style={{ display:"flex", flexWrap:"wrap", gap:10 }}>
@@ -911,33 +1042,28 @@ function DashboardOperacion({ pedidos, repartidores, liquidaciones, cotizNuevas=
         );
       })()}
 
-      {/* KPIs */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(6,1fr)", gap:14, marginBottom:24 }}>
-        {kpis.map((k,i) => (
-          <div key={i} className="bz-card-hover" style={{ background:B.white, border:`1px solid ${B.border}`,
-            borderRadius:12, padding:18, borderTop:`3px solid ${k.color}`,
-            boxShadow:"0 2px 8px #0D1E3D0A" }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
-              <div style={{ width:36, height:36, borderRadius:10, background:`${k.color}15`, color:k.color, display:"flex", alignItems:"center", justifyContent:"center", marginBottom:10 }}><Ico n={k.icon} size={20}/></div>
-              {k.delta != null && (
-                <span style={{ fontSize:10, fontWeight:700, padding:"2px 6px", borderRadius:8,
-                  background: k.delta>=0?"#ECFDF5":"#FEF2F2", color: k.delta>=0?B.green:B.red }}>
-                  {k.delta>=0?"▲":"▼"} {Math.abs(k.delta)}%
-                </span>
-              )}
-            </div>
-            <div style={{ fontSize:10, color:B.textMut, textTransform:"uppercase",
-              letterSpacing:"0.8px", marginBottom:4 }}>{k.label}</div>
-            <div style={{ fontSize: k.big?18:28, fontWeight:800, color:B.textPri, lineHeight:1 }}>{k.value}</div>
-            <div style={{ fontSize:11, color:B.textSec, marginTop:5 }}>{k.sub}</div>
+        {/* Resumen automático */}
+        <div style={{ ...CARD, padding:"16px 18px" }}>
+          <div style={{ fontSize:13, fontWeight:700, color:B.textPri, marginBottom:12, display:"flex", alignItems:"center", gap:8 }}>
+            <Ico n="sparkles" size={16} color={B.gold}/> Resumen del día
           </div>
-        ))}
+          <div style={{ display:"flex", flexDirection:"column", gap:9 }}>
+            {insights.map((frase,i)=>(
+              <div key={i} style={{ display:"flex", gap:9, fontSize:13, color:B.textSec, lineHeight:1.45 }}>
+                <span style={{ width:6, height:6, borderRadius:"50%", background:B.gold, marginTop:7, flexShrink:0 }}/>
+                <span>{frase.replace(/^\P{L}+/u,"")}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
+
+      <ComparativoMes pedidos={pedidos}/>
+
 
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 340px", gap:14, marginBottom:14 }}>
         {/* Tendencia 7 días */}
-        <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12,
-          padding:18, boxShadow:"0 2px 8px #0D1E3D0A", gridColumn:"span 2" }}>
+        <div style={{ ...CARD, padding:18, gridColumn:"span 2" }}>
           <div style={{ fontSize:13, fontWeight:700, color:B.textPri, marginBottom:4 }}>Tendencia — últimos 7 días</div>
           <div style={{ fontSize:11, color:B.textMut, marginBottom:10 }}>
             <span style={{ color:B.green, fontWeight:700 }}>■</span> Entregados · Barra completa = total del día
@@ -946,8 +1072,7 @@ function DashboardOperacion({ pedidos, repartidores, liquidaciones, cotizNuevas=
         </div>
 
         {/* Dona de estados */}
-        <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12,
-          padding:16, boxShadow:"0 2px 8px #0D1E3D0A" }}>
+        <div style={{ ...CARD, padding:18 }}>
           <div style={{ fontSize:12, fontWeight:700, color:B.textPri, marginBottom:12 }}>Estado de pedidos</div>
           <div style={{ display:"flex", alignItems:"center", gap:16 }}>
             <DonutChart segments={porEstado.map(e=>({ value:e.count, color:e.color }))} size={110}/>
@@ -966,26 +1091,19 @@ function DashboardOperacion({ pedidos, repartidores, liquidaciones, cotizNuevas=
 
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 340px", gap:14 }}>
         {/* Pedidos recientes */}
-        <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12,
-          overflow:"hidden", boxShadow:"0 2px 8px #0D1E3D0A", gridColumn:"span 2" }}>
+        <div style={{ ...CARD, overflow:"hidden", gridColumn:"span 2" }}>
           <div style={{ padding:"14px 18px", borderBottom:`1px solid ${B.border}`,
             display:"flex", justifyContent:"space-between", alignItems:"center" }}>
             <span style={{ fontSize:13, fontWeight:700, color:B.textPri }}>Pedidos recientes</span>
-            <span style={{ fontSize:11, color:B.textMut }}>{recientes.length} últimos</span>
+            <button onClick={()=>onIr&&onIr("pedidos")} style={{ display:"inline-flex", alignItems:"center", gap:5, fontSize:12, fontWeight:600, color:B.goldDk, background:"none", border:"none", cursor:"pointer" }}>Ver todos <Ico n="arrow" size={13}/></button>
           </div>
-          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+          <table className="bz-tabla" style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead>
-              <tr style={{ background:B.bg }}>
-                {["Tracking Boaz","N° Orden","Destinatario","Distrito","Servicio","Repartidor","Estado","Fecha"].map(h=>(
-                  <th key={h} style={{ padding:"8px 14px", textAlign:"left", fontSize:10,
-                    color:B.textMut, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.7px" }}>{h}</th>
-                ))}
-              </tr>
+              <tr>{["Tracking","N° orden","Destinatario","Distrito","Servicio","Repartidor","Estado","Fecha"].map(h=><Th key={h}>{h}</Th>)}</tr>
             </thead>
             <tbody>
               {recientes.map((p,i) => (
-                <tr key={p.id} style={{ borderTop:`1px solid ${B.border}`,
-                  background: i%2===0?B.white:"#F8FAFC" }}>
+                <tr key={p.id}>
                   <td style={{ padding:"10px 14px", fontSize:12, fontWeight:700, color:B.navy }}>{p.omd}</td>
                   <td style={{ padding:"10px 14px", fontSize:12, color:B.textSec }}>{p.cliente_referencia||"—"}</td>
                   <td style={{ padding:"10px 14px", fontSize:12, color:B.textPri }}>{p.dest_nombre}</td>
@@ -1014,8 +1132,7 @@ function DashboardOperacion({ pedidos, repartidores, liquidaciones, cotizNuevas=
         </div>
 
         {/* Top repartidores */}
-        <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12,
-          padding:16, boxShadow:"0 2px 8px #0D1E3D0A" }}>
+        <div style={{ ...CARD, padding:18 }}>
           <div style={{ fontSize:12, fontWeight:700, color:B.textPri, marginBottom:12 }}>Top repartidores</div>
           {[...repartidores].map(r=>{
             const count = pedidos.filter(p=>p.repartidor_id===r.id).length;
@@ -1104,6 +1221,13 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, tarifario
     return ordenDir==="asc" ? cmp : -cmp;
   });
 
+  const pg = usePaginacion(filtrados, 25, "pedidos");
+  const { conteo, sinGeo } = useMemo(() => {
+    const c = {}; let g = 0;
+    for (const p of pedidos) { c[p.estado] = (c[p.estado]||0)+1; if (!p.dest_lat) g++; }
+    return { conteo:c, sinGeo:g };
+  }, [pedidos]);
+
   const cambiarEstado = async (id, nuevoEstado) => {
     const extra = nuevoEstado==="entregado" ? {fecha_entrega:new Date().toISOString()} :
                   nuevoEstado==="en_ruta"   ? {fecha_asignacion:new Date().toISOString()} : {};
@@ -1130,100 +1254,74 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, tarifario
   return (
     <div>
       {/* Barra de herramientas */}
-      <div style={{ display:"flex", gap:10, marginBottom:16, flexWrap:"wrap", alignItems:"center" }}>
-        <input placeholder="🔍 Buscar por OMD, N° de orden, nombre, teléfono, distrito..."
-          value={busqueda} onChange={e=>setBusqueda(e.target.value)}
-          style={{ ...inp, width:320, background:B.white, boxShadow:"0 1px 3px #0D1E3D14" }} />
-        <div style={{ display:"flex", gap:6 }}>
-          {["todos",...Object.keys(ESTADOS_PEDIDO)].map(e=>{
-            const cantidad = e==="todos" ? pedidos.length : pedidos.filter(p=>p.estado===e).length;
-            return (
-              <button key={e} onClick={()=>setFiltroEstado(e)}
-                style={{ padding:"7px 12px", borderRadius:20, fontSize:11, fontWeight:600,
-                  cursor:"pointer", border:`1px solid ${filtroEstado===e?B.gold:B.border}`,
-                  background: filtroEstado===e?B.gold:"transparent",
-                  color: filtroEstado===e?B.navy:B.textSec }}>
-                {e==="todos"?"Todos":ESTADOS_PEDIDO[e].label} ({cantidad})
-              </button>
-            );
-          })}
+      <div style={{ display:"flex", gap:10, marginBottom:12, flexWrap:"wrap", alignItems:"center" }}>
+        <Buscador value={busqueda} onChange={setBusqueda} placeholder="Buscar por tracking, N° de orden, nombre, teléfono o distrito" width={380}/>
+        <div style={{ marginLeft:"auto", display:"flex", gap:8, flexWrap:"wrap" }}>
+          {sinGeo > 0 && (
+            <BtnSec onClick={()=>setModalGeocodificar(true)}><Ico n="pin" size={15}/> Geocodificar pendientes ({sinGeo})</BtnSec>
+          )}
+          <BtnSec onClick={()=>setModalCarga(true)}><Ico n="upload" size={15}/> Carga masiva</BtnSec>
+          <BtnPri onClick={()=>setModalNuevo(true)}><Ico n="plus" size={15} sw={2.4}/> Nuevo pedido</BtnPri>
         </div>
-        <span style={{ marginLeft:"auto", fontSize:12, color:B.textMut }}>{filtrados.length} pedidos</span>
-        {pedidos.filter(p=>!p.dest_lat).length > 0 && (
-          <BtnSec onClick={()=>setModalGeocodificar(true)}>
-            📍 Geocodificar pendientes ({pedidos.filter(p=>!p.dest_lat).length})
-          </BtnSec>
-        )}
-        <BtnSec onClick={()=>setModalCarga(true)}>⬆️ Cargar masivo</BtnSec>
-        <BtnPri onClick={()=>setModalNuevo(true)}>+ Nuevo pedido</BtnPri>
       </div>
+      <Tabs valor={filtroEstado} onChange={setFiltroEstado} style={{ marginBottom:12 }}
+        tabs={[{ id:"todos", l:"Todos", n:pedidos.length }, ...Object.keys(ESTADOS_PEDIDO).map(e=>({ id:e, l:ESTADOS_PEDIDO[e].label, n:conteo[e]||0 }))]}/>
 
       {/* Tabla */}
-      <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12,
-        overflow:"hidden", boxShadow:"0 2px 8px #0D1E3D0A" }}>
-        <table style={{ width:"100%", borderCollapse:"collapse" }}>
+      <div style={{ ...CARD, overflow:"hidden" }}>
+        <div style={{ overflowX:"auto" }}>
+        <table className="bz-tabla" style={{ width:"100%", borderCollapse:"collapse" }}>
           <thead>
-            <tr style={{ background:B.bg }}>
+            <tr>
               {[
-                ["Tracking Boaz","tracking"],["N° Orden","orden_cliente"],["Destinatario","destinatario"],["Dirección","direccion"],
-                ["Peso","peso"],["Tamaño","tamano"],["Servicio","servicio"],["Ámbito","ambito"],["Repartidor","repartidor"],
-                ["Estado","estado"],["Fecha","fecha"],["Acciones",null],
-              ].map(([h,col])=>(
-                <th key={h} onClick={()=>col && ordenarPor(col)}
-                  style={{ padding:"10px 14px", textAlign:"left", fontSize:10,
-                    color: ordenCol===col ? B.navy : B.textMut, fontWeight:700, textTransform:"uppercase",
-                    letterSpacing:"0.7px", cursor: col?"pointer":"default", userSelect:"none",
-                    whiteSpace:"nowrap" }}>
-                  {h}{col && (
-                    <span style={{ marginLeft:4, opacity: ordenCol===col?1:0.3 }}>
-                      {ordenCol===col ? (ordenDir==="asc"?"▲":"▼") : "▲"}
-                    </span>
-                  )}
-                </th>
+                ["Tracking","tracking"],["N° orden","orden_cliente"],["Destinatario","destinatario"],["Dirección","direccion"],
+                ["Peso","peso","right"],["Tamaño","tamano"],["Servicio","servicio"],["Ámbito","ambito"],["Repartidor","repartidor"],
+                ["Estado","estado"],["Fecha","fecha"],["",null],
+              ].map(([h,col,al],k)=>(
+                <Th key={k} col={col} align={al||"left"} orden={{ col:ordenCol, dir:ordenDir }} onOrden={ordenarPor}>{h}</Th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {filtrados.map((p,i) => {
+            {pg.visibles.map((p) => {
               const rep = repartidores.find(r=>r.id===p.repartidor_id);
+              const est = ESTADOS_PEDIDO[p.estado] || { bg:"#F1F5F9", color:"#475569" };
               return (
-                <tr key={p.id} style={{ borderTop:`1px solid ${B.border}`,
-                  background: i%2===0?B.white:"#F8FAFC",
-                  cursor:"pointer" }}
+                <tr key={p.id} style={{ cursor:"pointer" }}
                   onClick={()=>setModalDetalle(p)}>
-                  <td style={{ padding:"11px 14px", fontSize:12, fontWeight:700, color:B.navy }}>{p.omd}</td>
-                  <td style={{ padding:"11px 14px", fontSize:12, color:B.textSec }}>{p.cliente_referencia||"—"}</td>
-                  <td style={{ padding:"11px 14px" }}>
-                    <div style={{ fontSize:12, color:B.textPri, fontWeight:600 }}>{p.dest_nombre}</div>
-                    <div style={{ fontSize:10, color:B.textMut }}>{p.dest_telefono}</div>
+                  <td style={{ ...TD, fontWeight:700, color:B.navy, whiteSpace:"nowrap" }}>{p.omd}</td>
+                  <td style={{ ...TDS, whiteSpace:"nowrap" }}>{p.cliente_referencia||"—"}</td>
+                  <td style={TD}>
+                    <div style={{ fontWeight:600 }}>{p.dest_nombre}</div>
+                    {p.dest_telefono && <div style={{ fontSize:12, color:B.textMut }}>{p.dest_telefono}</div>}
                   </td>
-                  <td style={{ padding:"11px 14px" }}>
-                    <div style={{ fontSize:12, color:B.textSec }}>{p.dest_direccion?.slice(0,30)}{p.dest_direccion?.length>30?"...":""}</div>
-                    <div style={{ fontSize:10, color:B.textMut }}>{p.dest_distrito}</div>
+                  <td style={TD}>
+                    <div title={p.dest_direccion||""} style={{ color:B.textSec, maxWidth:240, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.dest_direccion||"—"}</div>
+                    {p.dest_distrito && <div style={{ fontSize:12, color:B.textMut }}>{p.dest_distrito}</div>}
                   </td>
-                  <td style={{ padding:"11px 14px", fontSize:12, color:B.textSec }}>{p.peso_kg?p.peso_kg+" kg":"—"}</td>
-                  <td style={{ padding:"11px 14px" }}>
-                    <span style={{ fontSize:10, fontWeight:700, padding:"3px 8px", borderRadius:8,
+                  <td style={{ ...TDN, color:B.textSec }}>{p.peso_kg?p.peso_kg+" kg":"—"}</td>
+                  <td style={TD}>
+                    <span style={{ fontSize:11, fontWeight:700, padding:"3px 8px", borderRadius:6,
                       background:"#F0F4F8", color:B.navy }}>
                       {bandaDePeso(p.peso_kg)}
                     </span>
                   </td>
-                  <td style={{ padding:"11px 14px" }}>
+                  <td style={TD}>
                     {p.tipo_servicio && BADGE_SERVICIO[p.tipo_servicio] ? (
-                      <span style={{ fontSize:10, fontWeight:700, padding:"3px 8px", borderRadius:8,
+                      <span style={{ fontSize:11, fontWeight:700, padding:"3px 8px", borderRadius:6, whiteSpace:"nowrap",
                         background: BADGE_SERVICIO[p.tipo_servicio].bg,
                         color: BADGE_SERVICIO[p.tipo_servicio].color }}>
                         {BADGE_SERVICIO[p.tipo_servicio].label}
                       </span>
                     ) : <span style={{ fontSize:11, color:B.textMut }}>—</span>}
                   </td>
-                  <td style={{ padding:"11px 14px", fontSize:11, color:B.textSec, textTransform:"capitalize" }}>{p.ambito?.replace("_"," ")||"—"}</td>
-                  <td style={{ padding:"11px 14px" }} onClick={e=>e.stopPropagation()}>
+                  <td style={{ ...TDS, textTransform:"capitalize", whiteSpace:"nowrap" }}>{p.ambito?.replace("_"," ")||"—"}</td>
+                  <td style={{ ...TD, whiteSpace:"nowrap" }} onClick={e=>e.stopPropagation()}>
                     {asignando===p.id ? (
                       <select autoFocus defaultValue={p.repartidor_id||""}
                         onChange={e=>{if(e.target.value)asignarRep(p.id,e.target.value,p.estado); else setAsignando(null);}}
                         onBlur={()=>setAsignando(null)}
-                        style={{ ...inp, padding:"4px 8px", fontSize:11, width:"auto" }}>
+                        style={{ ...inp, padding:"5px 8px", fontSize:12, width:"auto" }}>
                         <option value="">Sin asignar</option>
                         {repartidores.filter(r=>r.activo).map(r=>(
                           <option key={r.id} value={r.id}>{r.nombres} {r.apellidos}</option>
@@ -1232,39 +1330,42 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, tarifario
                     ) : rep ? (
                       <button onClick={()=>setAsignando(p.id)}
                         title="Clic para cambiar de repartidor"
-                        style={{ fontSize:12, color:B.textPri, background:"none", border:"none",
+                        style={{ fontSize:13, color:B.textPri, background:"none", border:"none",
                           cursor:"pointer", padding:0, textDecoration:"underline",
-                          textDecorationStyle:"dotted", textDecorationColor:B.textMut }}>
+                          textDecorationStyle:"dotted", textDecorationColor:B.textMut, textUnderlineOffset:3 }}>
                         {rep.nombres} {rep.apellidos}
                       </button>
                     ) : (
                       <button onClick={()=>setAsignando(p.id)}
-                        style={{ fontSize:11, color:B.blue, background:"none", border:"none",
-                          cursor:"pointer", fontWeight:600 }}>+ Asignar</button>
+                        style={{ display:"inline-flex", alignItems:"center", gap:4, fontSize:12, color:B.goldDk, background:`${B.gold}12`, border:`1px dashed ${B.gold}88`,
+                          borderRadius:6, padding:"3px 9px", cursor:"pointer", fontWeight:700 }}><Ico n="plus" size={12} sw={2.6}/> Asignar</button>
                     )}
                   </td>
-                  <td style={{ padding:"11px 14px" }} onClick={e=>e.stopPropagation()}>
-                    <select value={p.estado} onChange={e=>cambiarEstado(p.id,e.target.value)}
-                      style={{ ...inp, padding:"4px 8px", fontSize:11, width:"auto",
-                        cursor:"pointer", borderRadius:6 }}>
+                  <td style={TD} onClick={e=>e.stopPropagation()}>
+                    <select value={p.estado} onChange={e=>cambiarEstado(p.id,e.target.value)} aria-label="Estado del pedido"
+                      style={{ ...inp, padding:"4px 8px", fontSize:11, fontWeight:700, width:"auto",
+                        cursor:"pointer", borderRadius:20, background:est.bg, color:est.color, border:`1px solid ${est.color}33` }}>
                       {Object.entries(ESTADOS_PEDIDO).map(([k,v])=>(
                         <option key={k} value={k}>{v.label}</option>
                       ))}
                     </select>
                   </td>
-                  <td style={{ padding:"11px 14px", fontSize:11, color:B.textMut }}>{fmt.fecha(p.created_at)}</td>
-                  <td style={{ padding:"11px 14px" }} onClick={e=>e.stopPropagation()}>
-                    <button onClick={()=>setModalDetalle(p)}
-                      style={{ fontSize:11, color:B.navy, background:B.bg, border:`1px solid ${B.border}`,
-                        padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Ver</button>
+                  <td style={{ ...TDS, whiteSpace:"nowrap" }}>{fmt.fecha(p.created_at)}</td>
+                  <td style={{ ...TD, padding:"6px 10px" }} onClick={e=>e.stopPropagation()}>
+                    <BtnIco n="eye" title="Ver detalle" onClick={()=>setModalDetalle(p)}/>
                   </td>
                 </tr>
               );
             })}
-            {filtrados.length===0&&<tr><td colSpan={10} style={{ padding:40, textAlign:"center",
-              color:B.textMut, fontSize:13 }}>No hay pedidos con este filtro</td></tr>}
+            {filtrados.length===0&&<tr><td colSpan={12}>
+              <EstadoVacio icono="package" titulo={pedidos.length===0 ? "Aún no hay pedidos" : "Ningún pedido coincide"}
+                texto={pedidos.length===0 ? "Registra el primero o súbelos en bloque desde un Excel." : "Prueba con otro estado o cambia el texto de búsqueda."}>
+                {pedidos.length>0 && (busqueda || filtroEstado!=="todos") && <BtnSec onClick={()=>{ setBusqueda(""); setFiltroEstado("todos"); }}>Quitar filtros</BtnSec>}
+              </EstadoVacio></td></tr>}
           </tbody>
         </table>
+        </div>
+        {pg.pie}
       </div>
 
       {modalNuevo && <ModalNuevoPedido repartidores={repartidores} empresas={empresas} tarifariosCliente={tarifariosCliente} tarifarioEstandar={tarifarioEstandar}
@@ -4173,6 +4274,11 @@ function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }) {
   const totalFacturado = facturas.reduce((a,fa)=>a+(parseFloat(fa.total_s)||0),0);
   const totalCobrado = facturas.filter(fa=>fa.estado_pago==="pagado").reduce((a,fa)=>a+(parseFloat(fa.total_s)||0),0);
   const totalPorCobrar = totalFacturado - totalCobrado;
+  const [busq, setBusq] = useState("");
+  const nPend = facturas.filter(fa=>fa.estado_pago!=="pagado").length;
+  const qf = busq.trim().toLowerCase();
+  const filasFact = !qf ? facturasFiltradas : facturasFiltradas.filter(fa => `${fa.serie}-${fa.numero} ${fa.empresas?.nombre||""}`.toLowerCase().includes(qf));
+  const pg = usePaginacion(filasFact, 25, "facturas");
 
   const seleccionarTipoServicio = (id) => {
     const t = tiposServicio.find(ts=>ts.id===id);
@@ -4217,93 +4323,67 @@ function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }) {
   return (
     <div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14, marginBottom:20 }}>
-        {[
-          { label:"Total facturado", value: fmt.sol(totalFacturado), icon:"🧾", color:B.navy },
-          { label:"Cobrado", value: fmt.sol(totalCobrado), icon:"✅", color:B.green },
-          { label:"Por cobrar", value: fmt.sol(totalPorCobrar), icon:"⏳", color:B.red },
-        ].map((k,i)=>(
-          <div key={i} style={{ background:B.white, border:`1px solid ${B.border}`,
-            borderRadius:12, padding:18, borderTop:`3px solid ${k.color}`, boxShadow:"0 2px 8px #0D1E3D0A" }}>
-            <div style={{ fontSize:20, marginBottom:6 }}>{k.icon}</div>
-            <div style={{ fontSize:20, fontWeight:800, color:B.textPri }}>{k.value}</div>
-            <div style={{ fontSize:10, color:B.textMut, textTransform:"uppercase" }}>{k.label}</div>
-          </div>
-        ))}
+        <Kpi icon="receipt" label="Total facturado" valor={fmt.sol(totalFacturado)} sub={`${facturas.length} factura${facturas.length===1?"":"s"}`} color={B.navy}/>
+        <Kpi icon="check" label="Cobrado" valor={fmt.sol(totalCobrado)} sub={totalFacturado>0 ? `${Math.round(totalCobrado/totalFacturado*100)}% del total` : null} color={B.green}/>
+        <Kpi icon="clock" label="Por cobrar" valor={fmt.sol(totalPorCobrar)} sub={`${nPend} pendiente${nPend===1?"":"s"}`} color={B.red}/>
       </div>
 
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-        <div style={{ display:"flex", gap:6 }}>
-          {[["todas","Todas"],["pendiente","Por cobrar"],["pagado","Cobradas"]].map(([id,label])=>(
-            <button key={id} onClick={()=>setFiltroPago(id)}
-              style={{ padding:"8px 16px", borderRadius:8, fontSize:12, cursor:"pointer",
-                border:`1px solid ${filtroPago===id?B.gold:B.border}`,
-                background:filtroPago===id?B.gold:"transparent",
-                color:filtroPago===id?B.navy:B.textSec, fontWeight:filtroPago===id?700:400 }}>
-              {label}
-            </button>
-          ))}
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:12 }}>
+        <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
+          <Tabs valor={filtroPago} onChange={setFiltroPago}
+            tabs={[{ id:"todas", l:"Todas", n:facturas.length }, { id:"pendiente", l:"Por cobrar", n:nPend }, { id:"pagado", l:"Cobradas", n:facturas.length-nPend }]}/>
+          <Buscador value={busq} onChange={setBusq} placeholder="Buscar por cliente o número" width={260}/>
         </div>
-        <div style={{ display:"flex", gap:8 }}>
-          <BtnPri onClick={abrirNuevaFactura}>+ Registrar factura</BtnPri>
-        </div>
+        <BtnPri onClick={abrirNuevaFactura}><Ico n="plus" size={15} sw={2.4}/> Registrar factura</BtnPri>
       </div>
 
-      <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12,
-        overflow:"hidden", boxShadow:"0 2px 8px #0D1E3D0A" }}>
-        <table style={{ width:"100%", borderCollapse:"collapse" }}>
+      <div style={{ ...CARD, overflow:"hidden" }}>
+        <div style={{ overflowX:"auto" }}>
+        <table className="bz-tabla" style={{ width:"100%", borderCollapse:"collapse" }}>
           <thead>
-            <tr style={{ background:B.bg }}>
-              {["Serie-Número","Cliente","IGV","Total","Detracción","Neto a cobrar","Fecha emisión","Estado de pago","Fecha de pago","Acciones"].map(h=>(
-                <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:10,
-                  color:B.textMut, fontWeight:700, textTransform:"uppercase" }}>{h}</th>
-              ))}
+            <tr>
+              <Th>N° factura</Th><Th>Cliente</Th><Th>Emisión</Th><Th align="right">IGV</Th><Th align="right">Total</Th>
+              <Th align="right">Detracción</Th><Th align="right">Neto a cobrar</Th><Th>Estado</Th><Th>Pago</Th><Th align="right"></Th>
             </tr>
           </thead>
           <tbody>
-            {facturasFiltradas.map((fa,i)=>(
-              <tr key={fa.id} style={{ borderTop:`1px solid ${B.border}`,
-                background:i%2===0?B.white:"#F8FAFC" }}>
-                <td style={{ padding:"11px 14px", fontSize:12, fontWeight:700, color:B.navy }}>
-                  {fa.serie}-{fa.numero}
+            {pg.visibles.map((fa)=>(
+              <tr key={fa.id}>
+                <td style={{ ...TD, fontWeight:700, color:B.navy, whiteSpace:"nowrap" }}>{fa.serie}-{fa.numero}</td>
+                <td style={TD}>{fa.empresas?.nombre||"—"}</td>
+                <td style={{ ...TDS, whiteSpace:"nowrap" }}>{fmt.fecha(fa.fecha_emision)}</td>
+                <td style={{ ...TDN, color:B.textSec }}>{fmt.sol(fa.igv_s)}</td>
+                <td style={{ ...TDN, fontWeight:600 }}>{fmt.sol(fa.total_s)}</td>
+                <td style={{ ...TDN, color: fa.monto_detraccion>0?"#B91C1C":B.textMut }}>
+                  {fa.monto_detraccion>0 ? <>− {fmt.sol(fa.monto_detraccion)} <span style={{ fontSize:11, color:B.textMut }}>({fa.porcentaje_detraccion}%)</span></> : "—"}
                 </td>
-                <td style={{ padding:"11px 14px", fontSize:12, color:B.textPri }}>{fa.empresas?.nombre||"—"}</td>
-                <td style={{ padding:"11px 14px", fontSize:12, color:B.textSec }}>{fmt.sol(fa.igv_s)}</td>
-                <td style={{ padding:"11px 14px", fontSize:13, fontWeight:800, color:B.navy }}>{fmt.sol(fa.total_s)}</td>
-                <td style={{ padding:"11px 14px", fontSize:12, color: fa.monto_detraccion>0?B.red:B.textMut }}>
-                  {fa.monto_detraccion>0 ? `- ${fmt.sol(fa.monto_detraccion)} (${fa.porcentaje_detraccion}%)` : "—"}
-                </td>
-                <td style={{ padding:"11px 14px", fontSize:13, fontWeight:800, color:B.gold }}>
+                <td style={{ ...TDN, fontWeight:800, color:B.navy }}>
                   {fmt.sol((parseFloat(fa.total_s)||0) - (parseFloat(fa.monto_detraccion)||0))}
                 </td>
-                <td style={{ padding:"11px 14px", fontSize:11, color:B.textMut }}>{fmt.fecha(fa.fecha_emision)}</td>
-                <td style={{ padding:"11px 14px" }}>
-                  <span style={{ fontSize:11, padding:"3px 8px", borderRadius:10, fontWeight:700,
-                    background:fa.estado_pago==="pagado"?"#ECFDF5":"#FEF2F2",
-                    color:fa.estado_pago==="pagado"?B.green:B.red }}>
-                    {fa.estado_pago==="pagado"?"Pagado":"Pendiente"}
-                  </span>
-                </td>
-                <td style={{ padding:"11px 14px", fontSize:11, color:B.textMut }}>
+                <td style={TD}><Etiqueta tono={fa.estado_pago==="pagado"?"ok":"warn"}>{fa.estado_pago==="pagado"?"Pagada":"Pendiente"}</Etiqueta></td>
+                <td style={{ ...TDS, whiteSpace:"nowrap" }}>
                   {fa.fecha_pago ? fmt.fecha(fa.fecha_pago) : "—"}
-                  {fa.banco_pago && <div style={{ fontSize:10, color:B.textMut }}>{fa.banco_pago}{fa.numero_operacion?` · Op. ${fa.numero_operacion}`:""}</div>}
+                  {fa.banco_pago && <div style={{ fontSize:12, color:B.textMut }}>{fa.banco_pago}{fa.numero_operacion?` · Op. ${fa.numero_operacion}`:""}</div>}
                 </td>
-                <td style={{ padding:"11px 14px" }}>
-                  <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-                    <button onClick={()=>{setEditandoFactura(fa); setF({...fa, aplica_detraccion:(fa.porcentaje_detraccion||0)>0, porcentaje_detraccion: fa.porcentaje_detraccion?String(fa.porcentaje_detraccion):""}); setModal(true);}}
-                      style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer" }}>✏️ Editar</button>
-                    {fa.estado_pago!=="pagado" && (
-                      <button onClick={()=>setModalPago(fa)}
-                        style={{ fontSize:11, color:B.green, background:"none", border:"none",
-                          cursor:"pointer", fontWeight:700 }}>💰 Marcar pagada</button>
-                    )}
+                <td style={{ ...TD, padding:"6px 10px" }}>
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"flex-end", gap:4, whiteSpace:"nowrap" }}>
+                  {fa.estado_pago!=="pagado" && (
+                    <button className="bz-btn-sec" onClick={()=>setModalPago(fa)}
+                      style={{ fontSize:12, fontWeight:600, color:"#047857", background:B.white, border:`1px solid ${B.border}`, borderRadius:8, padding:"5px 10px", cursor:"pointer" }}>Registrar pago</button>
+                  )}
+                  <BtnIco n="edit" title="Editar factura" onClick={()=>{setEditandoFactura(fa); setF({...fa, aplica_detraccion:(fa.porcentaje_detraccion||0)>0, porcentaje_detraccion: fa.porcentaje_detraccion?String(fa.porcentaje_detraccion):""}); setModal(true);}}/>
                   </div>
                 </td>
               </tr>
             ))}
-            {facturasFiltradas.length===0&&<tr><td colSpan={10} style={{ padding:32, textAlign:"center",
-              color:B.textMut, fontSize:13 }}>No hay facturas en esta vista</td></tr>}
+            {filasFact.length===0&&<tr><td colSpan={10}>
+              <EstadoVacio icono="receipt" titulo={facturas.length===0 ? "Aún no hay facturas registradas" : "Ninguna factura coincide"}
+                texto={facturas.length===0 ? "Registra la primera para llevar el control de lo facturado y lo cobrado." : "Cambia el filtro o el texto de búsqueda."}/>
+            </td></tr>}
           </tbody>
         </table>
+        </div>
+        {pg.pie}
       </div>
 
       {modalPago && (
