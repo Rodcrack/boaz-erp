@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, Fragment } from "react";
 import { createClient } from "@supabase/supabase-js";
 // Librería de Excel: se descarga solo cuando se exporta o importa un archivo (aligera la carga inicial)
 let _xlsx = null;
@@ -127,6 +127,39 @@ const obtenerTarifaEstandar = (ambito, tipoServicio, tarifarioEstandar) => {
   return tarifarioEstandar.find(t=>t.ambito===ambito && t.activo && !t.tipo_servicio) || null;
 };
 
+// ── TARIFA DE UN PEDIDO (un solo lugar para todo el ERP) ──────
+// Orden: 1) precio fijo del cliente  2) tarifa del distrito del cliente  3) tarifario por ámbito/servicio/peso
+// (del cliente o, si no tiene, el estándar). Al final se suma el recargo por embalaje si aplica.
+let TARIFAS_DISTRITO = [];   // lo llena la carga principal del ERP
+const ZONAS_LIMA = {
+  urbano: ["Lima","Barranco","Breña","Chorrillos","El Agustino","Jesús María","La Victoria","Lince","Magdalena del Mar","Miraflores","Pueblo Libre","Rímac","San Borja","San Isidro","San Luis","San Miguel","Santiago de Surco","Surquillo"],
+  semi_urbano: ["Callao","Ate","Independencia","La Molina","Los Olivos","San Juan de Lurigancho","San Juan de Miraflores","San Martín de Porres","Santa Anita","Villa El Salvador","Villa María del Triunfo"],
+  periferico: ["Comas","Ventanilla","Carabayllo","Lurigancho-Chosica","Lurín","Pachacámac","Puente Piedra"],
+};
+const normDist = (t) => (t||"").toString().normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/\s+/g," ").trim();
+const ambitoDeDistrito = (d) => { const n = normDist(d); if (!n) return null; for (const a in ZONAS_LIMA) if (ZONAS_LIMA[a].some(z=>normDist(z)===n)) return a; return null; };
+const calcularTarifaPedido = ({ empresa, ambito, tipoServicio, pesoKg, distrito, embalaje }, tarifariosCliente=[], tarifarioEstandar=[]) => {
+  const modo = (empresa && empresa.modo_pedido) || "tarifario";
+  const amb = ambito || ambitoDeDistrito(distrito) || "urbano";
+  let base = null, origen = "", aviso = "";
+  if (empresa && modo==="fijo" && empresa.precio_fijo_pedido!=null && empresa.precio_fijo_pedido!=="") {
+    base = parseFloat(empresa.precio_fijo_pedido)||0; origen = "precio fijo por pedido del cliente";
+  } else if (empresa && modo==="distrito") {
+    const d = normDist(distrito);
+    const t = d && TARIFAS_DISTRITO.find(x => x.empresa_id===empresa.id && x.activo!==false && normDist(x.distrito)===d);
+    if (t) { base = parseFloat(t.tarifa)||0; origen = `tarifa del distrito ${t.distrito}`; }
+    else aviso = d ? "Este distrito no tiene tarifa propia para el cliente; se usa su tarifario general." : "Elige el distrito para aplicar la tarifa del cliente.";
+  }
+  if (base==null) {
+    const tc = obtenerTarifaEmpresa(empresa && empresa.id, amb, tipoServicio, tarifariosCliente);
+    const te = obtenerTarifaEstandar(amb, tipoServicio, tarifarioEstandar);
+    base = getTarifaSameDay(amb, pesoKg, tc || te);
+    origen = tc ? "tarifario negociado con el cliente" : te ? "tarifario estándar" : "tarifario base";
+  }
+  const recargo = embalaje ? (parseFloat(empresa && empresa.recargo_embalaje)||0) : 0;
+  return { tarifa: Math.round((base+recargo)*100)/100, base, recargo, origen, aviso, ambito: amb };
+};
+
 // ── GEOCODIFICACIÓN GRATUITA (OpenStreetMap / Nominatim) ───────
 // Convierte una dirección en texto a coordenadas lat/lng. Gratis, sin API key.
 // Límite de uso: máx. 1 solicitud por segundo (por eso las cargas masivas
@@ -145,9 +178,9 @@ async function geocodificarDireccion(direccion, distrito) {
 const esperar = (ms) => new Promise(r => setTimeout(r, ms));
 
 const ROLES_ACCESO = {
-  admin: ["dashboard","pedidos","repartidores","unidades","incidencias","inventario","clientes","cotizaciones","catalogo","liquidacion-clientes","facturacion","cobranza","liquidaciones","liquidacion-transporte","planilla","gastos","reportes","rentabilidad","usuarios","configuracion"],
-  operaciones: ["dashboard","pedidos","repartidores","unidades","incidencias","inventario","clientes","cotizaciones","catalogo"],
-  finanzas: ["dashboard","clientes","cotizaciones","catalogo","liquidacion-clientes","facturacion","cobranza","liquidaciones","liquidacion-transporte","planilla","gastos","reportes","rentabilidad"],
+  admin: ["dashboard","pedidos","servicios","repartidores","unidades","incidencias","inventario","clientes","cotizaciones","catalogo","liquidacion-clientes","facturacion","cobranza","liquidaciones","liquidacion-transporte","planilla","gastos","reportes","rentabilidad","usuarios","configuracion"],
+  operaciones: ["dashboard","pedidos","servicios","repartidores","unidades","incidencias","inventario","clientes","cotizaciones","catalogo"],
+  finanzas: ["dashboard","servicios","clientes","cotizaciones","catalogo","liquidacion-clientes","facturacion","cobranza","liquidaciones","liquidacion-transporte","planilla","gastos","reportes","rentabilidad"],
 };
 const Chip = ({ estado, size="sm" }) => {
   const s = ESTADOS_PEDIDO[estado] || { bg:"#F3F4F6", color:"#374151", label: estado };
@@ -1232,8 +1265,9 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, tarifario
   const [verFiltros, setVerFiltros] = useState(false);
   const [fEmp, setFEmp] = useState(""); const [fRep, setFRep] = useState("");
   const [fDesde, setFDesde] = useState(""); const [fHasta, setFHasta] = useState("");
-  const nFiltros = [fEmp,fRep,fDesde,fHasta].filter(Boolean).length;
-  const limpiarFiltros = () => { setFEmp(""); setFRep(""); setFDesde(""); setFHasta(""); };
+  const [fSinTar, setFSinTar] = useState(false);
+  const nFiltros = [fEmp,fRep,fDesde,fHasta,fSinTar].filter(Boolean).length;
+  const limpiarFiltros = () => { setFEmp(""); setFRep(""); setFDesde(""); setFHasta(""); setFSinTar(false); };
   // Columnas visibles (se recuerda en este navegador)
   const COLS_PED = [["tracking","Tracking",true],["orden_cliente","N° orden"],["cliente","Cliente"],["destinatario","Destinatario",true],["direccion","Dirección"],["peso","Peso"],["tamano","Tamaño"],["servicio","Servicio"],["ambito","Ámbito"],["repartidor","Repartidor"],["estado","Estado",true],["fecha","Fecha"]];
   const [ocultas, setOcultas] = useState(() => { try { const v = JSON.parse(localStorage.getItem("boaz_ped_cols")); return Array.isArray(v) ? v : ["tamano","ambito"]; } catch { return ["tamano","ambito"]; } });
@@ -1247,6 +1281,7 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, tarifario
 
   const filtrados = pedidos.filter(p => {
     if (fEmp && p.empresa_id!==fEmp) return false;
+    if (fSinTar && (parseFloat(p.tarifa_s)||0) > 0) return false;
     if (fRep && (fRep==="_sin" ? !!p.repartidor_id : p.repartidor_id!==fRep)) return false;
     if ((fDesde||fHasta) && p.created_at) { const d = diaLocal(new Date(p.created_at)); if ((fDesde && d<fDesde) || (fHasta && d>fHasta)) return false; }
     const okE = filtroEstado==="todos" || p.estado===filtroEstado;
@@ -1265,10 +1300,10 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, tarifario
   });
 
   const pg = usePaginacion(filtrados, 25, "pedidos");
-  const { conteo, sinGeo } = useMemo(() => {
-    const c = {}; let g = 0;
-    for (const p of pedidos) { c[p.estado] = (c[p.estado]||0)+1; if (!p.dest_lat) g++; }
-    return { conteo:c, sinGeo:g };
+  const { conteo, sinGeo, sinTarifa } = useMemo(() => {
+    const c = {}; let g = 0, t = 0;
+    for (const p of pedidos) { c[p.estado] = (c[p.estado]||0)+1; if (!p.dest_lat) g++; if (!((parseFloat(p.tarifa_s)||0) > 0)) t++; }
+    return { conteo:c, sinGeo:g, sinTarifa:t };
   }, [pedidos]);
 
   const selFilas = filtrados.filter(p => sel.has(p.id));
@@ -1295,6 +1330,21 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, tarifario
       setConfirmar(null);
       if (error) { toast("Error: "+error.message,"error"); return; }
       toast(`${selFilas.length} pedido${selFilas.length===1?"":"s"} asignado${selFilas.length===1?"":"s"} ✓`); setSel(new Set()); onRefresh();
+    }});
+  };
+  const masivoTarifa = () => {
+    if (!selFilas.length) return;
+    setConfirmar({ msg:`Se recalculará la tarifa de ${selFilas.length} pedido${selFilas.length===1?"":"s"} con el tarifario vigente de su cliente. Los pedidos que ya están en una factura no deberían recalcularse.`, ok: async () => {
+      const grupos = {};
+      for (const p of selFilas) {
+        const c = calcularTarifaPedido({ empresa:(empresas||[]).find(e=>e.id===p.empresa_id)||null, ambito:p.ambito, tipoServicio:p.tipo_servicio, pesoKg:parseFloat(p.peso_kg), distrito:p.dest_distrito, embalaje:!!p.con_embalaje }, tarifariosCliente, tarifarioEstandar);
+        (grupos[c.tarifa] || (grupos[c.tarifa] = [])).push(p.id);
+      }
+      let error = null;
+      for (const t in grupos) { if (error) break; ({ error } = await sb.from("pedidos").update({ tarifa_s: parseFloat(t) }).in("id", grupos[t])); }
+      setConfirmar(null);
+      if (error) { toast("Error: "+error.message,"error"); return; }
+      toast(`Tarifa recalculada en ${selFilas.length} pedido${selFilas.length===1?"":"s"} ✓`); setSel(new Set()); onRefresh();
     }});
   };
   const exportarPedidos = async (filas) => {
@@ -1371,6 +1421,9 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, tarifario
             <select style={{ ...inp, background:B.white }} value={fRep} onChange={e=>setFRep(e.target.value)}><option value="">Todos</option><option value="_sin">Sin repartidor</option>{repartidores.map(r=><option key={r.id} value={r.id}>{r.nombres} {r.apellidos}</option>)}</select></div>
           <div><label style={lbl}>Registrado desde</label><input type="date" style={{ ...inp, background:B.white, width:160 }} value={fDesde} onChange={e=>setFDesde(e.target.value)}/></div>
           <div><label style={lbl}>Hasta</label><input type="date" style={{ ...inp, background:B.white, width:160 }} value={fHasta} onChange={e=>setFHasta(e.target.value)}/></div>
+          <label style={{ display:"flex", alignItems:"center", gap:7, fontSize:13, color:B.textPri, cursor:"pointer", paddingBottom:9 }}>
+            <input type="checkbox" checked={fSinTar} onChange={e=>setFSinTar(e.target.checked)} style={{ width:16, height:16 }}/> Solo sin tarifa{sinTarifa>0 && <span style={{ color:"#B45309", fontWeight:700 }}>({sinTarifa})</span>}
+          </label>
           {nFiltros>0 && <BtnSec onClick={limpiarFiltros}>Limpiar</BtnSec>}
         </div>
       )}
@@ -1387,6 +1440,7 @@ function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, tarifario
               <option value="">Asignar repartidor…</option>{repartidores.filter(r=>r.activo).map(r=><option key={r.id} value={r.id}>{r.nombres} {r.apellidos}</option>)}</select>
             <select value="" onChange={e=>e.target.value && masivoEstado(e.target.value)} aria-label="Cambiar estado de los seleccionados" style={{ ...inp, width:"auto", background:B.white, padding:"7px 10px" }}>
               <option value="">Cambiar estado…</option>{Object.entries(ESTADOS_PEDIDO).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}</select>
+            <BtnSec onClick={masivoTarifa}><Ico n="dollar" size={15}/> Recalcular tarifa</BtnSec>
             <BtnSec onClick={()=>setModalEtiq(true)}><Ico n="printer" size={15}/> Etiquetas</BtnSec>
             <BtnSec onClick={()=>exportarPedidos(selFilas)}><Ico n="download" size={15}/> Exportar</BtnSec>
             <button onClick={()=>setSel(new Set())} title="Quitar selección" aria-label="Quitar selección" style={{ background:"none", border:"none", color:"#B9C6D6", cursor:"pointer", display:"inline-flex", padding:4 }}><Ico n="x" size={18}/></button>
@@ -1522,10 +1576,11 @@ function ModalNuevoPedido({ repartidores, empresas, tarifariosCliente, tarifario
     repartidor_id:"", cobro_destino:false, monto_cobrar:"", tipo_servicio:"same_day",
     descripcion:"", fecha_programada: diaLocal(),
   });
-  const tarifaCliente = obtenerTarifaEmpresa(f.empresa_id, f.ambito, f.tipo_servicio, tarifariosCliente);
-  const tarifaEstandarAplicable = obtenerTarifaEstandar(f.ambito, f.tipo_servicio, tarifarioEstandar);
-  const tarifaPersonalizada = tarifaCliente || tarifaEstandarAplicable;
-  const tarifa = getTarifa(f.ambito, parseFloat(f.peso_kg), tarifaPersonalizada);
+  const [embalaje, setEmbalaje] = useState(false);
+  const empSel = empresas.find(e=>e.id===f.empresa_id) || null;
+  const recargoEmp = parseFloat(empSel && empSel.recargo_embalaje)||0;
+  const calc = calcularTarifaPedido({ empresa:empSel, ambito:f.ambito, tipoServicio:f.tipo_servicio, pesoKg:parseFloat(f.peso_kg), distrito:f.dest_distrito, embalaje: embalaje && recargoEmp>0 }, tarifariosCliente, tarifarioEstandar);
+  const tarifa = calc.tarifa;
   const [guardando, setGuardando] = useState(false);
 
   const save = async () => {
@@ -1536,6 +1591,7 @@ function ModalNuevoPedido({ repartidores, empresas, tarifariosCliente, tarifario
     const coords = await geocodificarDireccion(f.dest_direccion, f.dest_distrito);
     const { error } = await sb.from("pedidos").insert([{
       ...f, omd: codigo, tarifa_s: tarifa,
+      ...(calc.recargo>0 ? { con_embalaje:true, recargo_embalaje_s:calc.recargo } : {}),
       peso_kg: parseFloat(f.peso_kg)||null,
       monto_cobrar: parseFloat(f.monto_cobrar)||null,
       empresa_id: f.empresa_id||null, repartidor_id: f.repartidor_id||null,
@@ -1571,9 +1627,7 @@ function ModalNuevoPedido({ repartidores, empresas, tarifariosCliente, tarifario
           <div>
             <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>Nuevo pedido</div>
             <div style={{ fontSize:11, color:B.textMut }}>
-              Tarifa calculada: <strong style={{color:B.gold}}>{fmt.sol(tarifa)}</strong> ({f.ambito.replace("_"," ")})
-              {tarifaCliente && <span style={{ color:B.green, fontWeight:700 }}> · tarifario negociado con el cliente ✓</span>}
-              {!tarifaCliente && tarifaEstandarAplicable && <span style={{ color:B.gold, fontWeight:700 }}> · tarifario estándar</span>}
+              Tarifa calculada: <strong style={{color:B.goldDk}}>{fmt.sol(tarifa)}</strong> · {calc.origen}{calc.recargo>0 ? ` + embalaje ${fmt.sol(calc.recargo)}` : ""}
             </div>
           </div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20,
@@ -1655,6 +1709,13 @@ function ModalNuevoPedido({ repartidores, empresas, tarifariosCliente, tarifario
             {f.cobro_destino && <input type="number" placeholder="Monto S/" style={inp} value={f.monto_cobrar} onChange={e=>setF(p=>({...p,monto_cobrar:e.target.value}))}/>}
           </div>
         </Row>
+        {recargoEmp>0 && (
+          <label style={{ display:"flex", alignItems:"center", gap:8, marginTop:10, fontSize:13, color:B.textPri, cursor:"pointer" }}>
+            <input type="checkbox" checked={embalaje} onChange={e=>setEmbalaje(e.target.checked)} style={{ width:16, height:16 }}/>
+            Requiere embalaje (pedido de agencia) <span style={{ color:B.textMut }}>— recargo de {fmt.sol(recargoEmp)}</span>
+          </label>
+        )}
+        {calc.aviso && <div style={{ marginTop:10, fontSize:12, color:"#B45309", background:"#FFF7ED", border:"1px solid #FDBA7488", borderRadius:8, padding:"8px 10px" }}>{calc.aviso}</div>}
 
         {/* Resumen tarifa */}
         <div style={{ background:`${B.navy}08`, border:`1px solid ${B.gold}44`,
@@ -1993,7 +2054,7 @@ function ModalGeocodificarPendientes({ pedidos, onClose, onDone, toast }) {
 const COLUMNAS_PLANTILLA_ADMIN = [
   "Numero de Orden", "Destinatario", "Telefono", "Direccion", "Referencia",
   "Distrito", "Ambito (urbano-semi_urbano-periferico)", "Peso (kg)",
-  "Tipo de Servicio", "Cobro en Destino (SI/NO)", "Monto a Cobrar",
+  "Tipo de Servicio", "Cobro en Destino (SI/NO)", "Monto a Cobrar", "Embalaje (SI/NO)",
 ];
 
 function normalizarTextoAdmin(s) {
@@ -2026,6 +2087,7 @@ function mapearFilaAdmin(fila) {
       out.cobro_destino = t==="si" || t==="sí" || t==="true" || t==="1" || t==="x";
     }
     else if (k.includes("monto")) out.monto_cobrar = parseFloat(v) || null;
+    else if (k.includes("embalaje")) { const t = normalizarTextoAdmin(v); out.embalaje = t==="si" || t==="sí" || t==="true" || t==="1" || t==="x"; }
   }
   if (!out.ambito) out.ambito = "urbano";
   return out;
@@ -2119,9 +2181,8 @@ function ModalCargaMasiva({ repartidores, empresas, tarifariosCliente, tarifario
           const { data: codigo, error: errCodigo } = await sb.rpc("generar_codigo_boaz");
           if (errCodigo || !codigo) { generados.push({ ...fila, ok:false, error:"no se pudo generar código: "+(errCodigo?.message||"sin detalle") }); continue; }
           const coords = await geocodificarDireccion(fila.dest_direccion, fila.dest_distrito);
-          const tarifaPersonalizada = obtenerTarifaEmpresa(empresaId, fila.ambito, fila.tipo_servicio, tarifariosCliente)
-            || obtenerTarifaEstandar(fila.ambito, fila.tipo_servicio, tarifarioEstandar);
-          const tarifa = getTarifaSameDay(fila.ambito, fila.peso_kg, tarifaPersonalizada);
+          const calcF = calcularTarifaPedido({ empresa: empresas.find(e=>e.id===empresaId)||null, ambito:fila.ambito, tipoServicio:fila.tipo_servicio, pesoKg:fila.peso_kg, distrito:fila.dest_distrito, embalaje:!!fila.embalaje }, tarifariosCliente, tarifarioEstandar);
+          const tarifa = calcF.tarifa;
           const { error: errInsert } = await sb.from("pedidos").insert({
             omd: codigo,
             empresa_id: empresaId,
@@ -2136,6 +2197,7 @@ function ModalCargaMasiva({ repartidores, empresas, tarifariosCliente, tarifario
             ambito: fila.ambito,
             peso_kg: fila.peso_kg || null,
             tarifa_s: tarifa,
+            ...(calcF.recargo>0 ? { con_embalaje:true, recargo_embalaje_s:calcF.recargo } : {}),
             tipo_servicio: fila.tipo_servicio || null,
             cobro_destino: !!fila.cobro_destino,
             monto_cobrar: fila.cobro_destino ? (fila.monto_cobrar || null) : null,
@@ -2438,6 +2500,7 @@ function ModalDetallePedido({ pedido: p, repartidores, onClose, onRefresh, toast
             {[["N° Orden",p.cliente_referencia||"—"],["Peso",p.peso_kg?p.peso_kg+" kg":"—"],["Tarifa",fmt.sol(p.tarifa_s)],
               ["Ámbito",p.ambito?.replace("_"," ")||"—"],["Repartidor",rep?`${rep.nombres} ${rep.apellidos}`:"Sin asignar"],
               ["Cobro destino",p.cobro_destino?fmt.sol(p.monto_cobrar):"No"],
+              ...(p.con_embalaje ? [["Embalaje",`Sí · recargo ${fmt.sol(p.recargo_embalaje_s)} incluido en la tarifa`]] : []),
               ["Fecha prog.",fmt.fecha(p.fecha_programada)]].map(([k,v])=>(
               <div key={k} style={{ marginBottom:8 }}>
                 <div style={{ fontSize:10, color:B.textMut }}>{k}</div>
@@ -2816,7 +2879,7 @@ function Repartidores({ repartidores, pedidos, onRefresh, toast }) {
 // ══════════════════════════════════════════════════════════════
 // MÓDULO 4: CLIENTES / EMPRESAS
 // ══════════════════════════════════════════════════════════════
-function Clientes({ empresas, pedidos, lineasNegocio, tarifariosCliente, tarifarioVehiculoCliente, tarifarioEstandar, tarifarioVehiculoEstandar, tarifasViajeCliente=[], tarifarioViajeEstandar=[], onRefresh, toast }) {
+function Clientes({ tarifasDistrito=[], empresas, pedidos, lineasNegocio, tarifariosCliente, tarifarioVehiculoCliente, tarifarioEstandar, tarifarioVehiculoEstandar, tarifasViajeCliente=[], tarifarioViajeEstandar=[], onRefresh, toast }) {
   const [modal, setModal] = useState(false);
   const [editando, setEditando] = useState(null);
   const [modalTarifario, setModalTarifario] = useState(null); // guarda la empresa seleccionada
@@ -2902,13 +2965,15 @@ function Clientes({ empresas, pedidos, lineasNegocio, tarifariosCliente, tarifar
                       <Ico n="alert" size={14}/> Sin tarifario habilitado · elegir
                     </button>
                   ) : MODALIDADES_TARIFA.filter(m=>mods.includes(m.id)).map(m => {
-                    const x = info[m.id], ok = x.n>0;
+                    const x = info[m.id];
+                    const regla = m.id!=="pedido" ? "" : e.modo_pedido==="fijo" && e.precio_fijo_pedido!=null ? `${fmt.sol(e.precio_fijo_pedido)} fijo` : e.modo_pedido==="distrito" ? `${tarifasDistrito.filter(t=>t.empresa_id===e.id).length} distritos` : "";
+                    const ok = x.n>0 || !!regla;
                     return (
                       <button key={m.id} onClick={x.abrir} className="bz-btn-sec" title={ok ? "Ver o editar tarifas" : "Configurar tarifas"}
                         style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:12, fontWeight:600, padding:"5px 10px", borderRadius:8, cursor:"pointer",
                           border:`1px solid ${ok?B.border:"#B4530966"}`, background:ok?B.white:"#FFF7ED", color:ok?B.textPri:"#B45309" }}>
                         <Ico n={m.ico} size={14} color={ok?"#047857":"#B45309"}/>{m.label}
-                        <span style={{ fontWeight:500, color:ok?B.textMut:"#B45309" }}>{ok ? `${x.n} ${x.n===1?x.uno:x.otro}` : "configurar"}</span>
+                        <span style={{ fontWeight:500, color:ok?B.textMut:"#B45309" }}>{regla || (ok ? `${x.n} ${x.n===1?x.uno:x.otro}` : "configurar")}</span>
                       </button>
                     );
                   })}
@@ -3019,7 +3084,7 @@ function Clientes({ empresas, pedidos, lineasNegocio, tarifariosCliente, tarifar
         </div>
       )}
       {modalTarifario && (
-        <ModalTarifarioCliente empresa={modalTarifario} tarifariosCliente={tarifariosCliente} tarifarioEstandar={tarifarioEstandar}
+        <ModalTarifarioCliente tarifasDistrito={tarifasDistrito} empresa={modalTarifario} tarifariosCliente={tarifariosCliente} tarifarioEstandar={tarifarioEstandar}
           onClose={()=>setModalTarifario(null)} onSaved={()=>{onRefresh();}} toast={toast}/>
       )}
       {modalTarifarioVehiculo && (
@@ -3128,7 +3193,102 @@ function ModalTarifarioViaje({ empresa, filas, estandar=[], onClose, onSaved, to
   );
 }
 
-function ModalTarifarioCliente({ empresa, tarifariosCliente, tarifarioEstandar, onClose, onSaved, toast }) {
+// Forma de cobro por pedido del cliente: tarifario (ámbito/servicio/peso), precio fijo o por distrito, más el recargo por embalaje
+function FormaCobroPedido({ empresa, tarifasDistrito=[], onSaved, toast }) {
+  const [modo, setModo] = useState(empresa.modo_pedido || "tarifario");
+  const [precio, setPrecio] = useState(empresa.precio_fijo_pedido!=null ? String(empresa.precio_fijo_pedido) : "");
+  const [recargo, setRecargo] = useState(parseFloat(empresa.recargo_embalaje)>0 ? String(empresa.recargo_embalaje) : "");
+  const [filas, setFilas] = useState(() => tarifasDistrito.filter(t=>t.empresa_id===empresa.id).map(t=>({ distrito:t.distrito, tarifa:String(t.tarifa) })));
+  const [guardando, setGuardando] = useState(false);
+  const todos = useMemo(() => [...ZONAS_LIMA.urbano, ...ZONAS_LIMA.semi_urbano, ...ZONAS_LIMA.periferico].sort((a,b)=>a.localeCompare(b)), []);
+  const setFila = (i, k, v) => setFilas(prev => prev.map((f,j) => j===i ? { ...f, [k]:v } : f));
+
+  const importar = async (archivo) => {
+    if (!archivo) return;
+    try {
+      await asegurarXLSX();
+      const wb = XLSX.read(await archivo.arrayBuffer(), { type:"array" });
+      const datos = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval:"" });
+      const nuevas = [];
+      for (const r of datos) {
+        let d = "", t = null;
+        for (const k of Object.keys(r)) { const n = normDist(k); if (n.includes("distrito")) d = String(r[k]).trim(); else if (/tarifa|precio|costo|monto/.test(n)) t = parseFloat(String(r[k]).replace(",", ".")); }
+        if (d && t!=null && !isNaN(t)) nuevas.push({ distrito:d, tarifa:String(t) });
+      }
+      if (!nuevas.length) { toast("No encontré filas válidas. El Excel debe tener las columnas «Distrito» y «Tarifa».","error"); return; }
+      setFilas(prev => { const m = new Map(prev.map(f=>[normDist(f.distrito), f])); for (const f of nuevas) m.set(normDist(f.distrito), f); return [...m.values()]; });
+      toast(`${nuevas.length} distrito${nuevas.length===1?"":"s"} cargado${nuevas.length===1?"":"s"} — revisa y guarda`);
+    } catch (e) { toast("No se pudo leer el archivo: "+(e.message||e), "error"); }
+  };
+
+  const guardar = async () => {
+    if (modo==="fijo" && !(parseFloat(precio)>0)) { toast("Indica el precio fijo por pedido","error"); return; }
+    const validas = filas.filter(f => f.distrito.trim() && parseFloat(f.tarifa)>=0 && f.tarifa!=="");
+    if (modo==="distrito") {
+      if (!validas.length) { toast("Agrega al menos un distrito con su tarifa","error"); return; }
+      const vistos = new Set(); for (const f of validas) { const k = normDist(f.distrito); if (vistos.has(k)) { toast(`El distrito «${f.distrito}» está repetido`,"error"); return; } vistos.add(k); }
+    }
+    setGuardando(true);
+    const falta = (m) => /column|relation|does not exist|schema cache/i.test(m||"") ? " — falta ejecutar tarifarios_v3_boaz.sql en Supabase" : "";
+    let { error } = await sb.from("empresas").update({ modo_pedido:modo, precio_fijo_pedido: modo==="fijo" ? parseFloat(precio) : (parseFloat(precio)||null), recargo_embalaje: parseFloat(recargo)||0 }).eq("id", empresa.id);
+    if (!error && (modo==="distrito" || validas.length || tarifasDistrito.some(t=>t.empresa_id===empresa.id))) {
+      ({ error } = await sb.from("tarifas_distrito_cliente").delete().eq("empresa_id", empresa.id));
+      if (!error && validas.length) ({ error } = await sb.from("tarifas_distrito_cliente").insert(validas.map(f => ({ empresa_id:empresa.id, distrito:f.distrito.trim(), tarifa:parseFloat(f.tarifa), activo:true }))));
+    }
+    setGuardando(false);
+    if (error) { toast("Error: "+error.message+falta(error.message),"error"); return; }
+    toast("Forma de cobro guardada ✓"); onSaved && onSaved();
+  };
+
+  return (
+    <div style={{ border:`1px solid ${B.border}`, borderRadius:12, padding:16, marginBottom:18, background:"#FBFCFE" }}>
+      <div style={{ fontSize:13, fontWeight:700, color:B.navy, marginBottom:4 }}>Cómo se cobra cada pedido</div>
+      <div style={{ fontSize:12, color:B.textMut, marginBottom:10 }}>Define la regla principal de este cliente. El tarifario por ámbito de abajo se usa cuando la regla no aplica (por ejemplo, un distrito sin tarifa).</div>
+      <Tabs valor={modo} onChange={setModo} tabs={[{ id:"tarifario", l:"Según tarifario" }, { id:"fijo", l:"Precio fijo por pedido" }, { id:"distrito", l:"Por distrito" }]}/>
+
+      {modo==="tarifario" && <div style={{ fontSize:12, color:B.textSec, marginTop:10 }}>Cada pedido se cobra según ámbito, tipo de servicio y peso, con el tarifario de este cliente o, si no tiene, el estándar.</div>}
+      {modo==="fijo" && (
+        <div style={{ marginTop:12, display:"flex", alignItems:"flex-end", gap:10, flexWrap:"wrap" }}>
+          <div><label style={lbl}>Precio por pedido (S/, sin IGV)</label>
+            <input type="number" step="0.01" min="0" style={{ ...inp, width:180, background:B.white }} value={precio} onChange={e=>setPrecio(e.target.value)} placeholder="Ej. 4.00"/></div>
+          <div style={{ fontSize:12, color:B.textSec, paddingBottom:10 }}>Todos los pedidos de este cliente se cobran a este precio, sin importar distrito ni peso.</div>
+        </div>
+      )}
+      {modo==="distrito" && (
+        <div style={{ marginTop:12 }}>
+          <datalist id="bz-distritos">{todos.map(d=><option key={d} value={d}/>)}</datalist>
+          {filas.length>0 && (
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 140px 34px", gap:"6px 8px", alignItems:"center", marginBottom:8, maxHeight:230, overflowY:"auto", paddingRight:4 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:B.textMut }}>DISTRITO</div><div style={{ fontSize:11, fontWeight:700, color:B.textMut }}>TARIFA (S/)</div><div/>
+              {filas.map((f,i) => (<Fragment key={i}>
+                <input list="bz-distritos" style={{ ...inp, background:B.white }} value={f.distrito} onChange={e=>setFila(i,"distrito",e.target.value)} placeholder="Distrito" aria-label="Distrito"/>
+                <input type="number" step="0.01" min="0" style={{ ...inp, background:B.white }} value={f.tarifa} onChange={e=>setFila(i,"tarifa",e.target.value)} placeholder="0.00" aria-label="Tarifa"/>
+                <BtnIco n="trash" title="Quitar distrito" color="#B91C1C" onClick={()=>setFilas(prev=>prev.filter((_,j)=>j!==i))}/>
+              </Fragment>))}
+            </div>
+          )}
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+            <BtnSec onClick={()=>setFilas(prev=>[...prev, { distrito:"", tarifa:"" }])}><Ico n="plus" size={15}/> Agregar distrito</BtnSec>
+            <label className="bz-btn-sec" style={{ display:"inline-flex", alignItems:"center", gap:7, background:B.white, border:`1px solid ${B.border}`, color:B.textPri, padding:"8px 14px", borderRadius:8, fontWeight:600, fontSize:13, cursor:"pointer" }}>
+              <Ico n="upload" size={15}/> Cargar desde Excel
+              <input type="file" accept=".xlsx,.xls,.csv" style={{ display:"none" }} onChange={e=>{ importar(e.target.files[0]); e.target.value=""; }}/>
+            </label>
+            <span style={{ fontSize:12, color:B.textMut }}>El Excel debe tener las columnas «Distrito» y «Tarifa». {filas.length>0 && `${filas.length} distrito${filas.length===1?"":"s"}.`}</span>
+          </div>
+        </div>
+      )}
+
+      <div style={{ display:"flex", alignItems:"flex-end", gap:10, flexWrap:"wrap", marginTop:14, paddingTop:14, borderTop:`1px solid ${B.border}` }}>
+        <div><label style={lbl}>Recargo por embalaje (S/, opcional)</label>
+          <input type="number" step="0.01" min="0" style={{ ...inp, width:180, background:B.white }} value={recargo} onChange={e=>setRecargo(e.target.value)} placeholder="0.00"/></div>
+        <div style={{ fontSize:12, color:B.textSec, flex:"1 1 200px", paddingBottom:10 }}>Se suma solo a los pedidos que marques con «Requiere embalaje» (por ejemplo, pedidos de agencia).</div>
+        <BtnPri onClick={guardar} disabled={guardando}>{guardando ? "Guardando…" : "Guardar forma de cobro"}</BtnPri>
+      </div>
+    </div>
+  );
+}
+
+function ModalTarifarioCliente({ empresa, tarifasDistrito=[], tarifariosCliente, tarifarioEstandar, onClose, onSaved, toast }) {
   const AMBITOS = [
     { id:"urbano", label:"Urbano" },
     { id:"semi_urbano", label:"Semi Urbano" },
@@ -3220,6 +3380,8 @@ function ModalTarifarioCliente({ empresa, tarifariosCliente, tarifarioEstandar, 
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20,
             color:B.textSec, cursor:"pointer" }}>✕</button>
         </div>
+        <FormaCobroPedido empresa={empresa} tarifasDistrito={tarifasDistrito} onSaved={()=>{ onSaved && onSaved(); onClose(); }} toast={toast}/>
+        <div style={{ fontSize:13, fontWeight:700, color:B.navy, marginBottom:4 }}>Tarifario por ámbito, servicio y peso</div>
         <div style={{ fontSize:12, color:B.textMut, marginBottom:16 }}>
           Deja un ámbito en blanco para que ese cliente siga usando el tarifario genérico ahí. Si el cliente tiene tarifas distintas para Same Day y Next Day, configúralas en su propia pestaña — si no, usa "Aplica a ambos".
         </div>
@@ -4985,11 +5147,28 @@ function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesUnidad, 
   const [fechaFin, setFechaFin] = useState(hoy);
   const [generado, setGenerado] = useState(false);
   const [generandoLiquidacion, setGenerandoLiquidacion] = useState(false);
+  // Viajes, recojos y servicios cotizados del período (se suman al total a facturar)
+  const [servPer, setServPer] = useState([]);
+  useEffect(() => {
+    if (!generado) return;
+    let vivo = true;
+    (async () => {
+      try { const { data, error } = await cargarServicios(fechaInicio, fechaFin, empresaId==="todas" ? "" : empresaId);
+        if (vivo) setServPer(error ? [] : (data||[]).filter(x => x.estado==="realizado" && !x.facturado && (empresaId==="todas" || x.empresa_id===empresaId))); } catch { if (vivo) setServPer([]); }
+    })();
+    return () => { vivo = false; };
+  }, [generado, fechaInicio, fechaFin, empresaId]);
+  const subtotalServ = servPer.reduce((t,x)=>t+(parseFloat(x.monto)||0),0);
 
-  // Si el cliente elegido tiene asignaciones de unidades registradas, es un
-  // cliente de Transporte y Carga — el reporte se arma por placa/días
-  // trabajados en vez de por pedidos.
-  const esClienteTransporte = empresaId!=="todas" && asignacionesUnidad.some(a=>a.empresa_id===empresaId);
+  // ¿A este cliente se le cobra por pedido? Si tiene modalidades definidas manda eso; si no, se
+  // mantiene la regla anterior: un cliente con unidades asignadas se cobra por unidad, no por pedido.
+  const cobraPorPedido = (id) => {
+    if (!id) return true;
+    const e = empresas.find(x=>x.id===id); const m = e && e.modalidades_tarifa;
+    if (Array.isArray(m) && m.length) return m.includes("pedido");
+    return !asignacionesUnidad.some(a=>a.empresa_id===id);
+  };
+  const [confirmar, setConfirmar] = useState(null);
 
   const diasTrabajadosEnRango = (asignacion) => {
     const registrados = diasServicio.filter(d=>d.asignacion_id===asignacion.id && d.fecha>=fechaInicio && d.fecha<=fechaFin);
@@ -5006,8 +5185,7 @@ function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesUnidad, 
     return Math.round((hasta-desde)/86400000)+1;
   };
 
-  const filasTransporte = esClienteTransporte
-    ? asignacionesUnidad.filter(a=>a.empresa_id===empresaId).map(a=>{
+  const filasTransporte = asignacionesUnidad.filter(a=>empresaId==="todas" || a.empresa_id===empresaId).map(a=>{
         const tarifaDia = parseFloat(a.tarifa_dia)||0;
         const registrados = diasServicio.filter(d=>d.asignacion_id===a.id && d.fecha>=fechaInicio && d.fecha<=fechaFin && d.prestado);
         let dias, monto;
@@ -5023,8 +5201,7 @@ function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesUnidad, 
         }
         const unidad = unidades.find(u=>u.id===a.unidad_id);
         return { asignacion:a, unidad, dias, monto, igv: monto*0.18, total: monto*1.18 };
-      }).filter(f=>f.dias>0)
-    : [];
+      }).filter(f=>f.dias>0);
   const subtotalTransporte = filasTransporte.reduce((s,f)=>s+f.monto,0);
   const igvTransporte = subtotalTransporte*0.18;
   const totalTransporte = subtotalTransporte*1.18;
@@ -5037,8 +5214,9 @@ function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesUnidad, 
     return fecha >= desde && fecha <= hasta;
   };
 
-  const filtrados = pedidos
-    .filter(p => (empresaId==="todas" || p.empresa_id===empresaId) && dentroDelRango(p))
+  const enRango = pedidos.filter(p => (empresaId==="todas" || p.empresa_id===empresaId) && dentroDelRango(p));
+  const noCobrables = enRango.filter(p => !cobraPorPedido(p.empresa_id)).length;
+  const filtrados = enRango.filter(p => cobraPorPedido(p.empresa_id))
     .sort((a,b)=> new Date(a.created_at) - new Date(b.created_at));
 
   const nombreEmpresa = (id) => empresas.find(e=>e.id===id)?.nombre || "—";
@@ -5047,107 +5225,117 @@ function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesUnidad, 
   const igv = subtotal * 0.18;
   const total = subtotal * 1.18;
 
-  // Agrupado por cliente, solo relevante cuando se ve "Todos los clientes"
+  // Totales consolidados: pedidos + unidades por día + viajes y servicios
+  const subtotalGen = subtotal + subtotalTransporte + subtotalServ;
+  const igvGen = subtotalGen*0.18, totalGen = subtotalGen*1.18;
+  const hayAlgo = filtrados.length>0 || filasTransporte.length>0 || servPer.length>0;
+  const tituloCliente = empresaId==="todas" ? "Todos los clientes" : nombreEmpresa(empresaId);
+  const slugCliente = empresaId==="todas" ? "todos-los-clientes" : nombreEmpresa(empresaId).replace(/\s+/g,"-").toLowerCase();
+  const n2 = (v) => Math.round((parseFloat(v)||0)*100)/100;
+
+  // Resumen por cliente (solo cuando se ve "Todos los clientes")
   const porCliente = {};
-  filtrados.forEach(p=>{
-    const key = p.empresa_id || "sin_empresa";
-    if (!porCliente[key]) porCliente[key] = { nombre: nombreEmpresa(p.empresa_id), pedidos:[], subtotal:0 };
-    porCliente[key].pedidos.push(p);
-    porCliente[key].subtotal += parseFloat(p.tarifa_s)||0;
-  });
+  const acum = (id, campo, monto) => { const k = id || "sin_empresa"; const g = porCliente[k] || (porCliente[k] = { nombre:nombreEmpresa(id), pedidos:0, unidades:0, servicios:0 }); g[campo] += monto; };
+  filtrados.forEach(p => acum(p.empresa_id, "pedidos", parseFloat(p.tarifa_s)||0));
+  filasTransporte.forEach(f => acum(f.asignacion.empresa_id, "unidades", f.monto));
+  servPer.forEach(x => acum(x.empresa_id, "servicios", parseFloat(x.monto)||0));
 
   const exportarExcel = async () => {
-    await asegurarXLSX();
-    if (esClienteTransporte) { toast("Este cliente se liquida por días de transporte — usa el botón de Liquidación de Transporte","error"); return; }
-    if (filtrados.length===0) { toast("No hay pedidos en este rango para exportar","error"); return; }
-    const filas = filtrados.map(p=>{
-      const sub = parseFloat(p.tarifa_s)||0;
-      return [
-        p.omd, p.cliente_referencia||"", empresaId==="todas"?nombreEmpresa(p.empresa_id):undefined,
-        p.dest_nombre, p.tipo_servicio||"", fmt.fecha(p.created_at),
-        sub.toFixed(2), (sub*0.18).toFixed(2), (sub*1.18).toFixed(2),
-      ].filter(v=>v!==undefined);
-    });
-    const encabezados = ["Tracking Boaz","N° Orden","Cliente","Destinatario","Servicio","Fecha","Subtotal","IGV","Total"]
-      .filter((h,i)=> empresaId==="todas" || i!==2);
-    const ws = XLSX.utils.aoa_to_sheet([encabezados, ...filas,
-      [], ["","","","","","Subtotal", subtotal.toFixed(2)],
-      ["","","","","","IGV 18%", igv.toFixed(2)],
-      ["","","","","","TOTAL", total.toFixed(2)],
-    ]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Reporte");
-    const nombreCliente = empresaId==="todas" ? "todos-los-clientes" : nombreEmpresa(empresaId).replace(/\s+/g,"-").toLowerCase();
-    XLSX.writeFile(wb, `reporte-facturacion-${nombreCliente}-${fechaInicio}-a-${fechaFin}.xlsx`);
+    if (!hayAlgo) { toast("No hay nada que exportar en este período","error"); return; }
+    try {
+      await asegurarXLSX();
+      const wb = XLSX.utils.book_new();
+      const resumen = [["Pre-facturación", tituloCliente], ["Período", `${fmt.fecha(fechaInicio)} al ${fmt.fecha(fechaFin)}`], [],
+        ["Concepto","Cantidad","Subtotal (S/)"],
+        ["Pedidos", filtrados.length, n2(subtotal)], ["Unidades por día", filasTransporte.length, n2(subtotalTransporte)], ["Viajes, recojos y servicios cotizados", servPer.length, n2(subtotalServ)],
+        [], ["Subtotal","",n2(subtotalGen)], ["IGV 18%","",n2(igvGen)], ["TOTAL A FACTURAR","",n2(totalGen)]];
+      if (empresaId==="todas") { resumen.push([], ["Cliente","Pedidos","Unidades","Servicios","Subtotal","Total con IGV"]);
+        Object.values(porCliente).forEach(c => { const st = c.pedidos+c.unidades+c.servicios; resumen.push([c.nombre, n2(c.pedidos), n2(c.unidades), n2(c.servicios), n2(st), n2(st*1.18)]); }); }
+      const wsR = XLSX.utils.aoa_to_sheet(resumen); wsR["!cols"] = [{wch:38},{wch:14},{wch:16},{wch:14},{wch:14},{wch:16}];
+      XLSX.utils.book_append_sheet(wb, wsR, "Resumen");
+      if (filtrados.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filtrados.map(p => { const sub = parseFloat(p.tarifa_s)||0; return {
+        "Tracking Boaz":p.omd, "N° Orden":p.cliente_referencia||"", Cliente:nombreEmpresa(p.empresa_id), Destinatario:p.dest_nombre||"", Distrito:p.dest_distrito||"", Servicio:p.tipo_servicio||"", Fecha:fmt.fecha(p.created_at),
+        Subtotal:n2(sub), IGV:n2(sub*0.18), Total:n2(sub*1.18) }; })), "Pedidos");
+      if (filasTransporte.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasTransporte.map(f => ({
+        Cliente:nombreEmpresa(f.asignacion.empresa_id), Placa:(f.unidad && f.unidad.placa)||"", "Tipo de vehículo":(f.unidad && f.unidad.tipo_vehiculo)||"", "Días trabajados":f.dias, "Tarifa/día":n2(f.asignacion.tarifa_dia),
+        Subtotal:n2(f.monto), IGV:n2(f.igv), Total:n2(f.total) }))), "Unidades");
+      if (servPer.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(servPer.map(x => ({
+        Fecha:fmt.fecha(x.fecha), Cliente:nombreEmpresa(x.empresa_id), Tipo:(TIPOS_SERV[x.tipo]||{}).label||x.tipo, Concepto:x.concepto, "Cotización / ref.":x.cotizacion_ref||"", Cantidad:parseFloat(x.cantidad)||0, Tarifa:n2(x.tarifa_unit),
+        Subtotal:n2(x.monto), IGV:n2((parseFloat(x.monto)||0)*0.18), Total:n2((parseFloat(x.monto)||0)*1.18) }))), "Servicios");
+      XLSX.writeFile(wb, `pre-facturacion-${slugCliente}-${fechaInicio}-a-${fechaFin}.xlsx`);
+    } catch (e) { toast("No se pudo exportar: "+(e.message||e), "error"); }
   };
 
   const imprimir = () => {
-    if (esClienteTransporte) { toast("Este cliente se liquida por días de transporte — usa el botón de Liquidación de Transporte","error"); return; }
-    if (filtrados.length===0) { toast("No hay pedidos en este rango para imprimir","error"); return; }
-    const filasHtml = filtrados.map(p=>{
-      const sub = parseFloat(p.tarifa_s)||0;
-      return `<tr>
-        <td>${escHTML(p.omd)}</td><td>${escHTML(p.cliente_referencia||"—")}</td>
-        ${empresaId==="todas"?`<td>${escHTML(nombreEmpresa(p.empresa_id))}</td>`:""}
-        <td>${escHTML(p.dest_nombre)}</td><td>${escHTML(p.tipo_servicio||"—")}</td><td>${fmt.fecha(p.created_at)}</td>
-        <td style="text-align:right">S/ ${sub.toFixed(2)}</td>
-      </tr>`;
-    }).join("");
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Reporte de facturación</title>
+    if (!hayAlgo) { toast("No hay nada que imprimir en este período","error"); return; }
+    const todas = empresaId==="todas";
+    const m = (v) => `S/ ${(parseFloat(v)||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+    const sec = (titulo, cab, filasH, sub) => filasH ? `<h2>${titulo}</h2><table><thead><tr>${cab.map(c=>`<th${c[1]?' class="r"':''}>${c[0]}</th>`).join("")}</tr></thead><tbody>${filasH}</tbody>
+      <tfoot><tr><td colspan="${cab.length-1}" class="r">Subtotal</td><td class="r"><b>${m(sub)}</b></td></tr></tfoot></table>` : "";
+    const hPed = filtrados.map(p => `<tr><td>${escHTML(p.omd)}</td><td>${escHTML(p.cliente_referencia||"—")}</td>${todas?`<td>${escHTML(nombreEmpresa(p.empresa_id))}</td>`:""}<td>${escHTML(p.dest_nombre)}</td><td>${escHTML(p.dest_distrito||"—")}</td><td>${fmt.fecha(p.created_at)}</td><td class="r">${m(p.tarifa_s)}</td></tr>`).join("");
+    const hUni = filasTransporte.map(f => `<tr>${todas?`<td>${escHTML(nombreEmpresa(f.asignacion.empresa_id))}</td>`:""}<td>${escHTML((f.unidad&&f.unidad.placa)||"—")}</td><td>${escHTML((f.unidad&&f.unidad.tipo_vehiculo)||"—")}</td><td class="r">${f.dias}</td><td class="r">${m(f.asignacion.tarifa_dia)}</td><td class="r">${m(f.monto)}</td></tr>`).join("");
+    const hSer = servPer.map(x => `<tr><td>${fmt.fecha(x.fecha)}</td>${todas?`<td>${escHTML(nombreEmpresa(x.empresa_id))}</td>`:""}<td>${escHTML((TIPOS_SERV[x.tipo]||{}).label||x.tipo)}</td><td>${escHTML(x.concepto)}${x.cotizacion_ref?` <span class="g">· Ref. ${escHTML(x.cotizacion_ref)}</span>`:""}</td><td class="r">${parseFloat(x.cantidad)||0}</td><td class="r">${m(x.tarifa_unit)}</td><td class="r">${m(x.monto)}</td></tr>`).join("");
+    const cli = todas ? [["Cliente"]] : [];
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Pre-facturación — ${escHTML(tituloCliente)}</title>
       <style>
-        body{font-family:Arial,sans-serif;padding:24px;color:#0D1E3D}
-        h1{font-size:18px;margin-bottom:4px} .sub{color:#64748B;font-size:12px;margin-bottom:20px}
-        table{width:100%;border-collapse:collapse;font-size:12px}
-        th{background:#F0F4F8;text-align:left;padding:8px;border-bottom:2px solid #D4AF37}
-        td{padding:7px 8px;border-bottom:1px solid #E2E8F0}
-        .totales{margin-top:16px;text-align:right;font-size:13px}
-        .totales div{margin-bottom:4px} .totales strong{font-size:16px;color:#D4AF37}
+        body{font-family:Arial,sans-serif;padding:28px;color:#0D1E3D}
+        h1{font-size:19px;margin:0 0 4px} .sub{color:#64748B;font-size:12px;margin-bottom:8px}
+        h2{font-size:13px;margin:22px 0 8px;padding-bottom:5px;border-bottom:2px solid #E8780A}
+        table{width:100%;border-collapse:collapse;font-size:11.5px}
+        th{background:#F0F4F8;text-align:left;padding:7px 8px} td{padding:6px 8px;border-bottom:1px solid #E2E8F0}
+        tfoot td{border-bottom:none;background:#F8FAFC} .r{text-align:right} .g{color:#64748B}
+        .totales{margin:24px 0 0 auto;width:300px;font-size:13px} .totales div{display:flex;justify-content:space-between;padding:4px 0}
+        .totales .t{border-top:2px solid #0D1E3D;margin-top:6px;padding-top:8px;font-size:16px;font-weight:bold;color:#C4660A}
+        @media print{button{display:none}}
       </style></head><body>
-      <h1>Reporte de facturación — ${empresaId==="todas"?"Todos los clientes":escHTML(nombreEmpresa(empresaId))}</h1>
-      <div class="sub">Del ${fmt.fecha(fechaInicio+"T00:00:00")} al ${fmt.fecha(fechaFin+"T00:00:00")} · ${filtrados.length} pedido${filtrados.length===1?"":"s"}</div>
-      <table><thead><tr>
-        <th>Tracking Boaz</th><th>N° Orden</th>${empresaId==="todas"?"<th>Cliente</th>":""}<th>Destinatario</th><th>Servicio</th><th>Fecha</th><th style="text-align:right">Subtotal</th>
-      </tr></thead><tbody>${filasHtml}</tbody></table>
+      <h1>Pre-facturación — ${escHTML(tituloCliente)}</h1>
+      <div class="sub">Grupo Boaz S.A.C. · Del ${fmt.fecha(fechaInicio)} al ${fmt.fecha(fechaFin)} · Montos sin IGV salvo el total</div>
+      ${sec(`Pedidos (${filtrados.length})`, [["Tracking Boaz"],["N° Orden"],...cli,["Destinatario"],["Distrito"],["Fecha"],["Subtotal",1]], hPed, subtotal)}
+      ${sec(`Unidades por día (${filasTransporte.length})`, [...cli,["Placa"],["Tipo de vehículo"],["Días",1],["Tarifa/día",1],["Subtotal",1]], hUni, subtotalTransporte)}
+      ${sec(`Viajes, recojos y servicios cotizados (${servPer.length})`, [["Fecha"],...cli,["Tipo"],["Concepto"],["Cant.",1],["Tarifa",1],["Subtotal",1]], hSer, subtotalServ)}
       <div class="totales">
-        <div>Subtotal: S/ ${subtotal.toFixed(2)}</div>
-        <div>IGV 18%: S/ ${igv.toFixed(2)}</div>
-        <div><strong>TOTAL: S/ ${total.toFixed(2)}</strong></div>
+        <div><span>Subtotal</span><span>${m(subtotalGen)}</span></div>
+        <div><span>IGV 18%</span><span>${m(igvGen)}</span></div>
+        <div class="t"><span>TOTAL A FACTURAR</span><span>${m(totalGen)}</span></div>
       </div>
-      <button onclick="window.print()" style="margin-top:20px;padding:10px 20px;font-size:14px;cursor:pointer;">Imprimir</button>
+      <button onclick="window.print()" style="margin-top:24px;padding:10px 20px;font-size:14px;cursor:pointer;">Imprimir o guardar como PDF</button>
       </body></html>`;
     const ventana = window.open("", "_blank");
-    if (!ventana) return;
+    if (!ventana) { toast("El navegador bloqueó la ventana. Permite las ventanas emergentes para imprimir.","error"); return; }
     ventana.document.write(html);
     ventana.document.close();
   };
 
-  const generarLiquidacion = async () => {
+  const generarLiquidacion = async (tipo) => {
     const empresa = empresas.find(e=>e.id===empresaId);
     if (!empresa) return;
     const numeroLiquidacion = `LIQ-BOAZ-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
-    if (esClienteTransporte) {
-      if (filasTransporte.length===0) { toast("No hay días de servicio registrados en este rango para generar la liquidación","error"); return; }
-      setGenerandoLiquidacion(true);
-      await generarLiquidacionTransporte({
-        filasTransporte, empresa, fechaInicio, fechaFin, numeroLiquidacion, toast,
-      });
-      setGenerandoLiquidacion(false);
-      toast("Liquidación de transporte generada ✓ — revisa el número correlativo antes de enviarla");
-      return;
-    }
-    if (filtrados.length===0) { toast("No hay pedidos en este rango para generar la liquidación","error"); return; }
     setGenerandoLiquidacion(true);
-    await generarLiquidacionEntregas({
-      pedidosOrdenados: filtrados, empresa, fechaInicio, fechaFin, numeroLiquidacion, toast,
-    });
-    setGenerandoLiquidacion(false);
-    toast("Liquidación de entregas generada ✓ — revisa el número correlativo antes de enviarla");
+    try {
+      if (tipo==="transporte") {
+        await generarLiquidacionTransporte({ filasTransporte, empresa, fechaInicio, fechaFin, numeroLiquidacion, toast });
+        toast("Liquidación de transporte generada ✓ — revisa el número correlativo antes de enviarla");
+      } else {
+        await generarLiquidacionEntregas({ pedidosOrdenados: filtrados, empresa, fechaInicio, fechaFin, numeroLiquidacion, toast });
+        toast("Liquidación de entregas generada ✓ — revisa el número correlativo antes de enviarla");
+      }
+    } finally { setGenerandoLiquidacion(false); }
+  };
+
+  const marcarServiciosFacturados = () => {
+    const ids = servPer.map(x=>x.id); if (!ids.length) return;
+    setConfirmar({ msg:`Se marcarán como facturados ${ids.length} servicio${ids.length===1?"":"s"} por ${fmt.sol(subtotalServ)} (sin IGV). Dejarán de aparecer en la pre-facturación.`, ok: async () => {
+      const { error } = await sb.from("servicios_cliente").update({ facturado:true }).in("id", ids);
+      setConfirmar(null);
+      if (error) { toast("Error: "+error.message,"error"); return; }
+      toast(`${ids.length} servicio${ids.length===1?"":"s"} marcado${ids.length===1?"":"s"} como facturado${ids.length===1?"":"s"} ✓`); setServPer([]);
+    }});
   };
 
   return (
     <div>
       <div style={{ fontSize:13, color:B.textSec, marginBottom:14, maxWidth:720 }}>
-        Elige un cliente y un rango de fechas para ver qué pedidos (o placas y días de transporte) entran en la facturación de ese período.
+        Elige un cliente y un rango de fechas para ver todo lo que entra en su facturación del período: pedidos, unidades por día y viajes, recojos o servicios cotizados.
       </div>
 
       <div style={{ ...CARD, padding:16, display:"grid", gridTemplateColumns:"1.4fr 1fr 1fr auto", gap:10, marginBottom:16, alignItems:"end" }}>
@@ -5171,116 +5359,141 @@ function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesUnidad, 
         </div>
       )}
 
-      {generado && (
+      {generado && (() => {
+        const todas = empresaId==="todas";
+        const cabecera = (ico, titulo, n, sub) => (
+          <div style={{ padding:"12px 16px", borderBottom:`1px solid ${B.border}`, display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+            <div style={{ fontSize:13, fontWeight:700, color:B.textPri, display:"flex", alignItems:"center", gap:8 }}><Ico n={ico} size={16} color={B.gold}/> {titulo} ({n})</div>
+            <div style={{ fontSize:13, color:B.textSec }}>Subtotal <b style={{ color:B.textPri }}>{fmt.sol(sub)}</b></div>
+          </div>);
+        const thS = { padding:"9px 14px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap", background:"#F6F9FC", position:"sticky", top:0 };
+        const tdS = { padding:"9px 14px", fontSize:13, color:B.textPri, borderTop:`1px solid #E3EAF2` };
+        const tdR = { ...tdS, textAlign:"right", whiteSpace:"nowrap" };
+        return (
           <>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14, marginBottom:16 }}>
-              <Kpi icon={esClienteTransporte?"truck":"package"} label={esClienteTransporte ? "Unidades" : "Pedidos"} valor={(esClienteTransporte ? filasTransporte.length : filtrados.length).toLocaleString("en-US")}/>
-              <Kpi icon="receipt" label="Subtotal + IGV" color={B.textSec}
-                valor={fmt.sol(esClienteTransporte ? subtotalTransporte : subtotal)} sub={`+ ${fmt.sol(esClienteTransporte ? igvTransporte : igv)} de IGV`}/>
-              <Kpi icon="dollar" label="Total a facturar" color={B.gold} valor={fmt.sol(esClienteTransporte ? totalTransporte : total)} sub="con IGV"/>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:16 }}>
+              <Kpi icon="package" label="Pedidos" valor={fmt.sol(subtotal)} sub={`${filtrados.length.toLocaleString("en-US")} pedido${filtrados.length===1?"":"s"}`}/>
+              <Kpi icon="truck" label="Unidades por día" valor={fmt.sol(subtotalTransporte)} sub={`${filasTransporte.length} unidad${filasTransporte.length===1?"":"es"}`}/>
+              <Kpi icon="map" label="Viajes y servicios" valor={fmt.sol(subtotalServ)} sub={`${servPer.length} por facturar`}/>
+              <Kpi icon="dollar" label="Total a facturar (con IGV)" color={B.gold} valor={fmt.sol(totalGen)} sub={`${fmt.sol(subtotalGen)} + ${fmt.sol(igvGen)} de IGV`}/>
             </div>
 
-            {esClienteTransporte && (
-              <div style={{ background:"#EFF6FF", border:"1px solid #BFDBFE", borderRadius:10,
-                padding:"10px 14px", marginBottom:16, fontSize:12, color:"#1E40AF" }}>
-                Este cliente se liquida por <strong>días de transporte trabajados</strong> (Unidades), no por pedidos — por eso la tabla de abajo muestra placas en vez de guías.
+            {noCobrables>0 && (
+              <div style={{ background:"#EFF6FF", border:"1px solid #BFDBFE", borderRadius:10, padding:"10px 14px", marginBottom:16, fontSize:12.5, color:"#1E40AF" }}>
+                {noCobrables} pedido{noCobrables===1?"":"s"} del período no se suma{noCobrables===1?"":"n"} porque su cliente no tiene habilitado el cobro <strong>por pedido</strong> (se le cobra por unidad o por viaje). Si también debe cobrarse por pedido, habilítalo en Clientes → Editar.
               </div>
             )}
 
-            {!esClienteTransporte && empresaId==="todas" && Object.keys(porCliente).length>1 && (
+            {todas && Object.keys(porCliente).length>1 && (
               <div style={{ marginBottom:16, display:"flex", flexWrap:"wrap", gap:8 }}>
-                {Object.values(porCliente).map((c,i)=>(
-                  <div key={i} style={{ fontSize:11, background:B.bg, borderRadius:20, padding:"5px 12px" }}>
-                    <strong style={{ color:B.navy }}>{c.nombre}</strong>: {c.pedidos.length} pedidos · {fmt.sol(c.subtotal*1.18)}
+                {Object.values(porCliente).filter(c=>(c.pedidos+c.unidades+c.servicios)>0).map((c,i)=>(
+                  <div key={i} style={{ fontSize:12, background:B.white, border:`1px solid ${B.border}`, borderRadius:20, padding:"5px 12px" }}>
+                    <strong style={{ color:B.navy }}>{c.nombre}</strong>: {fmt.sol((c.pedidos+c.unidades+c.servicios)*1.18)}
                   </div>
                 ))}
               </div>
             )}
 
-            <div style={{ display:"flex", gap:10, marginBottom:14, flexWrap:"wrap" }}>
-              {!esClienteTransporte && (
-                <>
-                  <BtnSec onClick={exportarExcel}><Ico n="download" size={15}/> Exportar a Excel</BtnSec>
-                  <BtnSec onClick={imprimir}><Ico n="filetext" size={15}/> Imprimir / PDF</BtnSec>
-                </>
-              )}
-              {empresaId!=="todas" && (
-                <BtnPri onClick={generarLiquidacion} disabled={generandoLiquidacion}>
-                  {generandoLiquidacion ? "Generando..." : esClienteTransporte
-                    ? "Generar Liquidación de Transporte (formato Boaz)"
-                    : "Generar Liquidación de Entregas (formato Boaz)"}
-                </BtnPri>
-              )}
+            <div style={{ display:"flex", gap:10, marginBottom:8, flexWrap:"wrap" }}>
+              <BtnSec onClick={exportarExcel}><Ico n="download" size={15}/> Exportar a Excel</BtnSec>
+              <BtnSec onClick={imprimir}><Ico n="printer" size={15}/> Imprimir / PDF</BtnSec>
+              {!todas && filtrados.length>0 && <BtnSec onClick={()=>generarLiquidacion("entregas")} style={generandoLiquidacion?{opacity:.6,pointerEvents:"none"}:{}}><Ico n="filetext" size={15}/> Liquidación de Entregas (formato Boaz)</BtnSec>}
+              {!todas && filasTransporte.length>0 && <BtnSec onClick={()=>generarLiquidacion("transporte")} style={generandoLiquidacion?{opacity:.6,pointerEvents:"none"}:{}}><Ico n="filetext" size={15}/> Liquidación de Transporte (formato Boaz)</BtnSec>}
+              {servPer.length>0 && <BtnSec onClick={marcarServiciosFacturados} style={{ marginLeft:"auto" }}><Ico n="check" size={15}/> Marcar servicios como facturados</BtnSec>}
             </div>
-            {empresaId==="todas" && (
-              <div style={{ fontSize:11, color:B.textMut, marginTop:-8, marginBottom:14 }}>
-                Elige un cliente específico (no "Todos los clientes") para generar la liquidación con el formato Boaz.
+            <div style={{ fontSize:12, color:B.textMut, marginBottom:14 }}>
+              El Excel y el PDF incluyen las tres secciones y el total. {todas ? "Elige un cliente específico para generar las liquidaciones con el formato Boaz." : "Las liquidaciones con formato Boaz cubren solo pedidos o solo unidades."}
+            </div>
+
+            {!hayAlgo && (
+              <div style={CARD}><EstadoVacio icono="filetext" titulo="No hay nada por facturar en este período" texto="No se encontraron pedidos, días de unidad ni servicios pendientes con estos filtros. Prueba con otro rango de fechas."/></div>
+            )}
+
+            {filtrados.length>0 && (
+              <div style={{ ...CARD, overflow:"hidden", marginBottom:16 }}>
+                {cabecera("package", "Pedidos", filtrados.length.toLocaleString("en-US"), subtotal)}
+                <div style={{ maxHeight:340, overflow:"auto" }}>
+                <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                  <thead><tr>
+                    {["Tracking Boaz","N° Orden", ...(todas?["Cliente"]:[]), "Destinatario","Distrito","Fecha"].map(h=><th key={h} style={thS}>{h}</th>)}<th style={{ ...thS, textAlign:"right" }}>Subtotal</th>
+                  </tr></thead>
+                  <tbody>
+                    {filtrados.map(p=>(
+                      <tr key={p.id}>
+                        <td style={{ ...tdS, fontWeight:700, color:B.navy, whiteSpace:"nowrap" }}>{p.omd}</td>
+                        <td style={{ ...tdS, color:B.textSec }}>{p.cliente_referencia||"—"}</td>
+                        {todas && <td style={{ ...tdS, color:B.textSec }}>{nombreEmpresa(p.empresa_id)}</td>}
+                        <td style={tdS}>{p.dest_nombre}</td>
+                        <td style={{ ...tdS, color:B.textSec }}>{p.dest_distrito||"—"}</td>
+                        <td style={{ ...tdS, color:B.textSec, whiteSpace:"nowrap" }}>{fmt.fecha(p.created_at)}</td>
+                        <td style={{ ...tdR, fontWeight:600, color:(parseFloat(p.tarifa_s)||0)>0?B.textPri:"#B45309" }}>{(parseFloat(p.tarifa_s)||0)>0 ? fmt.sol(p.tarifa_s) : "Sin tarifa"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                </div>
               </div>
             )}
 
-            {esClienteTransporte ? (
-              <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12,
-                overflow:"hidden", maxHeight:340, overflowY:"auto" }}>
+            {filasTransporte.length>0 && (
+              <div style={{ ...CARD, overflow:"hidden", marginBottom:16 }}>
+                {cabecera("truck", "Unidades por día", filasTransporte.length, subtotalTransporte)}
+                <div style={{ maxHeight:340, overflow:"auto" }}>
                 <table style={{ width:"100%", borderCollapse:"collapse" }}>
-                  <thead style={{ position:"sticky", top:0 }}>
-                    <tr style={{ background:"#F6F9FC" }}>
-                      {["Placa","Tipo de Vehículo","Días trabajados","Tarifa/día","Subtotal"].map(h=>(
-                        <th key={h} style={{ padding:"8px 12px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
+                  <thead><tr>
+                    {[...(todas?["Cliente"]:[]), "Placa","Tipo de vehículo"].map(h=><th key={h} style={thS}>{h}</th>)}
+                    {["Días trabajados","Tarifa/día","Subtotal"].map(h=><th key={h} style={{ ...thS, textAlign:"right" }}>{h}</th>)}
+                  </tr></thead>
                   <tbody>
-                    {filasTransporte.map((f,i)=>(
-                      <tr key={f.asignacion.id} style={{ borderTop:`1px solid ${B.border}`, background:B.white }}>
-                        <td style={{ padding:"8px 12px", fontSize:12, fontWeight:700, color:B.navy }}>{f.unidad?.placa||"—"}</td>
-                        <td style={{ padding:"8px 12px", fontSize:12, color:B.textPri, textTransform:"capitalize" }}>{f.unidad?.tipo_vehiculo||"—"}</td>
-                        <td style={{ padding:"8px 12px", fontSize:12, color:B.textSec }}>{f.dias}</td>
-                        <td style={{ padding:"8px 12px", fontSize:12, color:B.textSec }}>{fmt.sol(f.asignacion.tarifa_dia)}</td>
-                        <td style={{ padding:"8px 12px", fontSize:12, fontWeight:600, color:B.textPri }}>{fmt.sol(f.monto)}</td>
+                    {filasTransporte.map(f=>(
+                      <tr key={f.asignacion.id}>
+                        {todas && <td style={{ ...tdS, color:B.textSec }}>{nombreEmpresa(f.asignacion.empresa_id)}</td>}
+                        <td style={{ ...tdS, fontWeight:700, color:B.navy }}>{f.unidad?.placa||"—"}</td>
+                        <td style={{ ...tdS, textTransform:"capitalize" }}>{f.unidad?.tipo_vehiculo||"—"}</td>
+                        <td style={tdR}>{f.dias}</td>
+                        <td style={{ ...tdR, color:B.textSec }}>{fmt.sol(f.asignacion.tarifa_dia)}</td>
+                        <td style={{ ...tdR, fontWeight:600 }}>{fmt.sol(f.monto)}</td>
                       </tr>
                     ))}
-                    {filasTransporte.length===0 && (
-                      <tr><td colSpan={5} style={{ padding:30, textAlign:"center", color:B.textMut, fontSize:13 }}>
-                        No hay días de servicio en este rango de fechas
-                      </td></tr>
-                    )}
                   </tbody>
                 </table>
+                </div>
               </div>
-            ) : (
-              <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12,
-                overflow:"hidden", maxHeight:340, overflowY:"auto" }}>
+            )}
+
+            {servPer.length>0 && (
+              <div style={{ ...CARD, overflow:"hidden", marginBottom:16 }}>
+                {cabecera("map", "Viajes, recojos y servicios cotizados", servPer.length, subtotalServ)}
+                <div style={{ maxHeight:340, overflow:"auto" }}>
                 <table style={{ width:"100%", borderCollapse:"collapse" }}>
-                  <thead style={{ position:"sticky", top:0 }}>
-                    <tr style={{ background:"#F6F9FC" }}>
-                      {["Tracking Boaz","N° Orden", ...(empresaId==="todas"?["Cliente"]:[]), "Destinatario","Servicio","Fecha","Subtotal"].map(h=>(
-                        <th key={h} style={{ padding:"8px 12px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtrados.map((p,i)=>(
-                      <tr key={p.id} style={{ borderTop:`1px solid ${B.border}`, background:B.white }}>
-                        <td style={{ padding:"8px 12px", fontSize:12, fontWeight:700, color:B.navy }}>{p.omd}</td>
-                        <td style={{ padding:"8px 12px", fontSize:12, color:B.textSec }}>{p.cliente_referencia||"—"}</td>
-                        {empresaId==="todas" && <td style={{ padding:"8px 12px", fontSize:12, color:B.textSec }}>{nombreEmpresa(p.empresa_id)}</td>}
-                        <td style={{ padding:"8px 12px", fontSize:12, color:B.textPri }}>{p.dest_nombre}</td>
-                        <td style={{ padding:"8px 12px", fontSize:11, color:B.textSec }}>{p.tipo_servicio||"—"}</td>
-                        <td style={{ padding:"8px 12px", fontSize:11, color:B.textMut }}>{fmt.fecha(p.created_at)}</td>
-                        <td style={{ padding:"8px 12px", fontSize:12, fontWeight:600, color:B.textPri }}>{fmt.sol(p.tarifa_s)}</td>
-                      </tr>
-                    ))}
-                    {filtrados.length===0 && (
-                      <tr><td colSpan={7} style={{ padding:30, textAlign:"center", color:B.textMut, fontSize:13 }}>
-                        No hay pedidos en este rango de fechas
-                      </td></tr>
-                    )}
-                  </tbody>
+                  <thead><tr>
+                    {["Fecha", ...(todas?["Cliente"]:[]), "Tipo","Concepto"].map(h=><th key={h} style={thS}>{h}</th>)}
+                    {["Cant.","Tarifa","Subtotal"].map(h=><th key={h} style={{ ...thS, textAlign:"right" }}>{h}</th>)}
+                  </tr></thead>
+                  <tbody>{servPer.map(x => (
+                    <tr key={x.id}>
+                      <td style={{ ...tdS, color:B.textSec, whiteSpace:"nowrap" }}>{fmt.fecha(x.fecha)}</td>
+                      {todas && <td style={{ ...tdS, color:B.textSec }}>{nombreEmpresa(x.empresa_id)}</td>}
+                      <td style={tdS}><Etiqueta tono={(TIPOS_SERV[x.tipo]||{}).tono}>{(TIPOS_SERV[x.tipo]||{}).label||x.tipo}</Etiqueta></td>
+                      <td style={tdS}>{x.concepto}{x.cotizacion_ref ? <span style={{ color:B.textMut }}> · Ref. {x.cotizacion_ref}</span> : null}</td>
+                      <td style={tdR}>{parseFloat(x.cantidad)||0}</td><td style={{ ...tdR, color:B.textSec }}>{fmt.sol(x.tarifa_unit)}</td><td style={{ ...tdR, fontWeight:600 }}>{fmt.sol(x.monto)}</td>
+                    </tr>))}</tbody>
                 </table>
+                </div>
+              </div>
+            )}
+
+            {hayAlgo && (
+              <div style={{ ...CARD, padding:"14px 18px", background:"#FFF8EF", borderColor:`${B.gold}66`, display:"flex", justifyContent:"flex-end", gap:28, flexWrap:"wrap", alignItems:"baseline", fontSize:13, color:B.textSec }}>
+                <span>Subtotal: <b style={{ color:B.textPri }}>{fmt.sol(subtotalGen)}</b></span>
+                <span>IGV 18%: <b style={{ color:B.textPri }}>{fmt.sol(igvGen)}</b></span>
+                <span style={{ fontSize:15, color:B.navy }}>Total a facturar: <b style={{ fontSize:18, color:B.goldDk }}>{fmt.sol(totalGen)}</b></span>
               </div>
             )}
           </>
-        )}
+        );
+      })()}
+      {confirmar && <Confirm msg={confirmar.msg} onOk={confirmar.ok} onCancel={()=>setConfirmar(null)}/>}
     </div>
   );
 }
@@ -6187,6 +6400,254 @@ function DirectorioPersonas({ personal, terceros, repartidores }) {
 // ══════════════════════════════════════════════════════════════
 // FASE 4: Usuarios y roles, auditoría, incidencias
 // ══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
+// VIAJES, RECOJOS Y SERVICIOS COTIZADOS
+// Lo que se cobra a un cliente fuera de los pedidos y de la unidad por día.
+// ══════════════════════════════════════════════════════════════
+const TIPOS_SERV = {
+  recojo:   { label:"Recojo",            ico:"package", tono:"info",   ayuda:"Visita para recoger mercadería (se cobra por recojo)" },
+  viaje:    { label:"Viaje",             ico:"map",     tono:"ok",     ayuda:"Traslado o ruta acordada (se cobra por viaje)" },
+  especial: { label:"Servicio cotizado", ico:"filetext", tono:"warn",  ayuda:"Servicio eventual con precio cotizado en el momento" },
+};
+const ESTADOS_SERV = { pendiente:["Pendiente","warn"], realizado:["Realizado","ok"], anulado:["Anulado","neutro"] };
+const cargarServicios = async (desde, hasta, empresaId) => {
+  let q = sb.from("servicios_cliente").select("*").order("fecha",{ascending:false});
+  if (desde) q = q.gte("fecha", desde);
+  if (hasta) q = q.lte("fecha", hasta);
+  if (empresaId) q = q.eq("empresa_id", empresaId);
+  return q;
+};
+
+function ServiciosCliente({ empresas=[], repartidores=[], unidades=[], tarifasViajeCliente=[], tarifarioViajeEstandar=[], usuario, toast }) {
+  const hoy = diaLocal();
+  const [filas, setFilas] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [faltaSql, setFaltaSql] = useState(false);
+  const [desde, setDesde] = useState(hoy.slice(0,8)+"01");
+  const [hasta, setHasta] = useState(hoy);
+  const [fEmp, setFEmp] = useState("");
+  const [fTipo, setFTipo] = useState("todos");
+  const [fFact, setFFact] = useState("todos");
+  const [busq, setBusq] = useState("");
+  const [form, setForm] = useState(null);
+  const [guardando, setGuardando] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(null);
+
+  const cargar = useCallback(async () => {
+    setCargando(true);
+    const { data, error } = await cargarServicios(desde, hasta, "");
+    if (error) { setFaltaSql(/relation|does not exist|schema cache/i.test(error.message||"")); setFilas([]); }
+    else { setFaltaSql(false); setFilas(data||[]); }
+    setCargando(false);
+  }, [desde, hasta]);
+  useEffect(() => { cargar(); }, [cargar]);
+
+  const nomEmp = useMemo(() => { const m = {}; for (const e of empresas) m[e.id] = e.nombre; return m; }, [empresas]);
+  const q = busq.trim().toLowerCase();
+  const filtrados = filas.filter(f =>
+    (!fEmp || f.empresa_id===fEmp) && (fTipo==="todos" || f.tipo===fTipo) &&
+    (fFact==="todos" || (fFact==="si" ? f.facturado : !f.facturado && f.estado!=="anulado")) &&
+    (!q || `${f.concepto||""} ${nomEmp[f.empresa_id]||""} ${f.placa||""} ${f.cotizacion_ref||""}`.toLowerCase().includes(q)));
+  const pg = usePaginacion(filtrados, 25, "servicios");
+  const vigentes = filtrados.filter(f => f.estado!=="anulado");
+  const total = vigentes.reduce((t,f)=>t+(parseFloat(f.monto)||0),0);
+  const porFacturar = vigentes.filter(f=>!f.facturado && f.estado==="realizado");
+  const montoPorFacturar = porFacturar.reduce((t,f)=>t+(parseFloat(f.monto)||0),0);
+  const cuenta = (t) => filas.filter(f=>f.tipo===t).length;
+
+  // Formulario
+  const nuevo = () => setForm({ empresa_id:fEmp||"", fecha:hoy, tipo:"recojo", concepto:"", tipo_vehiculo:"", placa:"", repartidor_id:"", cantidad:"1", tarifa_unit:"", cotizacion_ref:"", notas:"", estado:"realizado" });
+  const editar = (f) => setForm({ ...f, cantidad:String(f.cantidad??1), tarifa_unit:String(f.tarifa_unit??""), tipo_vehiculo:f.tipo_vehiculo||"", placa:f.placa||"", repartidor_id:f.repartidor_id||"", cotizacion_ref:f.cotizacion_ref||"", notas:f.notas||"" });
+  const set = (k,v) => setForm(p => ({ ...p, [k]:v }));
+  // Tarifas acordadas que aplican al cliente y tipo elegidos (las del cliente primero; si no tiene, las estándar)
+  const opciones = useMemo(() => {
+    if (!form || form.tipo==="especial") return [];
+    const delCliente = tarifasViajeCliente.filter(t => t.empresa_id===form.empresa_id && t.activo!==false && (t.unidad||"viaje")===form.tipo);
+    const base = delCliente.length ? delCliente.map(t=>({ ...t, origen:"cliente" })) : tarifarioViajeEstandar.filter(t => t.activo!==false && (t.unidad||"viaje")===form.tipo).map(t=>({ ...t, origen:"estándar" }));
+    return base;
+  }, [form && form.empresa_id, form && form.tipo, tarifasViajeCliente, tarifarioViajeEstandar]);
+  const elegirTarifa = (id) => { const t = opciones.find(o=>String(o.id)===String(id)); if (!t) return; setForm(p => ({ ...p, concepto:t.concepto, tarifa_unit:String(t.tarifa), tipo_vehiculo:t.tipo_vehiculo||p.tipo_vehiculo })); };
+  const montoForm = form ? Math.round((parseFloat(form.cantidad)||0)*(parseFloat(form.tarifa_unit)||0)*100)/100 : 0;
+
+  const guardar = async () => {
+    if (!form.empresa_id) { toast("Elige el cliente","error"); return; }
+    if (!form.concepto.trim()) { toast("Indica el concepto del servicio","error"); return; }
+    if (!(parseFloat(form.cantidad)>0)) { toast("La cantidad debe ser mayor que cero","error"); return; }
+    if (form.tarifa_unit==="" || !(parseFloat(form.tarifa_unit)>=0)) { toast("Indica la tarifa","error"); return; }
+    setGuardando(true);
+    const fila = { empresa_id:form.empresa_id, fecha:form.fecha, tipo:form.tipo, concepto:form.concepto.trim(), tipo_vehiculo:form.tipo_vehiculo||null, placa:(form.placa||"").trim().toUpperCase()||null,
+      repartidor_id:form.repartidor_id||null, cantidad:parseFloat(form.cantidad), tarifa_unit:parseFloat(form.tarifa_unit), monto:montoForm,
+      cotizacion_ref:(form.cotizacion_ref||"").trim()||null, notas:(form.notas||"").trim()||null, estado:form.estado };
+    const { error } = form.id ? await sb.from("servicios_cliente").update(fila).eq("id", form.id)
+      : await sb.from("servicios_cliente").insert([{ ...fila, creado_por:(usuario && (usuario.nombre||usuario.email))||null }]);
+    setGuardando(false);
+    if (error) { toast("Error: "+error.message+(/relation|does not exist|schema cache/i.test(error.message||"") ? " — falta ejecutar servicios_cliente_boaz.sql en Supabase" : ""),"error"); return; }
+    toast(form.id ? "Servicio actualizado ✓" : "Servicio registrado ✓"); setForm(null); cargar();
+  };
+  const marcarFacturado = async (f, valor) => {
+    const { error } = await sb.from("servicios_cliente").update({ facturado:valor }).eq("id", f.id);
+    if (error) { toast("Error: "+error.message,"error"); return; }
+    toast(valor ? "Marcado como facturado ✓" : "Vuelve a estar por facturar ✓"); cargar();
+  };
+  const eliminar = async () => {
+    const { error } = await sb.from("servicios_cliente").delete().eq("id", confirmDel.id);
+    setConfirmDel(null);
+    if (error) { toast("Error: "+error.message,"error"); return; }
+    toast("Servicio eliminado ✓"); cargar();
+  };
+  const exportar = async () => {
+    try {
+      await asegurarXLSX();
+      const nomRep = (id) => { const r = repartidores.find(x=>x.id===id); return r ? `${r.nombres} ${r.apellidos}` : ""; };
+      const datos = filtrados.map(f => ({ Fecha:f.fecha, Cliente:nomEmp[f.empresa_id]||"", Tipo:(TIPOS_SERV[f.tipo]||{}).label||f.tipo, Concepto:f.concepto, Vehículo:f.tipo_vehiculo||"", Placa:f.placa||"", Conductor:nomRep(f.repartidor_id),
+        Cantidad:parseFloat(f.cantidad)||0, "Tarifa (S/)":parseFloat(f.tarifa_unit)||0, "Monto sin IGV (S/)":parseFloat(f.monto)||0, "Cotización / ref.":f.cotizacion_ref||"", Estado:(ESTADOS_SERV[f.estado]||[f.estado])[0], Facturado:f.facturado?"Sí":"No", Notas:f.notas||"" }));
+      const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(datos), "Servicios");
+      XLSX.writeFile(wb, `viajes_servicios_boaz_${desde}_${hasta}.xlsx`);
+    } catch (e) { toast("No se pudo exportar: "+(e.message||e), "error"); }
+  };
+
+  const th = { textAlign:"left", padding:"10px 14px", fontSize:11, fontWeight:700, color:B.textSec, background:"#F6F9FC", letterSpacing:".3px", borderBottom:"1px solid #E3EAF2", whiteSpace:"nowrap" };
+  const td = { padding:"12px 14px", fontSize:13, borderBottom:"1px solid #E3EAF2", color:B.textPri, verticalAlign:"middle" };
+
+  return (
+    <div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:16 }}>
+        <div style={{ fontSize:13, color:B.textSec, maxWidth:640 }}>Recojos, viajes y servicios cotizados que se cobran a un cliente además de sus pedidos o de su unidad por día. Lo registrado aquí aparece en la Pre-facturación del cliente.</div>
+        <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+          <BtnSec onClick={exportar}><Ico n="download" size={15}/> Excel</BtnSec>
+          <BtnPri onClick={nuevo}><Ico n="plus" size={15} sw={2.4}/> Registrar servicio</BtnPri>
+        </div>
+      </div>
+
+      {faltaSql && (
+        <div style={{ background:"#FFF7ED", border:"1px solid #FDBA74", borderRadius:12, padding:"12px 14px", marginBottom:14, fontSize:13, color:"#9A3412", display:"flex", gap:8, alignItems:"flex-start" }}>
+          <Ico n="alert" size={16}/><div>Falta activar este módulo en la base de datos: ejecuta <b>servicios_cliente_boaz.sql</b> en Supabase (SQL Editor) y recarga la página.</div>
+        </div>
+      )}
+
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:16 }}>
+        <Kpi icon="map" label="Servicios en el período" valor={vigentes.length.toLocaleString("en-US")} sub={`${cuenta("recojo")} recojos · ${cuenta("viaje")} viajes · ${cuenta("especial")} cotizados`}/>
+        <Kpi icon="dollar" label="Monto del período (sin IGV)" valor={fmt.sol(total)} color={B.goldDk}/>
+        <Kpi icon="clock" label="Por facturar" valor={fmt.sol(montoPorFacturar)} sub={`${porFacturar.length} servicio${porFacturar.length===1?"":"s"} realizado${porFacturar.length===1?"":"s"}`} color={B.orange} cv={montoPorFacturar>0?"#B45309":undefined}/>
+        <Kpi icon="check" label="Ya facturado" valor={fmt.sol(total-vigentes.filter(f=>!f.facturado).reduce((t,f)=>t+(parseFloat(f.monto)||0),0))} color={B.green}/>
+      </div>
+
+      <div style={{ ...CARD, padding:14, marginBottom:12, display:"flex", gap:12, flexWrap:"wrap", alignItems:"flex-end" }}>
+        <div><label style={lbl}>Desde</label><input type="date" style={{ ...inp, background:B.white, width:155 }} value={desde} onChange={e=>setDesde(e.target.value)}/></div>
+        <div><label style={lbl}>Hasta</label><input type="date" style={{ ...inp, background:B.white, width:155 }} value={hasta} onChange={e=>setHasta(e.target.value)}/></div>
+        <div style={{ flex:"1 1 200px", minWidth:0 }}><label style={lbl}>Cliente</label>
+          <select style={{ ...inp, background:B.white }} value={fEmp} onChange={e=>setFEmp(e.target.value)}><option value="">Todos</option>{empresas.map(e=><option key={e.id} value={e.id}>{e.nombre}</option>)}</select></div>
+        <div><label style={lbl}>Facturación</label>
+          <select style={{ ...inp, background:B.white, width:160 }} value={fFact} onChange={e=>setFFact(e.target.value)}><option value="todos">Todos</option><option value="no">Por facturar</option><option value="si">Facturados</option></select></div>
+        <div style={{ flex:"1 1 200px", minWidth:0 }}><label style={lbl}>Buscar</label><Buscador value={busq} onChange={setBusq} placeholder="Concepto, placa o cotización" width="100%"/></div>
+      </div>
+      <Tabs valor={fTipo} onChange={setFTipo} style={{ marginBottom:12 }}
+        tabs={[{ id:"todos", l:"Todos", n:filas.length }, ...Object.keys(TIPOS_SERV).map(t=>({ id:t, l:TIPOS_SERV[t].label+"s", n:cuenta(t) }))].map(t=> t.id==="especial" ? { ...t, l:"Servicios cotizados" } : t)}/>
+
+      <div style={{ ...CARD, overflow:"hidden" }}>
+        {cargando ? <Cargando filas={5}/> : filtrados.length===0 ? (
+          <EstadoVacio icono="map" titulo={filas.length===0 ? "Aún no hay servicios en este período" : "Ningún servicio coincide"}
+            texto={filas.length===0 ? "Registra aquí los recojos, viajes o servicios cotizados para que entren en la facturación del cliente." : "Cambia las fechas o los filtros."}>
+            {filas.length===0 && !faltaSql && <BtnPri onClick={nuevo}><Ico n="plus" size={15} sw={2.4}/> Registrar servicio</BtnPri>}
+          </EstadoVacio>
+        ) : (<>
+          <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead><tr><th style={th}>Fecha</th><th style={th}>Cliente</th><th style={th}>Tipo</th><th style={th}>Concepto</th><th style={th}>Unidad</th><th style={{...th,textAlign:"right"}}>Cant.</th><th style={{...th,textAlign:"right"}}>Tarifa</th><th style={{...th,textAlign:"right"}}>Monto</th><th style={th}>Estado</th><th style={th}></th></tr></thead>
+            <tbody>{pg.visibles.map(f => { const t = TIPOS_SERV[f.tipo] || TIPOS_SERV.especial; const e = ESTADOS_SERV[f.estado] || ESTADOS_SERV.realizado; const anul = f.estado==="anulado"; return (
+              <tr key={f.id} style={{ opacity:anul?0.55:1 }}>
+                <td style={{...td,whiteSpace:"nowrap"}}>{fmt.fecha(f.fecha)}</td>
+                <td style={{...td,fontWeight:600}}>{nomEmp[f.empresa_id]||"—"}</td>
+                <td style={td}><Etiqueta tono={t.tono}>{t.label}</Etiqueta></td>
+                <td style={td}>{f.concepto}{f.cotizacion_ref && <div style={{ fontSize:12, color:B.textMut }}>Ref. {f.cotizacion_ref}</div>}</td>
+                <td style={{...td,color:B.textSec,whiteSpace:"nowrap"}}>{f.placa || (f.tipo_vehiculo ? <span style={{ textTransform:"capitalize" }}>{f.tipo_vehiculo}</span> : "—")}</td>
+                <td style={{...td,textAlign:"right"}}>{parseFloat(f.cantidad)||0}</td>
+                <td style={{...td,textAlign:"right",whiteSpace:"nowrap",color:B.textSec}}>{fmt.sol(f.tarifa_unit)}</td>
+                <td style={{...td,textAlign:"right",whiteSpace:"nowrap",fontWeight:700,textDecoration:anul?"line-through":"none"}}>{fmt.sol(f.monto)}</td>
+                <td style={td}>{f.facturado ? <Etiqueta tono="ok">Facturado</Etiqueta> : <Etiqueta tono={e[1]}>{e[0]}</Etiqueta>}</td>
+                <td style={{...td,padding:"6px 10px"}}>
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"flex-end", gap:4, whiteSpace:"nowrap" }}>
+                    {!anul && f.estado==="realizado" && (
+                      <button className="bz-btn-sec" onClick={()=>marcarFacturado(f, !f.facturado)}
+                        style={{ fontSize:12, fontWeight:600, color:f.facturado?B.textSec:"#047857", background:B.white, border:`1px solid ${B.border}`, borderRadius:8, padding:"5px 10px", cursor:"pointer" }}>{f.facturado ? "Quitar facturado" : "Marcar facturado"}</button>)}
+                    <BtnIco n="edit" title="Editar servicio" onClick={()=>editar(f)}/>
+                    {!f.facturado && <BtnIco n="trash" title="Eliminar servicio" color="#B91C1C" onClick={()=>setConfirmDel(f)}/>}
+                  </div>
+                </td>
+              </tr>); })}</tbody>
+          </table>
+          </div>
+          {pg.pie}
+        </>)}
+      </div>
+
+      {form && (
+        <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1500, display:"flex", alignItems:"center", justifyContent:"center", padding:12 }}>
+          <div style={{ background:B.white, borderRadius:16, padding:24, width:600, maxWidth:"100%", maxHeight:"92vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+              <div style={{ fontSize:17, fontWeight:800, color:B.navy }}>{form.id ? "Editar servicio" : "Registrar servicio"}</div>
+              <button onClick={()=>setForm(null)} style={{ background:"none", border:"none", fontSize:20, color:B.textSec, cursor:"pointer" }}>✕</button>
+            </div>
+            <label style={lbl}>Tipo de servicio</label>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:14 }}>
+              {Object.entries(TIPOS_SERV).map(([id,t]) => { const on = form.tipo===id; return (
+                <button key={id} onClick={()=>set("tipo",id)} title={t.ayuda}
+                  style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 12px", borderRadius:10, cursor:"pointer", textAlign:"left", fontSize:13, fontWeight:on?700:500,
+                    border:`1px solid ${on?B.gold:B.border}`, background:on?"#FFF7ED":B.white, color:on?B.goldDk:B.textPri }}>
+                  <Ico n={t.ico} size={16}/>{t.label}
+                </button>); })}
+            </div>
+            <div style={{ fontSize:12, color:B.textMut, marginTop:-8, marginBottom:14 }}>{TIPOS_SERV[form.tipo].ayuda}.</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <div><label style={lbl}>Cliente</label>
+                <select style={inp} value={form.empresa_id} onChange={e=>set("empresa_id",e.target.value)}><option value="">— Selecciona —</option>{empresas.map(e=><option key={e.id} value={e.id}>{e.nombre}</option>)}</select></div>
+              <div><label style={lbl}>Fecha del servicio</label><input type="date" style={inp} value={form.fecha} onChange={e=>set("fecha",e.target.value)}/></div>
+              {opciones.length>0 && (
+                <div style={{ gridColumn:"1/-1" }}><label style={lbl}>Tarifa acordada ({opciones[0].origen==="cliente" ? "tarifario del cliente" : "tarifario estándar"})</label>
+                  <select style={inp} value="" onChange={e=>elegirTarifa(e.target.value)}>
+                    <option value="">Elegir para completar concepto y precio…</option>
+                    {opciones.map(o=><option key={o.id} value={o.id}>{o.concepto}{o.tipo_vehiculo?` · ${o.tipo_vehiculo}`:""} — {fmt.sol(o.tarifa)}</option>)}
+                  </select></div>
+              )}
+              {form.tipo!=="especial" && form.empresa_id && opciones.length===0 && (
+                <div style={{ gridColumn:"1/-1", fontSize:12, color:"#B45309", background:"#FFF7ED", border:"1px solid #FDBA7488", borderRadius:8, padding:"8px 10px" }}>
+                  Este cliente no tiene tarifas por {form.tipo} configuradas. Puedes escribir el concepto y el precio a mano, o configurarlas en Clientes → Por viaje.
+                </div>
+              )}
+              <div style={{ gridColumn:"1/-1" }}><label style={lbl}>Concepto</label>
+                <input style={inp} value={form.concepto} onChange={e=>set("concepto",e.target.value)} placeholder={form.tipo==="recojo" ? "Ej. Recojo en almacén" : form.tipo==="viaje" ? "Ej. Lima – Callao" : "Ej. Unidad exclusiva a Huacho"}/></div>
+              <div><label style={lbl}>{form.tipo==="recojo" ? "N° de recojos" : form.tipo==="viaje" ? "N° de viajes" : "Cantidad"}</label>
+                <input type="number" min="0" step="1" style={inp} value={form.cantidad} onChange={e=>set("cantidad",e.target.value)}/></div>
+              <div><label style={lbl}>{form.tipo==="especial" ? "Precio cotizado (S/, sin IGV)" : "Tarifa unitaria (S/, sin IGV)"}</label>
+                <input type="number" min="0" step="0.01" style={inp} value={form.tarifa_unit} onChange={e=>set("tarifa_unit",e.target.value)} placeholder="0.00"/></div>
+              {form.tipo==="especial" && <div style={{ gridColumn:"1/-1" }}><label style={lbl}>N° de cotización o referencia del acuerdo</label>
+                <input style={inp} value={form.cotizacion_ref} onChange={e=>set("cotizacion_ref",e.target.value)} placeholder="Ej. COT-014, correo del 12/11, WhatsApp de Naim"/></div>}
+              <div><label style={lbl}>Placa (opcional)</label>
+                <input style={inp} list="bz-placas-serv" value={form.placa} onChange={e=>set("placa",e.target.value.toUpperCase())} placeholder="Ej. ABC-123"/>
+                <datalist id="bz-placas-serv">{unidades.map(u=><option key={u.id} value={u.placa}/>)}</datalist></div>
+              <div><label style={lbl}>Conductor (opcional)</label>
+                <select style={inp} value={form.repartidor_id} onChange={e=>set("repartidor_id",e.target.value)}><option value="">—</option>{repartidores.filter(r=>r.activo).map(r=><option key={r.id} value={r.id}>{r.nombres} {r.apellidos}</option>)}</select></div>
+              <div><label style={lbl}>Estado</label>
+                <select style={inp} value={form.estado} onChange={e=>set("estado",e.target.value)}><option value="realizado">Realizado</option><option value="pendiente">Pendiente (programado)</option><option value="anulado">Anulado</option></select></div>
+              <div style={{ gridColumn:"1/-1" }}><label style={lbl}>Notas</label><textarea style={{ ...inp, minHeight:50 }} value={form.notas} onChange={e=>set("notas",e.target.value)}/></div>
+            </div>
+            <div style={{ background:`${B.navy}08`, border:`1px solid ${B.gold}44`, borderRadius:10, padding:14, marginTop:14, display:"flex", gap:28, flexWrap:"wrap" }}>
+              <div><div style={{ fontSize:12, color:B.textSec }}>Monto (sin IGV)</div><div style={{ fontSize:22, fontWeight:800, color:B.goldDk }}>{fmt.sol(montoForm)}</div></div>
+              <div><div style={{ fontSize:12, color:B.textSec }}>IGV (18%)</div><div style={{ fontSize:15, fontWeight:600, color:B.textSec, marginTop:6 }}>{fmt.sol(montoForm*0.18)}</div></div>
+              <div><div style={{ fontSize:12, color:B.textSec }}>Total con IGV</div><div style={{ fontSize:15, fontWeight:700, color:B.navy, marginTop:6 }}>{fmt.sol(montoForm*1.18)}</div></div>
+            </div>
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:18 }}>
+              <BtnSec onClick={()=>setForm(null)}>Cancelar</BtnSec>
+              <BtnPri onClick={guardar} disabled={guardando}>{guardando ? "Guardando…" : (form.id ? "Guardar cambios" : "Registrar servicio")}</BtnPri>
+            </div>
+          </div>
+        </div>
+      )}
+      {confirmDel && <Confirm msg={`Se eliminará «${confirmDel.concepto}» por ${fmt.sol(confirmDel.monto)}. No se puede deshacer.`} onOk={eliminar} onCancel={()=>setConfirmDel(null)}/>}
+    </div>
+  );
+}
+
 const TIPOS_INCIDENCIA = ["Daño del producto","Extravío","Cliente ausente","Dirección errónea","Rechazo del destinatario","Retraso","Reclamo del cliente","Otro"];
 const ESTADOS_INC = { abierta:{ label:"Abierta", c:"#B91C1C", bg:"#FEF2F2" }, en_proceso:{ label:"En proceso", c:"#B45309", bg:"#FFF7ED" }, resuelta:{ label:"Resuelta", c:"#047857", bg:"#ECFDF5" } };
 
@@ -9208,7 +9669,7 @@ function Configuracion({ onRefresh, toast }) {
 // líneas de negocio + tipos de servicio, y tarifarios negociados
 // por cliente. Todo el tema de precios en un solo lugar.
 // ══════════════════════════════════════════════════════════════
-function Catalogo({ lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVehiculoEstandar, recargoFeriadoPct, empresas=[], tarifariosCliente=[], tarifarioVehiculoCliente=[], tarifasViajeCliente=[], tarifarioViajeEstandar=[], onRefresh, toast }) {
+function Catalogo({ tarifasDistrito=[], lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVehiculoEstandar, recargoFeriadoPct, empresas=[], tarifariosCliente=[], tarifarioVehiculoCliente=[], tarifasViajeCliente=[], tarifarioViajeEstandar=[], onRefresh, toast }) {
   const [modalTarCli, setModalTarCli] = useState(null);
   const [modalTarVeh, setModalTarVeh] = useState(null);
   const [modalTarViaje, setModalTarViaje] = useState(null);
@@ -9471,7 +9932,7 @@ function Catalogo({ lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVe
           onClose={()=>setModalTarifarioEstandar(false)} onSaved={()=>{onRefresh();}} toast={toast}/>
       )}
       {modalTarCli && (
-        <ModalTarifarioCliente empresa={modalTarCli} tarifariosCliente={tarifariosCliente} tarifarioEstandar={tarifarioEstandar}
+        <ModalTarifarioCliente tarifasDistrito={tarifasDistrito} empresa={modalTarCli} tarifariosCliente={tarifariosCliente} tarifarioEstandar={tarifarioEstandar}
           onClose={()=>setModalTarCli(null)} onSaved={()=>{onRefresh();}} toast={toast}/>
       )}
       {modalTarViaje && (
@@ -9589,6 +10050,7 @@ export default function BoazERP() {
   const [tarifarioEstandar, setTarifarioEstandar] = useState([]);
   const [tarifarioVehiculoEstandar, setTarifarioVehiculoEstandar] = useState([]);
   const [tarifasViajeCliente, setTarifasViajeCliente] = useState([]);
+  const [tarifasDistrito, setTarifasDistrito] = useState([]);
   const [tarifarioViajeEstandar, setTarifarioViajeEstandar] = useState([]);
   const [recargoFeriadoPct, setRecargoFeriadoPct] = useState(0);
   const [diasServicio, setDiasServicio] = useState([]);
@@ -9601,7 +10063,7 @@ export default function BoazERP() {
   const cargar = useCallback(async (opts={}) => {
     if (!opts.silencioso) setCargando(true);
     try {
-      const [p,r,e,l,ln,ts,u,au,tc,ds,tv,te,tve,cr,tvj,tvje] = await Promise.all([
+      const [p,r,e,l,ln,ts,u,au,tc,ds,tv,te,tve,cr,tvj,tvje,tdc] = await Promise.all([
         cargarPedidosLiviano(),
         sb.from("repartidores").select("*").order("nombres"),
         sb.from("empresas").select("*").order("nombre"),
@@ -9618,6 +10080,7 @@ export default function BoazERP() {
         sb.from("configuracion_recargos").select("*").limit(1).maybeSingle(),
         sb.from("tarifarios_viaje_cliente").select("*"),
         sb.from("tarifario_viaje_estandar").select("*").order("concepto"),
+        sb.from("tarifas_distrito_cliente").select("*").order("distrito"),
       ]);
       if(p.data) setPedidos(p.data);
       if(r.data) setRepartidores(r.data);
@@ -9635,6 +10098,7 @@ export default function BoazERP() {
       if(cr.data) setRecargoFeriadoPct(parseFloat(cr.data.recargo_feriado_pct)||0);
       if(tvj.data) setTarifasViajeCliente(tvj.data);
       if(tvje.data) setTarifarioViajeEstandar(tvje.data);
+      if(tdc && tdc.data) { TARIFAS_DISTRITO = tdc.data; setTarifasDistrito(tdc.data); }
     } catch(err) { console.error(err); }
     if (!opts.silencioso) setCargando(false);
   }, []);
@@ -9670,6 +10134,7 @@ export default function BoazERP() {
     { id:"dashboard",    icon:"dashboard", label:"Dashboard" },
     { id:"pedidos",      icon:"package",   label:"Pedidos",
       badge: pedidos.filter(p=>p.estado==="sin_asignar").length || null },
+    { id:"servicios",    icon:"map",       label:"Viajes y servicios" },
     { id:"repartidores", icon:"bike",      label:"Repartidores" },
     { id:"unidades",     icon:"truck",     label:"Flota" },
     { id:"incidencias",  icon:"alert",     label:"Incidencias", badge: incAbiertasNav || null },
@@ -9907,13 +10372,14 @@ if (verificando) {
               {seccionOk && seccion==="repartidores"  && <Repartidores repartidores={repartidores} pedidos={pedidos} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccionOk && seccion==="unidades"      && <Unidades unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} repartidores={repartidores} tarifarioVehiculoCliente={tarifarioVehiculoCliente} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} onRefresh={cargarSilencioso} toast={showToast} onIr={setSeccion}/>}
               {seccionOk && seccion==="inventario"    && <Inventario empresas={empresas} toast={showToast}/>}
-              {seccionOk && seccion==="clientes"      && <Clientes empresas={empresas} pedidos={pedidos} lineasNegocio={lineasNegocio} tarifariosCliente={tarifariosCliente} tarifarioVehiculoCliente={tarifarioVehiculoCliente} tarifarioEstandar={tarifarioEstandar} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} tarifasViajeCliente={tarifasViajeCliente} tarifarioViajeEstandar={tarifarioViajeEstandar} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccionOk && seccion==="clientes"      && <Clientes empresas={empresas} tarifasDistrito={tarifasDistrito} pedidos={pedidos} lineasNegocio={lineasNegocio} tarifariosCliente={tarifariosCliente} tarifarioVehiculoCliente={tarifarioVehiculoCliente} tarifarioEstandar={tarifarioEstandar} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} tarifasViajeCliente={tarifasViajeCliente} tarifarioViajeEstandar={tarifarioViajeEstandar} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccionOk && seccion==="cotizaciones"  && <Cotizaciones toast={showToast} onCambio={setCotizNuevas}/>}
-              {seccionOk && seccion==="catalogo"      && <Catalogo empresas={empresas} tarifariosCliente={tarifariosCliente} tarifarioVehiculoCliente={tarifarioVehiculoCliente} tarifasViajeCliente={tarifasViajeCliente} tarifarioViajeEstandar={tarifarioViajeEstandar} lineasNegocio={lineasNegocio} tiposServicio={tiposServicio} tarifarioEstandar={tarifarioEstandar} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} recargoFeriadoPct={recargoFeriadoPct} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccionOk && seccion==="catalogo"      && <Catalogo empresas={empresas} tarifasDistrito={tarifasDistrito} tarifariosCliente={tarifariosCliente} tarifarioVehiculoCliente={tarifarioVehiculoCliente} tarifasViajeCliente={tarifasViajeCliente} tarifarioViajeEstandar={tarifarioViajeEstandar} lineasNegocio={lineasNegocio} tiposServicio={tiposServicio} tarifarioEstandar={tarifarioEstandar} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} recargoFeriadoPct={recargoFeriadoPct} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccionOk && seccion==="liquidaciones" && <Liquidaciones repartidores={repartidores} pedidos={pedidos} liquidaciones={liquidaciones} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccionOk && seccion==="liquidacion-transporte" && <LiquidacionTransporte unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} diasServicio={diasServicio} recargoFeriadoPct={recargoFeriadoPct} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccionOk && seccion==="liquidacion-clientes" && <LiquidacionClientes pedidos={pedidos} empresas={empresas} unidades={unidades} asignacionesUnidad={asignacionesUnidad} diasServicio={diasServicio} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} recargoFeriadoPct={recargoFeriadoPct} toast={showToast}/>}
               {seccionOk && seccion==="facturacion"   && <Facturacion empresas={empresas} pedidos={pedidos} tiposServicio={tiposServicio} usuario={usuario} toast={showToast}/>}
+              {seccionOk && seccion==="servicios"     && <ServiciosCliente empresas={empresas} repartidores={repartidores} unidades={unidades} tarifasViajeCliente={tarifasViajeCliente} tarifarioViajeEstandar={tarifarioViajeEstandar} usuario={usuario} toast={showToast}/>}
               {seccionOk && seccion==="incidencias"   && <Incidencias pedidos={pedidos} empresas={empresas} repartidores={repartidores} usuario={usuario} toast={showToast}/>}
               {seccionOk && seccion==="usuarios"      && <UsuariosAuditoria usuario={usuario} navModulos={navConSeccion.filter(x=>!x.section).map(x=>({ id:x.id, label:x.label, icon:x.icon, grupo:x._sec }))} onPermisosCambio={cargarPermisos} toast={showToast}/>}
               {seccionOk && seccion==="cobranza"      && <Cobranza pedidos={pedidos} empresas={empresas} repartidores={repartidores} onRefresh={cargarSilencioso} toast={showToast}/>}
