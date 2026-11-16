@@ -718,7 +718,7 @@ const nombreMes = (d) => d.toLocaleDateString("es-PE",{month:"short"}).replace("
 const claveMes = (iso) => (iso||"").slice(0,7);
 
 // ── Operación: comparativo mensual (se agrega arriba del dashboard clásico)
-function ComparativoMes({ pedidos }) {
+function ComparativoMes({ pedidos, ingExtra=()=>0, cobraPedido=()=>true }) {
   // Una sola pasada: agrupa por día y luego arma los totales (evita recorrer todos los pedidos 30+ veces)
   const { a, b, sPed, sEnt, sIng, sEf } = useMemo(() => {
     const hoy = new Date();
@@ -730,15 +730,20 @@ function ComparativoMes({ pedidos }) {
       if (!p.created_at) continue;
       const k = diaLocal(new Date(p.created_at));
       const g = porDia[k] || (porDia[k] = { n:0, ent:0, ing:0 });
-      g.n++; if (p.estado==="entregado") g.ent++; g.ing += parseFloat(p.tarifa_s)||0;
+      g.n++; if (p.estado==="entregado") g.ent++; g.ing += cobraPedido(p) ? (parseFloat(p.tarifa_s)||0) : 0;
     }
     const suma = (mes, hasta) => { let n=0, ent=0, ing=0;
       for (const k in porDia) { if (k.slice(0,7)!==mes) continue; if (hasta && parseInt(k.slice(8,10))>hasta) continue; const g = porDia[k]; n+=g.n; ent+=g.ent; ing+=g.ing; }
       return { n, ent, ef: n?Math.round(ent/n*100):0, ing }; };
     const dias = [];
-    for (let i=29;i>=0;i--) dias.push(porDia[diaLocal(new Date(Date.now()-i*86400000))] || { n:0, ent:0, ing:0 });
-    return { a: suma(mesAct), b: suma(mesPrev, diaDelMes), sPed: dias.map(g=>g.n), sEnt: dias.map(g=>g.ent), sIng: dias.map(g=>g.ing), sEf: dias.map(g=>g.n?g.ent/g.n*100:0) };
-  }, [pedidos]);
+    for (let i=29;i>=0;i--) { const k = diaLocal(new Date(Date.now()-i*86400000)); const g = porDia[k] || { n:0, ent:0, ing:0 }; dias.push({ ...g, ing: g.ing + ingExtra(k, k) }); }
+    // unidades por día y servicios: mes actual hasta hoy vs. mismo tramo del mes anterior
+    const A = suma(mesAct), Bm = suma(mesPrev, diaDelMes);
+    const finPrev = Math.min(diaDelMes, new Date(hoy.getFullYear(), hoy.getMonth(), 0).getDate());
+    A.ing += ingExtra(mesAct+"-01", diaLocal(hoy));
+    Bm.ing += ingExtra(mesPrev+"-01", mesPrev+"-"+String(finPrev).padStart(2,"0"));
+    return { a: A, b: Bm, sPed: dias.map(g=>g.n), sEnt: dias.map(g=>g.ent), sIng: dias.map(g=>g.ing), sEf: dias.map(g=>g.n?g.ent/g.n*100:0) };
+  }, [pedidos, ingExtra, cobraPedido]);
   return (
     <div style={{ marginBottom:20 }}>
       <SeccionTitulo nota="tendencia de 30 días">Este mes</SeccionTitulo>
@@ -751,6 +756,15 @@ function ComparativoMes({ pedidos }) {
     </div>
   );
 }
+
+// ¿A este cliente se le cobra por pedido? Si tiene modalidades definidas manda eso; si no, se mantiene la
+// regla anterior: un cliente con unidades asignadas se cobra por unidad, no por pedido.
+const clienteCobraPorPedido = (id, empresas=[], asignaciones=[]) => {
+  if (!id) return true;
+  const e = empresas.find(x=>x.id===id); const m = e && e.modalidades_tarifa;
+  if (Array.isArray(m) && m.length) return m.includes("pedido");
+  return !asignaciones.some(a=>a.empresa_id===id);
+};
 
 // Pagos al personal ya realizados (repartidores, planilla y terceros), como egresos.
 // Se usan en el Dashboard de Finanzas y en Gastos para que el resultado incluya el costo de personal.
@@ -988,7 +1002,22 @@ function MapaFlota({ pedidos, repartidores }) {
 }
 
 function Dashboard(props) {
-  const { modulos=[], pedidos, repartidores } = props;
+  const { modulos=[], pedidos, repartidores, empresas=[], asignaciones=[], diasServicio=[], recargoFeriadoPct=0 } = props;
+  // Ingresos que no vienen de pedidos: unidades por día y viajes/recojos/servicios cotizados
+  const [servs, setServs] = useState([]);
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      try { const d = new Date(); const r = await cargarServicios(diaLocal(new Date(d.getFullYear(), d.getMonth()-1, 1)), diaLocal(), "");
+        if (vivo && !r.error) setServs((r.data||[]).filter(x=>x.estado==="realizado")); } catch {}
+    })();
+    return () => { vivo = false; };
+  }, []);
+  const ingExtra = useCallback((desde, hasta) =>
+    asignaciones.reduce((t,a)=>t+montoAsignacionPeriodo(a, diasServicio, desde, hasta, recargoFeriadoPct||0).monto, 0) +
+    servs.filter(x=>dia10(x.fecha)>=desde && dia10(x.fecha)<=hasta).reduce((t,x)=>t+(parseFloat(x.monto)||0),0),
+    [asignaciones, diasServicio, recargoFeriadoPct, servs]);
+  const cobraPedido = useCallback((p) => clienteCobraPorPedido(p.empresa_id, empresas, asignaciones), [empresas, asignaciones]);
   const veFin = modulos.includes("cobranza");
   const [tab, setTab] = useState(() => { try { return localStorage.getItem("boaz_dash_tab") || "operacion"; } catch { return "operacion"; } });
   const tabOk = tab==="finanzas" && !veFin ? "operacion" : tab;
@@ -997,14 +1026,14 @@ function Dashboard(props) {
   return (
     <div>
       <Tabs tipo="linea" tabs={tabs} valor={tabOk} onChange={cambiar} style={{ marginBottom:18 }}/>
-      {tabOk==="operacion" && <DashboardOperacion {...props}/>}
+      {tabOk==="operacion" && <DashboardOperacion {...props} ingExtra={ingExtra} cobraPedido={cobraPedido}/>}
       {tabOk==="finanzas" && <DashboardFinanzas/>}
       {tabOk==="mapa" && <MapaFlota pedidos={pedidos} repartidores={repartidores}/>}
     </div>
   );
 }
 
-function DashboardOperacion({ pedidos, repartidores, liquidaciones, cotizNuevas=0, modulos=[], onIr }) {
+function DashboardOperacion({ pedidos, repartidores, liquidaciones, cotizNuevas=0, modulos=[], onIr, ingExtra=()=>0, cobraPedido=()=>true }) {
   const [alertasFin, setAlertasFin] = useState({ facturas:null, mant:[] });
   const [docsFlota, setDocsFlota] = useState({ venc:0, pronto:0 });
   const [incAbiertas, setIncAbiertas] = useState(0);
@@ -1064,8 +1093,9 @@ function DashboardOperacion({ pedidos, repartidores, liquidaciones, cotizNuevas=
   const entregados = pedidos.filter(p => p.estado==="entregado");
   const enRuta = pedidos.filter(p => p.estado==="en_ruta");
   const sinAsignar = pedidos.filter(p => p.estado==="sin_asignar");
-  const ingresoHoy = hoyP.reduce((a,p)=>a+(parseFloat(p.tarifa_s)||0),0);
-  const ingresoAyer = ayerP.reduce((a,p)=>a+(parseFloat(p.tarifa_s)||0),0);
+  const tarifaDe = (p) => cobraPedido(p) ? (parseFloat(p.tarifa_s)||0) : 0;
+  const ingresoHoy = hoyP.reduce((a,p)=>a+tarifaDe(p),0) + ingExtra(hoy, hoy);
+  const ingresoAyer = ayerP.reduce((a,p)=>a+tarifaDe(p),0) + ingExtra(ayer, ayer);
   const efectividad = pedidos.length ? Math.round(entregados.length/pedidos.length*100) : 0;
 
   const deltaPct = (hoyVal, ayerVal) => {
@@ -1080,7 +1110,7 @@ function DashboardOperacion({ pedidos, repartidores, liquidaciones, cotizNuevas=
     { icon:"check", label:"Entregados hoy", value: pedidos.filter(p=>p.estado==="entregado" && p.fecha_entrega && diaLocal(new Date(p.fecha_entrega))===hoy).length, sub:`${efectividad}% efectividad general`, color: B.green },
     { icon:"bike", label:"En ruta", value: enRuta.length, sub:`${repartidores.filter(r=>r.activo).length} repartidores activos`, color: B.gold },
     { icon:"alert", label:"Sin asignar", value: sinAsignar.length, sub: sinAsignar.length>0?"requieren atención":"todo OK", color: sinAsignar.length>0?B.red:B.green },
-    { icon:"dollar", label:"Ingresos de hoy (est.)", value: fmt.sol(ingresoHoy), sub:"tarifas de pedidos, sin IGV", color: B.goldDk, delta: deltaIngreso },
+    { icon:"dollar", label:"Ingresos de hoy (est.)", value: fmt.sol(ingresoHoy), sub:"pedidos + unidades + servicios, sin IGV", color: B.goldDk, delta: deltaIngreso },
   ];
 
   const porEstado = Object.entries(ESTADOS_PEDIDO).map(([k,v])=>({
@@ -1160,7 +1190,7 @@ function DashboardOperacion({ pedidos, repartidores, liquidaciones, cotizNuevas=
         </div>
       </div>
 
-      <ComparativoMes pedidos={pedidos}/>
+      <ComparativoMes pedidos={pedidos} ingExtra={ingExtra} cobraPedido={cobraPedido}/>
 
 
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 340px", gap:14, marginBottom:14 }}>
@@ -4876,7 +4906,46 @@ const bandaDePeso = (kg) => {
 // Genera la Liquidación de Entregas en el formato Boaz establecido:
 // encabezado navy/ámbar, tabla con Tracking Boaz y N° de Orden del cliente,
 // resumen operativo y tarifario de referencia al pie.
-async function generarLiquidacionEntregas({ pedidosOrdenados, empresa, fechaInicio, fechaFin, numeroLiquidacion, toast }) {
+// Hoja adicional de las liquidaciones formato Boaz: viajes, recojos y servicios cotizados del período,
+// más el resumen de lo que se factura en total (base de la liquidación + servicios).
+function agregarHojaServiciosLiq(wb, servicios, { empresa, fechaInicio, fechaFin, numeroLiquidacion, baseLabel, baseSubtotal }) {
+  if (!servicios || !servicios.length) return;
+  const NAVY = "FF1B2A4A", AMBER = "FFE8A33D", LIGHT_GRAY = "FFF2F2F2", WHITE = "FFFFFFFF";
+  const ws = wb.addWorksheet("Servicios adicionales", { views: [{ showGridLines:false }] });
+  [5, 13, 20, 46, 10, 13, 14].forEach((w,i)=>{ ws.getColumn(i+1).width = w; });
+  const bf = { style:"thin", color:{ argb:"FFBFBFBF" } }, borde = { top:bf, left:bf, right:bf, bottom:bf };
+  const relleno = (argb) => ({ type:"pattern", pattern:"solid", fgColor:{ argb } });
+  ws.mergeCells("A1:G1"); const t = ws.getCell("A1"); t.value = "GRUPO BOAZ S.A.C."; t.font = { size:16, bold:true, color:{ argb:WHITE } }; t.fill = relleno(NAVY); t.alignment = { horizontal:"center", vertical:"middle" }; ws.getRow(1).height = 28;
+  ws.mergeCells("A3:G3"); const d = ws.getCell("A3"); d.value = "VIAJES, RECOJOS Y SERVICIOS COTIZADOS"; d.font = { size:13, bold:true, color:{ argb:NAVY } }; d.alignment = { horizontal:"center" };
+  [["N° de Liquidación:", numeroLiquidacion], ["Cliente:", empresa.nombre], ["Periodo:", `${fmt.fecha(fechaInicio)} al ${fmt.fecha(fechaFin)}`]].forEach(([l,v],i) => {
+    ws.getCell(`A${5+i}`).value = l; ws.getCell(`A${5+i}`).font = { bold:true, size:10, color:{ argb:NAVY } };
+    ws.mergeCells(`C${5+i}:E${5+i}`); ws.getCell(`C${5+i}`).value = v; ws.getCell(`C${5+i}`).font = { size:10 };
+  });
+  const f0 = 9;
+  ["N°","Fecha","Tipo","Concepto","Cant.","Tarifa","Subtotal"].forEach((h,i) => { const c = ws.getCell(f0, i+1); c.value = h; c.font = { bold:true, size:10, color:{ argb:WHITE } }; c.fill = relleno(NAVY); c.alignment = { horizontal:"center", vertical:"middle" }; c.border = borde; });
+  let sub = 0;
+  servicios.forEach((x,i) => {
+    const monto = parseFloat(x.monto)||0; sub += monto;
+    [i+1, fmt.fecha(x.fecha), (TIPOS_SERV[x.tipo]||{}).label||x.tipo, x.concepto + (x.cotizacion_ref ? ` (Ref. ${x.cotizacion_ref})` : ""), parseFloat(x.cantidad)||0, parseFloat(x.tarifa_unit)||0, monto].forEach((v,j) => {
+      const c = ws.getCell(f0+1+i, j+1); c.value = v; c.border = borde; c.font = { size:10 };
+      if (i%2===1) c.fill = relleno(LIGHT_GRAY);
+      if (j>=5) c.numFmt = '"S/" #,##0.00';
+      if (j===0 || j===1 || j===4) c.alignment = { horizontal:"center" };
+    });
+  });
+  let f = f0 + servicios.length + 2;
+  const linea = (l, v, fuerte) => {
+    ws.mergeCells(`D${f}:F${f}`); ws.getCell(`D${f}`).value = l; ws.getCell(`D${f}`).alignment = { horizontal:"right" }; ws.getCell(`D${f}`).font = { bold:true, size:fuerte?11:10, color:{ argb:NAVY } };
+    const c = ws.getCell(`G${f}`); c.value = v; c.numFmt = '"S/" #,##0.00'; c.font = { bold:true, size:fuerte?11:10, color:{ argb:NAVY } }; if (fuerte) c.fill = relleno(AMBER); f++;
+  };
+  linea("Subtotal de servicios", sub);
+  linea(baseLabel, baseSubtotal);
+  linea("Subtotal general", sub+baseSubtotal);
+  linea("IGV 18%", (sub+baseSubtotal)*0.18);
+  linea("TOTAL A FACTURAR", (sub+baseSubtotal)*1.18, true);
+}
+
+async function generarLiquidacionEntregas({ pedidosOrdenados, empresa, fechaInicio, fechaFin, numeroLiquidacion, toast, servicios=[] }) {
   const ExcelJS = await cargarExcelJS();
   if (!ExcelJS) { toast("No se pudo cargar el generador de Excel — revisa tu conexión","error"); return; }
 
@@ -5032,6 +5101,7 @@ async function generarLiquidacionEntregas({ pedidosOrdenados, empresa, fechaInic
 
   ws.views = [{ state:"frozen", ySplit: filaTabla, showGridLines:false }];
 
+  agregarHojaServiciosLiq(wb, servicios, { empresa, fechaInicio, fechaFin, numeroLiquidacion, baseLabel:"Subtotal de entregas (hoja Liquidación)", baseSubtotal:subtotal });
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type:"application/octet-stream" });
   const url = URL.createObjectURL(blob);
@@ -5045,7 +5115,7 @@ async function generarLiquidacionEntregas({ pedidosOrdenados, empresa, fechaInic
 // Igual que generarLiquidacionEntregas, pero para clientes de Transporte y
 // Carga (Deliverman, Globalia, etc.) que no tienen pedidos — se liquidan por
 // placa y días de servicio trabajados dentro del rango elegido.
-async function generarLiquidacionTransporte({ filasTransporte, empresa, fechaInicio, fechaFin, numeroLiquidacion, toast }) {
+async function generarLiquidacionTransporte({ filasTransporte, empresa, fechaInicio, fechaFin, numeroLiquidacion, toast, servicios=[] }) {
   const ExcelJS = await cargarExcelJS();
   if (!ExcelJS) { toast("No se pudo cargar el generador de Excel — revisa tu conexión","error"); return; }
 
@@ -5179,6 +5249,7 @@ async function generarLiquidacionTransporte({ filasTransporte, empresa, fechaIni
 
   ws.views = [{ state:"frozen", ySplit: filaTabla, showGridLines:false }];
 
+  agregarHojaServiciosLiq(wb, servicios, { empresa, fechaInicio, fechaFin, numeroLiquidacion, baseLabel:"Subtotal de transporte (hoja Liquidación)", baseSubtotal:subtotal });
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type:"application/octet-stream" });
   const url = URL.createObjectURL(blob);
@@ -5212,12 +5283,7 @@ function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesUnidad, 
 
   // ¿A este cliente se le cobra por pedido? Si tiene modalidades definidas manda eso; si no, se
   // mantiene la regla anterior: un cliente con unidades asignadas se cobra por unidad, no por pedido.
-  const cobraPorPedido = (id) => {
-    if (!id) return true;
-    const e = empresas.find(x=>x.id===id); const m = e && e.modalidades_tarifa;
-    if (Array.isArray(m) && m.length) return m.includes("pedido");
-    return !asignacionesUnidad.some(a=>a.empresa_id===id);
-  };
+  const cobraPorPedido = (id) => clienteCobraPorPedido(id, empresas, asignacionesUnidad);
   const [confirmar, setConfirmar] = useState(null);
 
   const diasTrabajadosEnRango = (asignacion) => {
@@ -5360,13 +5426,15 @@ function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesUnidad, 
     const empresa = empresas.find(e=>e.id===empresaId);
     if (!empresa) return;
     const numeroLiquidacion = `LIQ-BOAZ-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
+    // Si el cliente tiene pedidos y también unidades, los servicios van solo en la liquidación de entregas (para no duplicarlos)
+    const conServ = tipo==="entregas" || filtrados.length===0;
     setGenerandoLiquidacion(true);
     try {
       if (tipo==="transporte") {
-        await generarLiquidacionTransporte({ filasTransporte, empresa, fechaInicio, fechaFin, numeroLiquidacion, toast });
+        await generarLiquidacionTransporte({ filasTransporte, empresa, fechaInicio, fechaFin, numeroLiquidacion, toast, servicios: conServ ? servPer : [] });
         toast("Liquidación de transporte generada ✓ — revisa el número correlativo antes de enviarla");
       } else {
-        await generarLiquidacionEntregas({ pedidosOrdenados: filtrados, empresa, fechaInicio, fechaFin, numeroLiquidacion, toast });
+        await generarLiquidacionEntregas({ pedidosOrdenados: filtrados, empresa, fechaInicio, fechaFin, numeroLiquidacion, toast, servicios: conServ ? servPer : [] });
         toast("Liquidación de entregas generada ✓ — revisa el número correlativo antes de enviarla");
       }
     } finally { setGenerandoLiquidacion(false); }
@@ -5452,7 +5520,7 @@ function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesUnidad, 
               {servPer.length>0 && <BtnSec onClick={marcarServiciosFacturados} style={{ marginLeft:"auto" }}><Ico n="check" size={15}/> Marcar servicios como facturados</BtnSec>}
             </div>
             <div style={{ fontSize:12, color:B.textMut, marginBottom:14 }}>
-              El Excel y el PDF incluyen las tres secciones y el total. {todas ? "Elige un cliente específico para generar las liquidaciones con el formato Boaz." : "Las liquidaciones con formato Boaz cubren solo pedidos o solo unidades."}
+              El Excel y el PDF incluyen las tres secciones y el total. {todas ? "Elige un cliente específico para generar las liquidaciones con el formato Boaz." : "Las liquidaciones con formato Boaz traen una hoja adicional con los servicios del período."}
             </div>
 
             {!hayAlgo && (
@@ -10422,7 +10490,7 @@ if (verificando) {
           ) : (
             <>
               {!seccionOk && <EstadoVacio icono="shield" titulo="Sin acceso a este módulo" texto="Tu rol no tiene permiso para verlo. Pide a un administrador que lo habilite."/>}
-              {seccionOk && seccion==="dashboard"     && <Dashboard pedidos={pedidos} repartidores={repartidores} liquidaciones={liquidaciones} cotizNuevas={cotizNuevas} modulos={modulosRol} onIr={setSeccion}/>}
+              {seccionOk && seccion==="dashboard"     && <Dashboard pedidos={pedidos} repartidores={repartidores} liquidaciones={liquidaciones} empresas={empresas} asignaciones={asignacionesUnidad} diasServicio={diasServicio} recargoFeriadoPct={recargoFeriadoPct} cotizNuevas={cotizNuevas} modulos={modulosRol} onIr={setSeccion}/>}
               {seccionOk && seccion==="pedidos"       && <Pedidos pedidos={pedidos} repartidores={repartidores} empresas={empresas} tarifariosCliente={tarifariosCliente} tarifarioEstandar={tarifarioEstandar} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccionOk && seccion==="repartidores"  && <Repartidores repartidores={repartidores} pedidos={pedidos} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccionOk && seccion==="unidades"      && <Unidades unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} repartidores={repartidores} tarifarioVehiculoCliente={tarifarioVehiculoCliente} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} onRefresh={cargarSilencioso} toast={showToast} onIr={setSeccion}/>}
