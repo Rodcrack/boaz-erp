@@ -752,6 +752,28 @@ function ComparativoMes({ pedidos }) {
   );
 }
 
+// Pagos al personal ya realizados (repartidores, planilla y terceros), como egresos.
+// Se usan en el Dashboard de Finanzas y en Gastos para que el resultado incluya el costo de personal.
+const CAT_PERSONAL = ["Pago a repartidores","Planilla","Honorarios y terceros"];
+const cargarEgresosPersonal = async () => {
+  const seguro = async (fn) => { try { const r = await fn(); return r.error ? [] : (r.data||[]); } catch { return []; } };
+  const [liq, pp, pt] = await Promise.all([
+    seguro(() => traerTodo(() => sb.from("liquidaciones").select("*,repartidores(nombres,apellidos)").eq("estado","pagado").order("id"))),
+    seguro(() => traerTodo(() => sb.from("pagos_planilla").select("*,personal_planilla(nombres,apellidos)").eq("estado","pagado").order("id"))),
+    seguro(() => traerTodo(() => sb.from("pagos_terceros").select("*,terceros_planilla(nombre)").eq("estado","pagado").order("id"))),
+  ]);
+  const dia = (v) => v ? String(v).slice(0,10) : null;
+  const nom = (o) => o ? `${o.nombres||""} ${o.apellidos||""}`.trim() : "";
+  const out = [];
+  liq.filter(l=>l.estado==="pagado").forEach(l => out.push({ id:"liq-"+l.id, auto:true, tipo:"egreso", categoria:CAT_PERSONAL[0], fecha: dia(l.fecha_pago) || dia(l.fecha) || dia(l.created_at),
+    descripcion:`Liquidación de ${nom(l.repartidores)||"repartidor"}${l.total_entregados?` · ${l.total_entregados} entregas`:""}`, monto: parseFloat(l.monto_ganado_s)||0 }));
+  pp.filter(x=>x.estado==="pagado").forEach(x => out.push({ id:"pla-"+x.id, auto:true, tipo:"egreso", categoria:CAT_PERSONAL[1], fecha: dia(x.fecha_pago) || (x.periodo ? x.periodo+"-28" : dia(x.created_at)),
+    descripcion:`Planilla ${x.periodo||""} — ${nom(x.personal_planilla)||"trabajador"} (bruto + EsSalud)`, monto: (parseFloat(x.sueldo_bruto)||0) + (parseFloat(x.monto_essalud)||0) }));
+  pt.filter(x=>x.estado==="pagado").forEach(x => out.push({ id:"ter-"+x.id, auto:true, tipo:"egreso", categoria:CAT_PERSONAL[2], fecha: dia(x.fecha_pago) || dia(x.created_at),
+    descripcion:`${(x.terceros_planilla && x.terceros_planilla.nombre)||"Tercero"}${x.descripcion?` — ${x.descripcion}`:""}${x.numero_documento?` · ${x.numero_documento}`:""}`, monto: parseFloat(x.monto_bruto)||0 }));
+  return out.filter(x => x.fecha && x.monto>0);
+};
+
 // ── Finanzas
 function DashboardFinanzas() {
   const [datos, setDatos] = useState(null);
@@ -760,27 +782,31 @@ function DashboardFinanzas() {
     let vivo = true;
     (async () => {
       const desde = diaLocal(new Date(new Date().getFullYear(), new Date().getMonth()-5, 1));
-      const [f, g] = await Promise.all([
-        traerTodo(() => sb.from("facturas").select("total_s,estado_pago,estado,fecha_emision,fecha_pago,empresa_id,empresas(nombre)").order("id")),
+      const [f, g, per] = await Promise.all([
+        traerTodo(() => sb.from("facturas").select("total_s,igv_s,estado_pago,estado,fecha_emision,fecha_pago,empresa_id,empresas(nombre)").order("id")),
         traerTodo(() => sb.from("gastos").select("monto,tipo,fecha").eq("tipo","egreso").gte("fecha",desde).order("id")),
+        cargarEgresosPersonal(),
       ]);
       if (!vivo) return;
       if (f.error) { setErr("No se pudieron cargar las facturas."); return; }
-      setDatos({ fact: (f.data||[]).filter(x=>x.estado!=="anulada" && x.estado!=="anulado"), gast: g.data||[] });
+      setDatos({ fact: (f.data||[]).filter(x=>x.estado!=="anulada" && x.estado!=="anulado"), gast: g.data||[], pers: (per||[]).filter(x=>x.fecha>=desde) });
     })();
     return () => { vivo = false; };
   }, []);
   if (err) return <EstadoVacio icono="alert" titulo="Sin datos" texto={err}/>;
   if (!datos) return <Cargando filas={5}/>;
-  const { fact, gast } = datos;
+  const { fact, gast, pers=[] } = datos;
   const hoy = new Date();
   const meses = [];
   for (let i=5;i>=0;i--) { const d = new Date(hoy.getFullYear(), hoy.getMonth()-i, 1); meses.push({ k: diaLocal(d).slice(0,7), l: nombreMes(d) }); }
   const num = (v) => parseFloat(v)||0;
   const factMes = meses.map(m => fact.filter(x=>claveMes(x.fecha_emision)===m.k).reduce((t,x)=>t+num(x.total_s),0));
   const cobMes  = meses.map(m => fact.filter(x=>x.estado_pago==="pagado" && claveMes(x.fecha_pago||x.fecha_emision)===m.k).reduce((t,x)=>t+num(x.total_s),0));
-  const gastMes = meses.map(m => gast.filter(x=>claveMes(x.fecha)===m.k).reduce((t,x)=>t+num(x.monto),0));
-  const margenMes = factMes.map((v,i)=>v-gastMes[i]);
+  const opMes   = meses.map(m => gast.filter(x=>claveMes(x.fecha)===m.k).reduce((t,x)=>t+num(x.monto),0));
+  const persMes = meses.map(m => pers.filter(x=>claveMes(x.fecha)===m.k).reduce((t,x)=>t+num(x.monto),0));
+  const gastMes = opMes.map((v,k)=>v+persMes[k]);                       // egresos totales: operativos + personal
+  const ventaMes = meses.map(m => fact.filter(x=>claveMes(x.fecha_emision)===m.k).reduce((t,x)=>t+num(x.total_s)-num(x.igv_s),0));   // ventas sin IGV
+  const margenMes = ventaMes.map((v,k)=>v-gastMes[k]);
   const i = 5;
   const pendientes = fact.filter(x=>x.estado_pago!=="pagado");
   const porCobrar = pendientes.reduce((t,x)=>t+num(x.total_s),0);
@@ -797,17 +823,17 @@ function DashboardFinanzas() {
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:18 }}>
         <KpiComparado icon="receipt" label="Facturado del mes" valor={factMes[i]} previo={factMes[i-1]} valorFmt={fmt.sol(factMes[i])} serie={factMes} color={B.navy}/>
         <KpiComparado icon="banknote" label="Cobrado del mes" valor={cobMes[i]} previo={cobMes[i-1]} valorFmt={fmt.sol(cobMes[i])} serie={cobMes} color={B.green}/>
-        <KpiComparado icon="wallet" label="Gastos del mes" valor={gastMes[i]} previo={gastMes[i-1]} valorFmt={fmt.sol(gastMes[i])} serie={gastMes} color={B.red} invertir/>
-        <KpiComparado icon="trend" label="Margen (facturado − gastos)" valor={margenMes[i]} previo={margenMes[i-1]} valorFmt={fmt.sol(margenMes[i])} serie={margenMes} color={margenMes[i]>=0?B.goldDk:B.red}/>
+        <KpiComparado icon="wallet" label="Egresos del mes" valor={gastMes[i]} previo={gastMes[i-1]} valorFmt={fmt.sol(gastMes[i])} serie={gastMes} color={B.red} invertir/>
+        <KpiComparado icon="trend" label="Margen (ventas sin IGV − egresos)" valor={margenMes[i]} previo={margenMes[i-1]} valorFmt={fmt.sol(margenMes[i])} serie={margenMes} color={margenMes[i]>=0?B.goldDk:B.red}/>
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr", gap:14, marginBottom:14 }}>
         <div style={tarj}>
-          <div style={{ fontSize:13, fontWeight:700, color:B.textPri, marginBottom:4 }}>Facturado, cobrado y gastos — últimos 6 meses</div>
+          <div style={{ fontSize:13, fontWeight:700, color:B.textPri, marginBottom:4 }}>Facturado, cobrado y egresos — últimos 6 meses</div>
           <div style={{ fontSize:11, color:B.textMut, marginBottom:8 }}>
-            <span style={{ color:B.navy, fontWeight:700 }}>■</span> Facturado &nbsp;<span style={{ color:B.green, fontWeight:700 }}>■</span> Cobrado &nbsp;<span style={{ color:B.red, fontWeight:700 }}>■</span> Gastos
+            <span style={{ color:B.navy, fontWeight:700 }}>■</span> Facturado &nbsp;<span style={{ color:B.green, fontWeight:700 }}>■</span> Cobrado &nbsp;<span style={{ color:B.red, fontWeight:700 }}>■</span> Egresos (gastos + personal)
           </div>
           <BarrasAgrupadas etiquetas={meses.map(m=>m.l)} formato={(v)=>v>=1000?(v/1000).toFixed(v>=10000?0:1)+"k":String(Math.round(v))}
-            series={[{nombre:"Facturado",color:B.navy,valores:factMes},{nombre:"Cobrado",color:B.green,valores:cobMes},{nombre:"Gastos",color:B.red,valores:gastMes}]}/>
+            series={[{nombre:"Facturado",color:B.navy,valores:factMes},{nombre:"Cobrado",color:B.green,valores:cobMes},{nombre:"Egresos",color:B.red,valores:gastMes}]}/>
         </div>
         <div style={tarj}>
           <div style={{ fontSize:13, fontWeight:700, color:B.textPri, marginBottom:2 }}>Cartera por cobrar</div>
@@ -819,6 +845,27 @@ function DashboardFinanzas() {
             </div>
           ))}
         </div>
+      </div>
+      <div style={{ ...tarj, marginBottom:14 }}>
+        <div style={{ fontSize:13, fontWeight:700, color:B.textPri, marginBottom:4 }}>Egresos del mes por origen</div>
+        <div style={{ fontSize:12, color:B.textMut, marginBottom:12 }}>Los pagos al personal se cuentan cuando están marcados como pagados en Liq. Repartidores y Planilla.</div>
+        {(() => {
+          const mk = meses[i].k, de = (c) => pers.filter(x=>x.categoria===c && claveMes(x.fecha)===mk).reduce((t,x)=>t+num(x.monto),0);
+          const partes = [["Gastos operativos (módulo Gastos)", opMes[i], B.red], ["Pago a repartidores (liquidaciones)", de(CAT_PERSONAL[0]), B.orange], ["Planilla (bruto + EsSalud)", de(CAT_PERSONAL[1]), B.navy], ["Honorarios y terceros", de(CAT_PERSONAL[2]), B.blue]];
+          const tot = gastMes[i];
+          return (<>
+            {partes.map(([l,v,c]) => (
+              <div key={l} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
+                <div style={{ width:250, maxWidth:"45%", fontSize:12, color:B.textPri }}>{l}</div>
+                <div style={{ flex:1, height:10, background:B.bg, borderRadius:6, overflow:"hidden" }}><div style={{ height:"100%", width:`${tot?v/tot*100:0}%`, background:c }}/></div>
+                <div style={{ width:100, textAlign:"right", fontSize:12, fontWeight:700, color:B.navy }}>{fmt.sol(v)}</div>
+              </div>))}
+            <div style={{ display:"flex", justifyContent:"space-between", borderTop:`1px solid ${B.border}`, marginTop:10, paddingTop:10, fontSize:13 }}>
+              <span style={{ color:B.textSec }}>Ventas sin IGV {fmt.sol(ventaMes[i])} − egresos {fmt.sol(tot)}</span>
+              <b style={{ color: margenMes[i]>=0 ? "#047857" : "#B91C1C" }}>Margen {fmt.sol(margenMes[i])}</b>
+            </div>
+          </>);
+        })()}
       </div>
       <div style={tarj}>
         <div style={{ fontSize:13, fontWeight:700, color:B.textPri, marginBottom:10 }}>Top clientes del mes (facturado)</div>
@@ -4409,8 +4456,11 @@ function Liquidaciones({ repartidores, pedidos, toast, onRefresh }) {
   };
 
   const marcarPagado = async (id) => {
-    await sb.from("liquidaciones").update({estado:"pagado"}).eq("id",id);
-    toast("Marcado como pagado ✓");
+    // Guarda la fecha de pago (la usa Finanzas). Si la columna aún no existe, marca solo el estado.
+    let { error } = await sb.from("liquidaciones").update({estado:"pagado", fecha_pago:diaLocal()}).eq("id",id);
+    if (error) ({ error } = await sb.from("liquidaciones").update({estado:"pagado"}).eq("id",id));
+    if (error) { toast("Error: "+error.message,"error"); return; }
+    toast("Marcado como pagado ✓ — ya cuenta como egreso en Finanzas");
     const { data } = await sb.from("liquidaciones").select("*,repartidores(nombres,apellidos)").order("created_at",{ascending:false});
     if (data) setHistorial(data);
   };
@@ -6183,6 +6233,7 @@ function Rentabilidad({ pedidos, empresas, repartidores, unidades, asignaciones,
   const [hasta, setHasta] = useState(diaLocal());
   const [gastos, setGastos] = useState([]);
   const [incs, setIncs] = useState([]);
+  const [servs, setServs] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [orden, setOrden] = useState("margen");
 
@@ -6195,6 +6246,7 @@ function Rentabilidad({ pedidos, empresas, repartidores, unidades, asignaciones,
       if (!vivo) return;
       if (error) { toast("No se pudieron leer los gastos: " + error.message, "error"); setGastos([]); } else setGastos(data||[]);
       setIncs(inc.error ? [] : (inc.data||[]));
+      try { const sv = await cargarServicios(desde, hasta, ""); if (vivo) setServs(sv.error ? [] : (sv.data||[]).filter(x=>x.estado==="realizado")); } catch { if (vivo) setServs([]); }
       setCargando(false);
     })();
     return () => { vivo = false; };
@@ -6275,13 +6327,14 @@ function Rentabilidad({ pedidos, empresas, repartidores, unidades, asignaciones,
     });
 
     incs.forEach(i => { fila(i.empresa_id||"—").cInc += parseFloat(i.costo_s)||0; });
+    servs.forEach(x => { fila(x.empresa_id||"—").ingTR += parseFloat(x.monto)||0; });   // viajes, recojos y servicios cotizados
     const lista = Object.values(filas).map(f => {
       const ing = f.ingUM + f.ingTR, cost = f.cPers + f.cVeh + f.cInc, margen = ing - cost;
       return { ...f, ing, cost, margen, pct: ing>0 ? margen/ing*100 : null };
     });
     const tot = lista.reduce((t,f)=>({ ing:t.ing+f.ing, cost:t.cost+f.cost, margen:t.margen+f.margen, pers:t.pers+f.cPers, veh:t.veh+f.cVeh, inc:t.inc+f.cInc }), { ing:0, cost:0, margen:0, pers:0, veh:0, inc:0 });
     return { lista, tot, gastosGenerales, sueldosSinAsignar, sinCosto:[...repsAdv].map(id => { const r = rep(id); return r ? `${r.nombres||""} ${r.apellidos||""}`.trim() : ""; }).filter(Boolean) };
-  }, [pedidos, empresas, repartidores, unidades, asignaciones, diasServicio, recargoFeriadoPct, gastos, incs, desde, hasta]);
+  }, [pedidos, empresas, repartidores, unidades, asignaciones, diasServicio, recargoFeriadoPct, gastos, incs, servs, desde, hasta]);
 
   const lista = [...modelo.lista].sort((a,b) => orden==="pct" ? (b.pct??-999)-(a.pct??-999) : orden==="ing" ? b.ing-a.ing : b.margen-a.margen);
   const resultadoOp = modelo.tot.margen - modelo.gastosGenerales - modelo.sueldosSinAsignar;
@@ -6290,7 +6343,7 @@ function Rentabilidad({ pedidos, empresas, repartidores, unidades, asignaciones,
   const exportar = async () => {
     await asegurarXLSX();
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(lista.map(f => ({ Cliente:f.nombre, "Ingreso última milla":+f.ingUM.toFixed(2), "Ingreso transporte":+f.ingTR.toFixed(2), "Ingreso total":+f.ing.toFixed(2), "Costo personal":+f.cPers.toFixed(2), "Gasto vehículos":+f.cVeh.toFixed(2), "Incidencias":+f.cInc.toFixed(2), "Margen":+f.margen.toFixed(2), "Margen %":f.pct==null?"":+f.pct.toFixed(1), Pedidos:f.pedidos, "Días transporte":f.diasTR }))), "Rentabilidad");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(lista.map(f => ({ Cliente:f.nombre, "Ingreso última milla":+f.ingUM.toFixed(2), "Ingreso transporte y servicios":+f.ingTR.toFixed(2), "Ingreso total":+f.ing.toFixed(2), "Costo personal":+f.cPers.toFixed(2), "Gasto vehículos":+f.cVeh.toFixed(2), "Incidencias":+f.cInc.toFixed(2), "Margen":+f.margen.toFixed(2), "Margen %":f.pct==null?"":+f.pct.toFixed(1), Pedidos:f.pedidos, "Días transporte":f.diasTR }))), "Rentabilidad");
     XLSX.writeFile(wb, `rentabilidad_boaz_${desde}_a_${hasta}.xlsx`);
   };
 
@@ -6325,7 +6378,7 @@ function Rentabilidad({ pedidos, empresas, repartidores, unidades, asignaciones,
           <EstadoVacio icono="chart" titulo="Sin actividad en el período" texto="No hay pedidos entregados ni días de transporte entre estas fechas."/> :
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead><tr>
-              <th style={{...th,textAlign:"left"}}>Cliente</th><th style={th}>Ing. última milla</th><th style={th}>Ing. transporte</th><th style={th}>Costo personal</th><th style={th}>Gasto vehículos</th><th style={th}>Incidencias</th>
+              <th style={{...th,textAlign:"left"}}>Cliente</th><th style={th}>Ing. última milla</th><th style={th} title="Unidades por día + viajes, recojos y servicios cotizados">Ing. transporte y servicios</th><th style={th}>Costo personal</th><th style={th}>Gasto vehículos</th><th style={th}>Incidencias</th>
               <th style={{...th,cursor:"pointer",color:orden==="margen"?B.navy:B.textSec}} onClick={()=>setOrden("margen")}>Margen {orden==="margen"?"▼":""}</th>
               <th style={{...th,cursor:"pointer",color:orden==="pct"?B.navy:B.textSec}} onClick={()=>setOrden("pct")}>Margen % {orden==="pct"?"▼":""}</th></tr></thead>
             <tbody>{lista.map(f => (
@@ -6995,6 +7048,7 @@ const solN = (n) => `S/ ${(n||0).toLocaleString("es-PE",{minimumFractionDigits:2
 function Gastos({ unidades, repartidores, toast, usuario }) {
   const [lista, setLista] = useState([]);
   const [facturas, setFacturas] = useState([]);
+  const [personal, setPersonal] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [desde, setDesde] = useState(inicioMes());
   const [hasta, setHasta] = useState(hoyLocal());
@@ -7026,6 +7080,7 @@ function Gastos({ unidades, repartidores, toast, usuario }) {
     if (g.error) toast("Error al cargar gastos: " + g.error.message + " (¿ejecutaste el SQL gastos_boaz.sql?)", "error");
     else setLista(g.data||[]);
     setFacturas((f.data||[]).filter(x => x.estado !== "anulada" && x.estado !== "anulado"));
+    cargarEgresosPersonal().then(p => setPersonal(p.filter(x => x.fecha>=desde && x.fecha<=hasta))).catch(()=>setPersonal([]));
     // alertas de mantenimiento: último registro con próximo mant. por placa
     if (!a.error) {
       const ultKm = {}, vistos = {}, out = [];
@@ -7053,7 +7108,7 @@ function Gastos({ unidades, repartidores, toast, usuario }) {
     proveedor:null, monto:(parseFloat(f.total_s)||0)-(parseFloat(f.igv_s)||0), igv:parseFloat(f.igv_s)||0,
   })), [facturas]);
 
-  const todos = useMemo(() => [...lista, ...ingFact].sort((a,b)=> (b.fecha||"").localeCompare(a.fecha||"")), [lista, ingFact]);
+  const todos = useMemo(() => [...lista, ...ingFact, ...personal].sort((a,b)=> (b.fecha||"").localeCompare(a.fecha||"")), [lista, ingFact, personal]);
   const filtrados = useMemo(() => {
     const q = busq.trim().toLowerCase();
     return todos.filter(g =>
@@ -7158,7 +7213,7 @@ function Gastos({ unidades, repartidores, toast, usuario }) {
   return (
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:16 }}>
-        <div style={{ fontSize:13, color:B.textSec, maxWidth:620 }}>Combustible, mantenimiento, reparaciones y otros movimientos. Los ingresos por facturas se suman automáticamente.</div>
+        <div style={{ fontSize:13, color:B.textSec, maxWidth:620 }}>Combustible, mantenimiento, reparaciones y otros movimientos. Se suman solos los ingresos por facturas y los pagos ya realizados a repartidores, planilla y terceros.</div>
         <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
           <BtnSec onClick={exportar}><Ico n="download" size={15}/> Excel</BtnSec>
           <BtnSec onClick={()=>nuevo("ingreso")}><Ico n="plus" size={15}/> Ingreso</BtnSec>
@@ -7179,7 +7234,7 @@ function Gastos({ unidades, repartidores, toast, usuario }) {
         <div><label style={lbl}>Tipo</label>
           <select style={{...inp,width:130}} value={fTipo} onChange={e=>setFTipo(e.target.value)}><option value="todos">Todos</option><option value="egreso">Egresos</option><option value="ingreso">Ingresos</option></select></div>
         <div><label style={lbl}>Categoría</label>
-          <select style={{...inp,width:180}} value={fCat} onChange={e=>setFCat(e.target.value)}><option value="">Todas</option>{[...CAT_EGRESO,...CAT_INGRESO,"Facturación"].map(c=><option key={c}>{c}</option>)}</select></div>
+          <select style={{...inp,width:180}} value={fCat} onChange={e=>setFCat(e.target.value)}><option value="">Todas</option>{[...CAT_EGRESO,...CAT_PERSONAL,...CAT_INGRESO,"Facturación"].map(c=><option key={c}>{c}</option>)}</select></div>
         <div><label style={lbl}>Vehículo</label>
           <select style={{...inp,width:130}} value={fPlaca} onChange={e=>setFPlaca(e.target.value)}><option value="">Todos</option>{placas.map(p=><option key={p}>{p}</option>)}</select></div>
         <div style={{ flex:"1 1 180px" }}><label style={lbl}>Buscar</label><input style={inp} placeholder="Proveedor, descripción…" value={busq} onChange={e=>setBusq(e.target.value)}/></div>
