@@ -2048,7 +2048,7 @@ function ModalGeocodificarPendientes({ pedidos, onClose, onDone, toast }) {
             )}
             <div style={{ background:"#FFFBEB", border:"1px solid #FDE68A", borderRadius:8,
               padding:"10px 14px", marginBottom:20, fontSize:12, color:"#92400E" }}>
-              ⏱️ Esto puede tardar aproximadamente <strong>{Math.ceil(pendientes.length*1.1)} segundos</strong> (1 dirección por segundo, para respetar el servicio gratuito). No cierres esta ventana mientras procesa.
+              Esto puede tardar aproximadamente <strong>{Math.ceil(pendientes.length*1.1)} segundos</strong> (1 dirección por segundo, para respetar el servicio gratuito). No cierres esta ventana mientras procesa.
             </div>
             <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
               <BtnSec onClick={onClose}>Cancelar</BtnSec>
@@ -4542,7 +4542,7 @@ function Liquidaciones({ repartidores, pedidos, toast, onRefresh }) {
                     background: l.estado==="pagado"?"#ECFDF5":"#FFFBEB",
                     color: l.estado==="pagado"?B.green:B.goldDk,
                     border:`1px solid ${l.estado==="pagado"?B.green+"44":B.gold+"44"}` }}>
-                    {l.estado==="pagado"?"✓ Pagado":"⏳ Pendiente"}
+                    {l.estado==="pagado"?"✓ Pagado":"Pendiente"}
                   </span>
                 </td>
                 <td style={{ padding:"12px 16px" }}>

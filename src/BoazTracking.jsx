@@ -9,12 +9,34 @@ const SUPABASE_URL  = "https://jeftkwjdqzkpswvaqspi.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImplZnRrd2pkcXprcHN3dmFxc3BpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4MzI0OTEsImV4cCI6MjEwMDQwODQ5MX0.Ta8Ei_wCm8ZEzD3IM-S60R0rJvI_d5BTvix_Z3W4EmY";
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 
+// Íconos de línea (mismo juego que el ERP)
+const ICONOS = {
+  alert:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  bike:'<circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/>',
+  camera:'<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
+  check:'<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+  clock:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  filetext:'<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+  message:'<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
+  package:'<path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 8.7 5 8.7-5"/>',
+  phone:'<path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384"/>',
+  refresh:'<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+  search:'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  van:'<path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/>',
+  xcircle:'<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>',
+};
+function Ico({ n, size=18, color="currentColor", sw=1.8, style }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw}
+    strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0, display:"block", ...style }}
+    dangerouslySetInnerHTML={{ __html: ICONOS[n] || "" }}/>;
+}
+
 const ESTADOS = {
-  sin_asignar: { label:"Registrado",    icon:"📋", color:"#3B82F6", desc:"Tu pedido está registrado en nuestro sistema." },
-  asignado:    { label:"Asignado",      icon:"🛵", color:"#F59E0B", desc:"Tu pedido fue asignado a un repartidor." },
-  en_ruta:     { label:"En camino",     icon:"🚐", color:"#8B5CF6", desc:"¡Tu pedido está en camino hacia ti!" },
-  entregado:   { label:"Entregado",     icon:"✅", color:"#10B981", desc:"¡Tu pedido fue entregado exitosamente!" },
-  no_entregado:{ label:"No entregado",  icon:"⚠️", color:"#EF4444", desc:"Tu pedido no pudo ser entregado. Nos pondremos en contacto contigo." },
+  sin_asignar: { label:"Registrado",    icon:"filetext", color:"#3B82F6", desc:"Tu pedido está registrado en nuestro sistema." },
+  asignado:    { label:"Asignado",      icon:"bike", color:"#F59E0B", desc:"Tu pedido fue asignado a un repartidor." },
+  en_ruta:     { label:"En camino",     icon:"van", color:"#8B5CF6", desc:"¡Tu pedido está en camino hacia ti!" },
+  entregado:   { label:"Entregado",     icon:"check", color:"#10B981", desc:"¡Tu pedido fue entregado exitosamente!" },
+  no_entregado:{ label:"No entregado",  icon:"alert", color:"#EF4444", desc:"Tu pedido no pudo ser entregado. Nos pondremos en contacto contigo." },
 };
 
 const TIMELINE = ["sin_asignar","asignado","en_ruta","entregado"];
@@ -30,8 +52,8 @@ const fmt = {
 };
 
 const ICONOS_HIST = {
-  llamada:"📞", whatsapp:"💬", estado:"🔄",
-  foto_entrega:"📸", foto_no_entrega:"📸",
+  llamada:"phone", whatsapp:"message", estado:"refresh",
+  foto_entrega:"camera", foto_no_entrega:"camera",
 };
 
 // Agrupa las fotos que pertenecen al mismo evento (misma marca de tiempo)
@@ -78,11 +100,8 @@ export default function BoazTracking() {
       "BZ-" + soloDigitos.padStart(6,"0"),
     ];
     let data = null, err = null;
-    for (const bz of candidatos) {
-      const res = await sb.from("pedidos").select("*").eq("omd", bz).single();
-      if (res.data) { data = res.data; break; }
-      err = res.error;
-    }
+    const res = await sb.rpc("tracking_publico", { p_omds: candidatos });
+    if (res.data) data = res.data; else err = res.error;
     if (err || !data) {
       setError("No encontramos ningún pedido con ese código. Verifica e intenta nuevamente.");
     } else {
@@ -156,13 +175,13 @@ export default function BoazTracking() {
                 letterSpacing:"1px", fontWeight:600 }}
             />
           </div>
-          <button onClick={buscar} disabled={buscando||!codigo}
+          <button onClick={()=>buscar()} disabled={buscando||!codigo}
             style={{ background:"linear-gradient(135deg,#F5A623,#D4891A)",
               border:"none", color:"#0D1E3D", padding:"14px 28px", borderRadius:12,
               cursor:buscando||!codigo?"not-allowed":"pointer",
               fontSize:14, fontWeight:800, opacity:!codigo?0.6:1,
               whiteSpace:"nowrap" }}>
-            {buscando?"Buscando...":"🔍 Rastrear"}
+            {buscando?"Buscando...":<><Ico n="search" size={16} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Rastrear</>}
           </button>
         </div>
 
@@ -170,7 +189,7 @@ export default function BoazTracking() {
           <div style={{ background:"#2D0707", border:"1px solid #EF444444",
             borderRadius:10, padding:"12px 16px", color:"#FCA5A5", fontSize:13,
             marginBottom:20, textAlign:"center" }}>
-            ❌ {error}
+            <Ico n="xcircle" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>{error}
           </div>
         )}
 
@@ -186,7 +205,7 @@ export default function BoazTracking() {
               <div style={{ background:`${estadoActual.color}22`,
                 borderBottom:`3px solid ${estadoActual.color}`,
                 padding:"20px 24px", display:"flex", alignItems:"center", gap:16 }}>
-                <div style={{ fontSize:40 }}>{estadoActual.icon}</div>
+                <div style={{ fontSize:40 }}><Ico n={estadoActual.icon} size={40} color={estadoActual.color}/></div>
                 <div>
                   <div style={{ fontSize:11, color:"#8FA3BA", textTransform:"uppercase",
                     letterSpacing:"1px", marginBottom:4 }}>Estado actual</div>
@@ -304,7 +323,7 @@ export default function BoazTracking() {
                         <div key={i} style={{ display:"flex", gap:10, alignItems:"flex-start",
                           borderBottom: i<historialAgrupado.length-1 ? "1px solid #1E3560" : "none",
                           paddingBottom:12 }}>
-                          <span style={{ fontSize:16 }}>{ICONOS_HIST[h.tipo]||"•"}</span>
+                          <span style={{ fontSize:16 }}><Ico n={ICONOS_HIST[h.tipo]||"clock"} size={16}/></span>
                           <div style={{ flex:1 }}>
                             <div style={{ fontSize:13, fontWeight:600, color:"#E8EAF0" }}>
                               {h.tipo==="llamada" && "Llamada al destinatario"}
@@ -341,7 +360,7 @@ export default function BoazTracking() {
                     padding:"8px 16px", borderRadius:8, fontSize:12,
                     fontWeight:700, textDecoration:"none", display:"flex",
                     alignItems:"center", gap:6 }}>
-                  💬 WhatsApp Boaz
+                  <Ico n="message" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>WhatsApp Boaz
                 </a>
               </div>
             </div>
@@ -360,7 +379,7 @@ export default function BoazTracking() {
         {/* Ejemplo si no hay pedido */}
         {!pedido && !error && !buscando && (
           <div style={{ textAlign:"center", marginTop:40, color:"#4A6080" }}>
-            <div style={{ fontSize:40, marginBottom:12 }}>📦</div>
+            <div style={{ fontSize:40, marginBottom:12 }}><Ico n="package" size={40} style={{ display:"inline-block", verticalAlign:"middle" }}/></div>
             <div style={{ fontSize:13 }}>Ingresa tu Tracking Boaz para comenzar</div>
             <div style={{ fontSize:11, marginTop:6, color:"#2A3F60" }}>Ejemplo: BZ0000000004</div>
           </div>

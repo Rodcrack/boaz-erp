@@ -6,12 +6,47 @@
 // ══════════════════════════════════════════════════════════════
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
-import * as XLSX from "xlsx";
-import ExcelJS from "exceljs";
+// Librerías de Excel: se descargan solo cuando se importa o exporta un archivo
+let _xlsx = null;
+const asegurarXLSX = async () => { if (!_xlsx) { const m = await import("xlsx"); _xlsx = m.utils ? m : m.default; } return _xlsx; };
+const XLSX = new Proxy({}, { get: (_, k) => { if (!_xlsx) throw new Error("XLSX no cargado"); return _xlsx[k]; } });
+const cargarExcelJSMod = async () => (await import("exceljs")).default;
 
 const SUPABASE_URL  = "https://jeftkwjdqzkpswvaqspi.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImplZnRrd2pkcXprcHN3dmFxc3BpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4MzI0OTEsImV4cCI6MjEwMDQwODQ5MX0.Ta8Ei_wCm8ZEzD3IM-S60R0rJvI_d5BTvix_Z3W4EmY";
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// Íconos de línea (mismo juego que el ERP)
+const ICONOS = {
+  alert:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  banknote:'<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/>',
+  bike:'<circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/>',
+  building:'<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/>',
+  camera:'<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
+  chart:'<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9M13 17V5M8 17v-3"/>',
+  check:'<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+  clock:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
+  eye:'<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>',
+  filetext:'<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+  home:'<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  message:'<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
+  package:'<path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 8.7 5 8.7-5"/>',
+  phone:'<path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384"/>',
+  pin:'<path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/>',
+  printer:'<path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/>',
+  refresh:'<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+  search:'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  tag:'<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><path d="M7.5 7.5h.01"/>',
+  trend:'<path d="M22 7 13.5 15.5 8.5 10.5 2 17"/><path d="M16 7h6v6"/>',
+  upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>',
+  xcircle:'<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>',
+};
+function Ico({ n, size=18, color="currentColor", sw=1.8, style }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw}
+    strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0, display:"block", ...style }}
+    dangerouslySetInnerHTML={{ __html: ICONOS[n] || "" }}/>;
+}
 
 // Sesión segura: token obtenido al iniciar sesión, enviado en cada llamada.
 let _tokenCli = null;
@@ -40,8 +75,8 @@ const ESTADOS = {
 };
 
 const ICONOS_HIST = {
-  llamada:"📞", whatsapp:"💬", estado:"🔄",
-  foto_entrega:"📸", foto_no_entrega:"📸",
+  llamada:"phone", whatsapp:"message", estado:"refresh",
+  foto_entrega:"camera", foto_no_entrega:"camera",
 };
 
 const fmt = {
@@ -133,7 +168,8 @@ function validarFila(fila) {
   return errores;
 }
 
-function parseArchivo(file) {
+async function parseArchivo(file) {
+  await asegurarXLSX();
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -150,7 +186,8 @@ function parseArchivo(file) {
   });
 }
 
-function descargarPlantilla() {
+async function descargarPlantilla() {
+  await asegurarXLSX();
   const ejemplo = ["PED-00123","Marco Salinas","987654321","Calle Las Flores 890","Frente al parque","Miraflores","1.2","Same Day","NO",""];
   const ws = XLSX.utils.aoa_to_sheet([COLUMNAS_PLANTILLA, ejemplo]);
   ws["!cols"] = COLUMNAS_PLANTILLA.map(()=>({ wch:20 }));
@@ -237,8 +274,8 @@ function Login({ onLogin }) {
         )}
 
         <button onClick={entrar} disabled={cargando}
-          style={{ width:"100%", background:`linear-gradient(135deg,${C.gold},${C.goldDk})`,
-            border:"none", color:C.navy, padding:14, borderRadius:12,
+          style={{ width:"100%", background:"#D46A08",
+            border:"none", color:"#fff", padding:14, borderRadius:12,
             fontSize:15, fontWeight:800, cursor: cargando?"default":"pointer", letterSpacing:"0.5px" }}>
           {cargando ? "Ingresando..." : "Entrar →"}
         </button>
@@ -307,7 +344,7 @@ function KPICard({ icon, label, value, sub, color }) {
   return (
     <div style={{ background:C.white, borderRadius:14, padding:18, border:`1px solid ${C.border}`,
       boxShadow:"0 2px 8px #0D1E3D0A", borderTop:`3px solid ${color}` }}>
-      <div style={{ fontSize:22, marginBottom:6 }}>{icon}</div>
+      <div style={{ fontSize:22, marginBottom:6 }}><Ico n={icon} size={22} color={color}/></div>
       <div style={{ fontSize:26, fontWeight:900, color:C.navy }}>{value}</div>
       <div style={{ fontSize:11, color:C.textMut, textTransform:"uppercase", fontWeight:700, marginTop:2 }}>{label}</div>
       {sub && <div style={{ fontSize:11, color:color, fontWeight:700, marginTop:6 }}>{sub}</div>}
@@ -411,6 +448,7 @@ function Reportes({ pedidos, contacto }) {
         GREEN="FF1E7A34", RED="FFB00000", REDBG="FFFCE4E4", GRAY="FF808080", ZEBRA="FFF2F2F2",
         BORDER="FFD9DEE6";
 
+      const ExcelJS = await cargarExcelJSMod();
       const wb = new ExcelJS.Workbook();
       const ws = wb.addWorksheet("Liquidación", { pageSetup:{ orientation:"landscape" } });
       ws.columns = [ {width:3}, {width:10}, {width:34}, {width:20}, {width:24}, {width:16}, {width:22}, {width:37} ];
@@ -555,7 +593,7 @@ function Reportes({ pedidos, contacto }) {
             padding:"10px 18px", borderRadius:10, fontSize:12, fontWeight:800,
             cursor: incluidosLiquidacion.length>0 && !generando ? "pointer" : "default",
             whiteSpace:"nowrap" }}>
-          {generando ? "Generando..." : "📄 Descargar Liquidación Documentaria"}
+          {generando ? "Generando..." : <><Ico n="filetext" size={16} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Descargar Liquidación Documentaria</>}
         </button>
       </div>
       {periodo==="personalizado" && (
@@ -576,18 +614,18 @@ function Reportes({ pedidos, contacto }) {
       {filtrados.length===0 ? (
         <div style={{ background:C.white, borderRadius:14, padding:40, textAlign:"center",
           color:C.textMut, border:`1px solid ${C.border}` }}>
-          📊 No hay pedidos registrados en este periodo
+          <Ico n="chart" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>No hay pedidos registrados en este periodo
         </div>
       ) : (
       <>
         {/* KPIs principales */}
         <div style={{ display:"grid", gridTemplateColumns:"repeat(5, 1fr)", gap:12, marginBottom:20 }}>
-          <KPICard icon="📦" label="Total pedidos" value={filtrados.length} color={C.navy}/>
-          <KPICard icon="✅" label="Entregados" value={entregados.length} color={C.green}
+          <KPICard icon="package" label="Total pedidos" value={filtrados.length} color={C.navy}/>
+          <KPICard icon="check" label="Entregados" value={entregados.length} color={C.green}
             sub={finalizados>0 ? `${efectividad}% efectividad` : null}/>
-          <KPICard icon="⚠️" label="No entregados" value={noEntregados.length} color={C.red}/>
-          <KPICard icon="🛵" label="En ruta" value={enRuta.length} color="#7C3AED"/>
-          <KPICard icon="⏳" label="Por asignar / asignados" value={sinAsignar.length+asignados.length} color={C.gold}/>
+          <KPICard icon="alert" label="No entregados" value={noEntregados.length} color={C.red}/>
+          <KPICard icon="bike" label="En ruta" value={enRuta.length} color="#7C3AED"/>
+          <KPICard icon="clock" label="Por asignar / asignados" value={sinAsignar.length+asignados.length} color={C.gold}/>
         </div>
 
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16 }}>
@@ -764,7 +802,7 @@ function generarHtmlEtiquetasCliente(pedidosSel, empresa) {
 </head>
 <body>
   <div class="no-print" style="text-align:center;padding:14px;">
-    <button onclick="window.print()" style="padding:10px 20px;font-size:14px;cursor:pointer;">🖨️ Imprimir</button>
+    <button onclick="window.print()" style="padding:10px 20px;font-size:14px;cursor:pointer;"><Ico n="printer" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Imprimir</button>
   </div>
   ${filas}
   <script>
@@ -772,7 +810,7 @@ function generarHtmlEtiquetasCliente(pedidosSel, empresa) {
       if (typeof JsBarcode === "undefined") {
         document.body.insertAdjacentHTML("afterbegin",
           '<div style="background:#FEE;color:#900;padding:12px;text-align:center;font-family:Arial;">' +
-          '⚠️ No se pudo cargar la librería de códigos de barras (revisa tu conexión a internet e intenta de nuevo).</div>');
+          'No se pudo cargar la librería de códigos de barras (revisa tu conexión a internet e intenta de nuevo).</div>');
         return;
       }
       document.querySelectorAll("svg[data-code]").forEach(function(el){
@@ -814,7 +852,7 @@ function ModalEtiquetasCliente({ pedidos, empresa, onClose }) {
       <div style={{ background:C.white, borderRadius:16, padding:28, width:560,
         maxHeight:"85vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-          <div style={{ fontSize:16, fontWeight:800, color:C.navy }}>🏷️ Generar etiquetas con código de barras</div>
+          <div style={{ fontSize:16, fontWeight:800, color:C.navy }}><Ico n="tag" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Generar etiquetas con código de barras</div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20,
             color:C.textSec, cursor:"pointer" }}>✕</button>
         </div>
@@ -855,7 +893,7 @@ function ModalEtiquetasCliente({ pedidos, empresa, onClose }) {
             style={{ background: seleccionados.size>0 ? `linear-gradient(135deg,${C.gold},${C.goldDk})` : "#CBD5E1",
               border:"none", color:C.navy, padding:"9px 20px", borderRadius:8,
               fontSize:13, fontWeight:800, cursor: seleccionados.size>0 ? "pointer" : "default" }}>
-            🖨️ Generar e imprimir ({seleccionados.size})
+            <Ico n="printer" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Generar e imprimir ({seleccionados.size})
           </button>
         </div>
       </div>
@@ -900,7 +938,8 @@ function Dashboard({ pedidos, onVerPedido, empresa }) {
     setBusqueda(""); setFechaInicio(""); setFechaFin(""); setTipoServicio(""); setEstado("");
   };
 
-  const descargarCSV = () => {
+  const descargarCSV = async () => {
+    await asegurarXLSX();
     const headers = ["Tracking Boaz","Estado","Tipo Servicio","Destinatario","Telefono","Direccion","Distrito","Fecha de Registro","Fecha Ultimo Estado"];
     const rows = filtrados.map(p => [
       p.omd, ESTADOS[p.estado]?.label||p.estado, TIPOS_SERVICIO[p.tipo_servicio]?.label||"",
@@ -938,10 +977,10 @@ function Dashboard({ pedidos, onVerPedido, empresa }) {
             padding:"12px 16px", fontSize:14, color:C.textPri, outline:"none",
             boxSizing:"border-box", background:C.white }}/>
         <button
-          style={{ background:`linear-gradient(135deg,${C.gold},${C.goldDk})`, border:"none",
-            color:C.navy, padding:"0 22px", borderRadius:10, fontSize:13, fontWeight:800,
+          style={{ background:"#D46A08", border:"none",
+            color:"#fff", padding:"0 22px", borderRadius:10, fontSize:13, fontWeight:800,
             cursor:"pointer", display:"flex", alignItems:"center", gap:6 }}>
-          🔍 Buscar
+          <Ico n="search" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Buscar
         </button>
         <button onClick={limpiarFiltros}
           style={{ background:C.white, border:`1px solid ${C.border}`, color:C.textSec,
@@ -952,15 +991,15 @@ function Dashboard({ pedidos, onVerPedido, empresa }) {
           style={{ background:C.navy, border:"none", color:"#E8EAF0",
             padding:"0 18px", borderRadius:10, fontSize:13, fontWeight:700, cursor:"pointer",
             display:"flex", alignItems:"center", gap:6, whiteSpace:"nowrap" }}>
-          ⬇️ Descargar Excel
+          <Ico n="download" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Descargar Excel
         </button>
         {empresa?.puede_ver_liquidacion && (
           <button onClick={generarLiquidacion} disabled={generandoLiquidacion}
-            style={{ background:`linear-gradient(135deg,${C.gold},${C.goldDk})`, border:"none",
-              color:C.navy, padding:"0 18px", borderRadius:10, fontSize:13, fontWeight:800,
+            style={{ background:"#D46A08", border:"none",
+              color:"#fff", padding:"0 18px", borderRadius:10, fontSize:13, fontWeight:800,
               cursor: generandoLiquidacion?"default":"pointer",
               display:"flex", alignItems:"center", gap:6, whiteSpace:"nowrap" }}>
-            {generandoLiquidacion ? "Generando..." : "📄 Generar Liquidación"}
+            {generandoLiquidacion ? "Generando..." : <><Ico n="filetext" size={16} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Generar Liquidación</>}
           </button>
         )}
       </div>
@@ -1034,7 +1073,7 @@ function Dashboard({ pedidos, onVerPedido, empresa }) {
             {filtrados.length===0 ? (
               <tr>
                 <td colSpan={8} style={{ padding:40, textAlign:"center", color:C.textMut }}>
-                  📦 No se encontraron pedidos con estos filtros
+                  <Ico n="package" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>No se encontraron pedidos con estos filtros
                 </td>
               </tr>
             ) : filtrados.map(p=>(
@@ -1064,7 +1103,7 @@ function Dashboard({ pedidos, onVerPedido, empresa }) {
                   <button onClick={()=>onVerPedido(p)} title="Ver detalle"
                     style={{ background:"none", border:"none", cursor:"pointer",
                       fontSize:18, color:C.navy, padding:4 }}>
-                    👁️
+                    <Ico n="eye" size={18} style={{ display:"inline-block", verticalAlign:"middle" }}/>
                   </button>
                 </td>
               </tr>
@@ -1147,7 +1186,8 @@ function CargaMasiva({ empresaId, empresa, onCargaCompleta }) {
     onCargaCompleta();
   };
 
-  const descargarResultado = () => {
+  const descargarResultado = async () => {
+    await asegurarXLSX();
     if (!resultado) return;
     const headers = ["N Orden Cliente","Tracking Boaz","Destinatario","Estado"];
     const rows = resultado.map(r => [r.cliente_referencia||"", r.ok?r.codigo:"—", r.dest_nombre, r.ok?"Creado":("Error: "+r.error)]);
@@ -1171,12 +1211,12 @@ function CargaMasiva({ empresaId, empresa, onCargaCompleta }) {
           <button onClick={descargarPlantilla}
             style={{ background:C.white, border:`1px solid ${C.border}`, color:C.textSec,
               padding:"10px 16px", borderRadius:10, fontSize:13, fontWeight:700, cursor:"pointer" }}>
-            📥 Descargar plantilla
+            <Ico n="download" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Descargar plantilla
           </button>
-          <label style={{ background:`linear-gradient(135deg,${C.gold},${C.goldDk})`, color:C.navy,
+          <label style={{ background:"#D46A08", color:"#fff",
             padding:"10px 16px", borderRadius:10, fontSize:13, fontWeight:800, cursor:"pointer",
             display:"inline-flex", alignItems:"center", gap:6 }}>
-            📤 Seleccionar archivo (.csv, .xlsx)
+            <Ico n="upload" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Seleccionar archivo (.csv, .xlsx)
             <input type="file" accept=".csv,.xlsx,.xls" onChange={onSeleccionarArchivo} style={{ display:"none" }}/>
           </label>
           {nombreArchivo && <div style={{ fontSize:12, color:C.textMut, alignSelf:"center" }}>{nombreArchivo}</div>}
@@ -1198,7 +1238,7 @@ function CargaMasiva({ empresaId, empresa, onCargaCompleta }) {
               style={{ background: validas.length>0 ? C.green : "#CBD5E1", color:C.white, border:"none",
                 padding:"10px 18px", borderRadius:10, fontSize:13, fontWeight:800,
                 cursor: validas.length>0 && !procesando ? "pointer" : "default" }}>
-              {procesando ? (progreso||"Generando códigos...") : `✅ Confirmar y cargar ${validas.length} pedido${validas.length===1?"":"s"}`}
+              {procesando ? (progreso||"Generando códigos...") : `Confirmar y cargar ${validas.length} pedido${validas.length===1?"":"s"}`}
             </button>
           </div>
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
@@ -1222,8 +1262,8 @@ function CargaMasiva({ empresaId, empresa, onCargaCompleta }) {
                   <td style={{ padding:"10px 12px" }}>{TIPOS_SERVICIO[f.tipo_servicio]?.label||"—"}</td>
                   <td style={{ padding:"10px 12px" }}>
                     {f.errores.length===0
-                      ? <span style={{ color:C.green, fontWeight:700 }}>✅ OK</span>
-                      : <span style={{ color:C.red, fontWeight:700 }} title={f.errores.join(", ")}>❌ {f.errores[0]}</span>}
+                      ? <span style={{ color:C.green, fontWeight:700 }}><Ico n="check" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>OK</span>
+                      : <span style={{ color:C.red, fontWeight:700 }} title={f.errores.join(", ")}><Ico n="xcircle" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>{f.errores[0]}</span>}
                   </td>
                 </tr>
               ))}
@@ -1241,15 +1281,15 @@ function CargaMasiva({ empresaId, empresa, onCargaCompleta }) {
             <div style={{ display:"flex", gap:8 }}>
               {empresa?.puede_generar_etiquetas && resultado.some(r=>r.ok) && (
                 <button onClick={()=>setMostrarEtiquetas(true)}
-                  style={{ background:`linear-gradient(135deg,${C.gold},${C.goldDk})`, color:C.navy, border:"none",
+                  style={{ background:"#D46A08", color:"#fff", border:"none",
                     padding:"8px 16px", borderRadius:8, fontSize:12, fontWeight:800, cursor:"pointer" }}>
-                  🏷️ Generar etiquetas
+                  <Ico n="tag" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Generar etiquetas
                 </button>
               )}
               <button onClick={descargarResultado}
                 style={{ background:C.navy, color:"#E8EAF0", border:"none", padding:"8px 16px",
                   borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer" }}>
-                ⬇️ Descargar códigos generados
+                <Ico n="download" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Descargar códigos generados
               </button>
             </div>
           </div>
@@ -1259,7 +1299,7 @@ function CargaMasiva({ empresaId, empresa, onCargaCompleta }) {
                 padding:"8px 12px", background:C.bg, borderRadius:8, fontSize:12 }}>
                 <span style={{ color:C.textSec }}>{r.cliente_referencia||"—"} · {r.dest_nombre}</span>
                 <span style={{ fontWeight:700, color: r.ok?C.green:C.red }}>
-                  {r.ok ? `${r.ubicado?"📍 ":"⚠️ "}${r.codigo}` : `Error: ${r.error}`}
+                  {r.ok ? `${r.codigo}${r.ubicado?"":" (sin ubicar en el mapa)"}` : `Error: ${r.error}`}
                 </span>
               </div>
             ))}
@@ -1527,27 +1567,27 @@ function DetalleModal({ pedido: p, onClose }) {
             marginBottom:12, border:`1px solid #E2E8F0`,
             borderLeft:`4px solid ${C.gold}` }}>
             <div style={{ fontSize:11, fontWeight:700, color:C.navy, textTransform:"uppercase",
-              letterSpacing:"0.8px", marginBottom:12 }}>📦 Destinatario</div>
+              letterSpacing:"0.8px", marginBottom:12 }}><Ico n="package" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Destinatario</div>
             <div style={{ fontSize:16, fontWeight:800, color:C.textPri, marginBottom:4 }}>
               {p.dest_nombre}
             </div>
             <div style={{ fontSize:13, color:C.textSec, marginBottom:4 }}>
-              📍 {p.dest_direccion}
+              <Ico n="pin" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>{p.dest_direccion}
             </div>
             {p.dest_referencia && (
               <div style={{ fontSize:12, color:C.textMut, marginBottom:4 }}>
-                🏠 Ref: {p.dest_referencia}
+                <Ico n="home" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Ref: {p.dest_referencia}
               </div>
             )}
             <div style={{ fontSize:13, color:C.textSec }}>
-              🏙️ {p.dest_distrito}
+              <Ico n="building" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>{p.dest_distrito}
             </div>
           </div>
 
           <div style={{ background:C.white, borderRadius:14, padding:18,
             marginBottom:12, border:`1px solid #E2E8F0` }}>
             <div style={{ fontSize:11, fontWeight:700, color:C.navy, textTransform:"uppercase",
-              letterSpacing:"0.8px", marginBottom:12 }}>📋 Paquete</div>
+              letterSpacing:"0.8px", marginBottom:12 }}><Ico n="filetext" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Paquete</div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
               <div>
                 <div style={{ fontSize:10, color:C.textMut, textTransform:"uppercase" }}>Peso</div>
@@ -1570,7 +1610,7 @@ function DetalleModal({ pedido: p, onClose }) {
               <div style={{ marginTop:14, background:"#FFF7ED",
                 border:"2px solid #FED7AA", borderRadius:10, padding:"12px 14px" }}>
                 <div style={{ fontSize:12, fontWeight:700, color:"#C2410C", marginBottom:2 }}>
-                  💵 COBRO EN DESTINO (COD)
+                  <Ico n="banknote" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>COBRO EN DESTINO (COD)
                 </div>
                 <div style={{ fontSize:20, fontWeight:900, color:"#C2410C" }}>
                   S/ {p.monto_cobrar}
@@ -1581,14 +1621,14 @@ function DetalleModal({ pedido: p, onClose }) {
               <div style={{ marginTop:14, background:"#FEF2F2",
                 border:"2px solid #FECACA", borderRadius:10, padding:"12px 14px" }}>
                 <div style={{ fontSize:12, fontWeight:700, color:C.red, marginBottom:2 }}>
-                  ⚠️ NO ENTREGADO
+                  <Ico n="alert" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>NO ENTREGADO
                 </div>
                 <div style={{ fontSize:13, color:"#991B1B" }}>{p.motivo_no_entrega}</div>
               </div>
             )}
             {p.repartidor_nombre && (
               <div style={{ marginTop:14, fontSize:12, color:C.textSec }}>
-                🛵 Repartidor asignado: <strong>{p.repartidor_nombre}</strong>
+                <Ico n="bike" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Repartidor asignado: <strong>{p.repartidor_nombre}</strong>
               </div>
             )}
           </div>
@@ -1596,7 +1636,7 @@ function DetalleModal({ pedido: p, onClose }) {
           <div style={{ background:C.white, borderRadius:14, padding:18,
             border:`1px solid #E2E8F0` }}>
             <div style={{ fontSize:11, fontWeight:700, color:C.navy, textTransform:"uppercase",
-              letterSpacing:"0.8px", marginBottom:12 }}>🕒 Historial y evidencias</div>
+              letterSpacing:"0.8px", marginBottom:12 }}><Ico n="clock" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Historial y evidencias</div>
             {historial.length===0 ? (
               <div style={{ fontSize:12, color:C.textMut, textAlign:"center", padding:"12px 0" }}>
                 Sin eventos registrados aún.
@@ -1607,7 +1647,7 @@ function DetalleModal({ pedido: p, onClose }) {
                   <div key={i} style={{ display:"flex", gap:10, alignItems:"flex-start",
                     borderBottom: i<historial.length-1 ? "1px solid #F1F5F9" : "none",
                     paddingBottom:10 }}>
-                    <span style={{ fontSize:16 }}>{ICONOS_HIST[h.tipo]||"•"}</span>
+                    <span style={{ fontSize:16 }}><Ico n={ICONOS_HIST[h.tipo]||"clock"} size={16}/></span>
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:12, fontWeight:600, color:C.textPri }}>
                         {h.tipo==="llamada" && "Llamada al destinatario"}
@@ -1738,9 +1778,9 @@ export default function BoazCliente() {
       <div style={{ background:C.white, borderBottom:`1px solid ${C.border}`,
         padding:"0 24px", display:"flex", gap:4 }}>
         {[
-          { id:"consulta", label:"📋 Consultar pedidos" },
-          { id:"reportes", label:"📈 Reportes" },
-          { id:"carga", label:"⬆️ Cargar pedidos" },
+          { id:"consulta", label:<><Ico n="filetext" size={16} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Consultar pedidos</> },
+          { id:"reportes", label:<><Ico n="trend" size={16} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Reportes</> },
+          { id:"carga", label:<><Ico n="upload" size={16} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Cargar pedidos</> },
         ].map(t=>(
           <button key={t.id} onClick={()=>setVista(t.id)}
             style={{ background:"none", border:"none", cursor:"pointer",

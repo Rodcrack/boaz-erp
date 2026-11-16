@@ -11,6 +11,54 @@ const SUPABASE_URL  = "https://jeftkwjdqzkpswvaqspi.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImplZnRrd2pkcXprcHN3dmFxc3BpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4MzI0OTEsImV4cCI6MjEwMDQwODQ5MX0.Ta8Ei_wCm8ZEzD3IM-S60R0rJvI_d5BTvix_Z3W4EmY";
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 
+// Íconos de línea (mismo juego que el ERP)
+const ICONOS = {
+  alert:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  banknote:'<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/>',
+  bike:'<circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/>',
+  building:'<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/>',
+  camera:'<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
+  check:'<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+  clock:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  dollar:'<path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+  filetext:'<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+  flag:'<path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528"/>',
+  home:'<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  image:'<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>',
+  mail:'<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
+  map:'<path d="M9 3 3 5v16l6-2 6 2 6-2V3l-6 2-6-2z"/><path d="M9 3v16"/><path d="M15 5v16"/>',
+  message:'<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
+  mic:'<path d="M12 19v3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><rect x="9" y="2" width="6" height="13" rx="3"/>',
+  package:'<path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 8.7 5 8.7-5"/>',
+  phone:'<path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384"/>',
+  pin:'<path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/>',
+  play:'<polygon points="6 3 20 12 6 21 6 3"/>',
+  refresh:'<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+  save:'<path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/>',
+  search:'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  tag:'<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><path d="M7.5 7.5h.01"/>',
+  target:'<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+  truck:'<path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/>',
+  user:'<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  xcircle:'<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>',
+};
+function Ico({ n, size=18, color="currentColor", sw=1.8, style }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw}
+    strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0, display:"block", ...style }}
+    dangerouslySetInnerHTML={{ __html: ICONOS[n] || "" }}/>;
+}
+
+// Sesión segura: el token se obtiene al iniciar sesión y viaja en cada llamada.
+let _tokenApp = null;
+const setTokenApp = (t) => { _tokenApp = t; };
+const rpcApp = async (nombre, args = {}) => {
+  const res = await sb.rpc(nombre, { p_token: _tokenApp, ...args });
+  if (res.error && /sesion_invalida/.test(res.error.message || "")) {
+    window.dispatchEvent(new Event("boaz-sesion-expirada"));
+  }
+  return res;
+};
+
 // ── PALETA ────────────────────────────────────────────────────
 const C = {
   navy:"#0D1E3D", navyMd:"#152848", navyLt:"#1E3A5F",
@@ -50,8 +98,8 @@ const fmt = {
 };
 
 const ICONOS_HIST = {
-  llamada:"📞", whatsapp:"💬", estado:"🔄",
-  foto_entrega:"📸", foto_no_entrega:"📸",
+  llamada:"phone", whatsapp:"message", estado:"refresh",
+  foto_entrega:"camera", foto_no_entrega:"camera",
 };
 
 // ── HELPERS: GPS, COMPRESIÓN, COLA OFFLINE ─────────────────────
@@ -137,7 +185,7 @@ async function subirFotosYUrls(pedidoId, tipoEvento, blobsOBase64) {
   const subidas = blobsOBase64.map(async (blob, i) => {
     if (typeof blob === "string") blob = await base64ToBlob(blob);
     const path = `${pedidoId}/${tipoEvento}_${Date.now()}_${i}_${Math.random().toString(36).slice(2,6)}.jpg`;
-    const { error } = await sb.storage.from("evidencias").upload(path, blob, { upsert: true, contentType: "image/jpeg" });
+    const { error } = await sb.storage.from("evidencias").upload(path, blob, { upsert: false, contentType: "image/jpeg" });
     if (error) throw error;
     const { data } = sb.storage.from("evidencias").getPublicUrl(path);
     return data.publicUrl;
@@ -199,12 +247,7 @@ async function guardarEvidenciaYEstado({ pedidoId, nuevoEstado, fotosFiles, moti
       { tipo: "estado", detalle: detalleEvento, timestamp, lat: gpsPos?.lat, lng: gpsPos?.lng },
       ...urls.map((u) => ({ tipo: tipoEvento, url: u, timestamp, lat: gpsPos?.lat, lng: gpsPos?.lng })),
     ];
-    const { data: actual } = await sb.from("pedidos").select("historial").eq("id", pedidoId).single();
-    const historialActual = actual?.historial || [];
-    const { error } = await sb.from("pedidos").update({
-      ...payload,
-      historial: [...historialActual, ...eventos],
-    }).eq("id", pedidoId);
+    const { error } = await rpcApp("rep_pedido_actualizar", { p_ids: [pedidoId], p_cambios: payload, p_eventos: eventos });
     if (error) throw error;
     return { ok: true, offline: false };
   } catch (e) {
@@ -227,9 +270,7 @@ async function registrarContacto(pedidoId, tipo) {
   const gpsPos = await obtenerGPS();
   const evento = { tipo, timestamp: new Date().toISOString(), lat: gpsPos?.lat, lng: gpsPos?.lng };
   try {
-    const { data: actual } = await sb.from("pedidos").select("historial").eq("id", pedidoId).single();
-    const historialActual = actual?.historial || [];
-    const { error } = await sb.from("pedidos").update({ historial: [...historialActual, evento] }).eq("id", pedidoId);
+    const { error } = await rpcApp("rep_pedido_actualizar", { p_ids: [pedidoId], p_cambios: {}, p_eventos: [evento] });
     if (error) throw error;
   } catch (e) {
     encolar({ tipo: "contacto", pedidoId, evento });
@@ -241,7 +282,7 @@ async function iniciarRutaMasivo(pedidoIds) {
   const timestamp = new Date().toISOString();
   const payload = { estado: "en_ruta", fecha_inicio_ruta: timestamp };
   try {
-    const { error } = await sb.from("pedidos").update(payload).in("id", pedidoIds);
+    const { error } = await rpcApp("rep_pedido_actualizar", { p_ids: pedidoIds, p_cambios: payload, p_eventos: [] });
     if (error) throw error;
     return { ok: true, offline: false };
   } catch (e) {
@@ -296,9 +337,7 @@ async function calcularRutaAutomatica(pedidos) {
 }
 
 async function guardarOrdenRuta(pedidosEnOrden) {
-  await Promise.all(pedidosEnOrden.map((p, i) =>
-    sb.from("pedidos").update({ orden_ruta: i }).eq("id", p.id)
-  ));
+  await rpcApp("rep_guardar_orden", { p_ids: pedidosEnOrden.map(p => p.id) });
 }
 
 async function procesarCola() {
@@ -309,15 +348,13 @@ async function procesarCola() {
   for (const accion of q) {
     try {
       if (accion.tipo === "iniciar_ruta") {
-        const { error } = await sb.from("pedidos").update(accion.payload).in("id", accion.pedidoIds);
+        const { error } = await rpcApp("rep_pedido_actualizar", { p_ids: accion.pedidoIds, p_cambios: accion.payload, p_eventos: [] });
         if (error) throw error;
         ok++;
         continue;
       }
       if (accion.tipo === "contacto") {
-        const { data: actual } = await sb.from("pedidos").select("historial").eq("id", accion.pedidoId).single();
-        const historialActual = actual?.historial || [];
-        const { error } = await sb.from("pedidos").update({ historial: [...historialActual, accion.evento] }).eq("id", accion.pedidoId);
+        const { error } = await rpcApp("rep_pedido_actualizar", { p_ids: [accion.pedidoId], p_cambios: {}, p_eventos: [accion.evento] });
         if (error) throw error;
         ok++;
         continue;
@@ -328,12 +365,7 @@ async function procesarCola() {
           { tipo: "estado", detalle: accion.detalleEvento, timestamp: accion.timestamp, lat: accion.lat, lng: accion.lng },
           ...urls.map((u) => ({ tipo: accion.tipoEvento, url: u, timestamp: accion.timestamp, lat: accion.lat, lng: accion.lng })),
         ];
-        const { data: actual } = await sb.from("pedidos").select("historial").eq("id", accion.pedidoId).single();
-        const historialActual = actual?.historial || [];
-        const { error } = await sb.from("pedidos").update({
-          ...accion.payload,
-          historial: [...historialActual, ...eventos],
-        }).eq("id", accion.pedidoId);
+        const { error } = await rpcApp("rep_pedido_actualizar", { p_ids: [accion.pedidoId], p_cambios: accion.payload, p_eventos: eventos });
         if (error) throw error;
         ok++;
         continue;
@@ -362,6 +394,7 @@ function Login({ onLogin }) {
     });
     setCargando(false);
     if (err || !data || data.length===0) { setError("Usuario o PIN incorrecto"); return; }
+    setTokenApp(data[0].token);
     onLogin(data[0]);
   };
 
@@ -471,7 +504,7 @@ function CamaraEnVivo({ onFoto, onCerrar, onFallback }) {
       <video ref={videoRef} playsInline muted style={{ flex:1, width:"100%", objectFit:"cover", minHeight:0 }}/>
       {!listo && <div style={{ position:"absolute", top:"45%", width:"100%", textAlign:"center", color:"#fff", fontSize:14 }}>Abriendo cámara…</div>}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-around", padding:"16px 12px 28px", background:"#000" }}>
-        <div style={{ color:"#fff", fontSize:13, width:80 }}>{fotosTomadas>0 ? `📷 ${fotosTomadas} foto(s)` : ""}</div>
+        <div style={{ color:"#fff", fontSize:13, width:80 }}>{fotosTomadas>0 ? <><Ico n="camera" size={16} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>{`${fotosTomadas} foto(s)`}</> : ""}</div>
         <button onClick={tomar} disabled={!listo} aria-label="Tomar foto"
           style={{ width:70, height:70, borderRadius:"50%", border:"5px solid #fff", background:"#ffffff55", cursor:"pointer" }}/>
         <button onClick={onCerrar}
@@ -539,7 +572,7 @@ function CapturaFotos({ fotos, setFotos, minimo = 2, label = "Evidencias" }) {
     <div>
       <div style={{ fontSize:11, fontWeight:700, color: completo?C.green:C.navy,
         textTransform:"uppercase", marginBottom:8 }}>
-        📷 {label} — {fotos.length}/{minimo} mínimo {completo && "✓"}
+        <Ico n="camera" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>{label} — {fotos.length}/{minimo} mínimo {completo && "✓"}
       </div>
       <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:10 }}>
         {fotos.map((f,i)=>(
@@ -547,7 +580,7 @@ function CapturaFotos({ fotos, setFotos, minimo = 2, label = "Evidencias" }) {
             {f.rota ? (
               <div style={{ width:70, height:70, borderRadius:8, border:`2px solid ${C.red}`,
                 background:"#FEF2F2", display:"flex", alignItems:"center", justifyContent:"center",
-                fontSize:22 }}>⚠️</div>
+                fontSize:22 }}><Ico n="alert" size={22} style={{ display:"inline-block", verticalAlign:"middle" }}/></div>
             ) : (
               <img src={f.preview} alt="" onError={()=>marcarRota(i)}
                 style={{ width:70, height:70, objectFit:"cover",
@@ -561,17 +594,17 @@ function CapturaFotos({ fotos, setFotos, minimo = 2, label = "Evidencias" }) {
       </div>
       {hayRotas && (
         <div style={{ fontSize:11, color:C.red, marginBottom:8, fontWeight:600 }}>
-          ⚠️ Una o más fotos no cargaron bien. Quítalas (×) y vuelve a tomarlas antes de guardar.
+          <Ico n="alert" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Una o más fotos no cargaron bien. Quítalas (×) y vuelve a tomarlas antes de guardar.
         </div>
       )}
       {procesando && (
         <div style={{ fontSize:11, color:C.gold, marginBottom:8, fontWeight:600 }}>
-          ⏳ Procesando foto...
+          Procesando foto...
         </div>
       )}
       {errorEscaneo && (
         <div style={{ fontSize:11, color:C.red, marginBottom:8, fontWeight:600 }}>
-          ⚠️ {errorEscaneo}
+          <Ico n="alert" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>{errorEscaneo}
         </div>
       )}
       <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:6 }}>
@@ -579,19 +612,19 @@ function CapturaFotos({ fotos, setFotos, minimo = 2, label = "Evidencias" }) {
           style={{ flex:"1 1 30%", minWidth:100, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
             padding:"12px 8px", borderRadius:10, border:`2px dashed ${C.gold}`,
             background:"#FFF8EF", color:C.goldDk, fontSize:12, fontWeight:700, cursor:"pointer" }}>
-          📸 Tomar foto
+          <Ico n="camera" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Tomar foto
         </button>
         <button onClick={()=>inputGaleria.current?.click()}
           style={{ flex:"1 1 30%", minWidth:100, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
             padding:"12px 8px", borderRadius:10, border:`2px dashed ${C.navyLt}`,
             background:"#F0F4F8", color:C.navy, fontSize:12, fontWeight:700, cursor:"pointer" }}>
-          🖼️ Galería
+          <Ico n="image" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Galería
         </button>
         <button onClick={()=>inputEscaner.current?.click()}
           style={{ flex:"1 1 30%", minWidth:100, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
             padding:"12px 8px", borderRadius:10, border:`2px dashed #7C3AED`,
             background:"#F5F3FF", color:"#6D28D9", fontSize:12, fontWeight:700, cursor:"pointer" }}>
-          📄 Escanear
+          <Ico n="filetext" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Escanear
         </button>
         {camaraVivo && <CamaraEnVivo
           onFoto={(f)=>agregarFotos({ target:{ files:[f], value:"" } })}
@@ -674,7 +707,7 @@ function OrdenarRuta({ pedidosIniciales, onVolver, onGuardado, toast }) {
           style={{ background:C.white, border:`1px solid #E2E8F0`,
             color:C.textSec, padding:"8px 14px", borderRadius:10,
             fontSize:13, cursor:"pointer", fontWeight:600 }}>← Volver</button>
-        <div style={{ fontSize:16, fontWeight:800, color:C.navy }}>🗺️ Ordenar mi ruta</div>
+        <div style={{ fontSize:16, fontWeight:800, color:C.navy }}><Ico n="map" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Ordenar mi ruta</div>
       </div>
 
       <div style={{ fontSize:12, color:C.textMut, marginBottom:14 }}>
@@ -686,7 +719,7 @@ function OrdenarRuta({ pedidosIniciales, onVolver, onGuardado, toast }) {
           color:C.white, border:"none", padding:14, borderRadius:12,
           fontSize:14, fontWeight:800, cursor: calculando?"default":"pointer",
           marginBottom:16 }}>
-        {calculando ? "Calculando..." : "🎯 Ruteo automático"}
+        {calculando ? "Calculando..." : <><Ico n="target" size={16} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Ruteo automático</>}
       </button>
 
       <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:16 }}>
@@ -728,7 +761,7 @@ function OrdenarRuta({ pedidosIniciales, onVolver, onGuardado, toast }) {
         style={{ width:"100%", background:`linear-gradient(135deg,${C.green},#059669)`,
           color:C.white, border:"none", padding:16, borderRadius:12,
           fontSize:15, fontWeight:800, cursor: guardando?"default":"pointer" }}>
-        {guardando ? "Guardando..." : "💾 Guardar orden de ruta"}
+        {guardando ? "Guardando..." : <><Ico n="save" size={16} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Guardar orden de ruta</>}
       </button>
     </div>
   );
@@ -1035,7 +1068,7 @@ function MapaRuta({ pedidos, onVolver, onVerPedido }) {
       </label>
       {sinCoords > 0 && (
         <div style={{ background:"#FFFBEB", padding:"6px 14px", fontSize:11, color:"#92400E", fontWeight:600 }}>
-          ⚠️ {sinCoords} pedido{sinCoords===1?"":"s"} sin coordenadas — no se muestra{sinCoords===1?"":"n"} en el mapa.
+          <Ico n="alert" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>{sinCoords} pedido{sinCoords===1?"":"s"} sin coordenadas — no se muestra{sinCoords===1?"":"n"} en el mapa.
         </div>
       )}
       <div style={{ position:"relative", flex:1, minHeight:0 }}>
@@ -1050,7 +1083,7 @@ function MapaRuta({ pedidos, onVolver, onVerPedido }) {
         <div ref={contenedorRef} style={{ width:"100%", height:"100%" }}/>
         <button onClick={recentrar} title="Mi ubicación"
           style={{ position:"absolute", top:12, right:12, zIndex:1000, width:44, height:44, borderRadius:8,
-            background:"#fff", border:"none", boxShadow:"0 2px 8px #0003", fontSize:22, cursor:"pointer" }}>🎯</button>
+            background:"#fff", border:"none", boxShadow:"0 2px 8px #0003", fontSize:22, cursor:"pointer" }}><Ico n="target" size={22} style={{ display:"inline-block", verticalAlign:"middle" }}/></button>
         {sel && (
           <div style={{ position:"absolute", left:10, right:10, bottom:12, zIndex:1000, background:"#fff",
             borderRadius:14, padding:"14px 16px", boxShadow:"0 4px 20px #0004", border:"1px solid #C7D2FE" }}>
@@ -1285,7 +1318,7 @@ function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, ini
           style={{ background:"#FFFFFF18", border:"none", color:"#fff",
             width:38, height:38, borderRadius:10, fontSize:18, cursor:"pointer",
             display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}
-          title="Escanear pedido">📷</button>
+          title="Escanear pedido"><Ico n="camera" size={22} style={{ display:"inline-block", verticalAlign:"middle" }}/></button>
         <button onClick={onLogout}
           style={{ background:"none", border:"1px solid #1E3560",
             color:C.textMut, padding:"6px 12px", borderRadius:8,
@@ -1300,14 +1333,14 @@ function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, ini
             color:C.white, border:"none", padding:16, borderRadius:14,
             fontSize:15, fontWeight:800, cursor: iniciando?"default":"pointer",
             marginBottom:16, boxShadow:"0 6px 16px #6D28D944" }}>
-          {iniciando ? "Iniciando..." : `🚀 Iniciar Ruta (${pedidosIniciables.length} pedido${pedidosIniciables.length===1?"":"s"})`}
+          {iniciando ? "Iniciando..." : `Iniciar Ruta (${pedidosIniciables.length} pedido${pedidosIniciables.length===1?"":"s"})`}
         </button>
       )}
 
       {pedidosEnEspera.length > 0 && (
         <div style={{ background:"#FFFBEB", border:"1px solid #FDE68A", borderRadius:12,
           padding:"10px 14px", marginBottom:16, fontSize:12, color:"#92400E", fontWeight:600 }}>
-          📦 Tienes {pedidosEnEspera.length} pedido{pedidosEnEspera.length===1?"":"s"} de una nueva carga esperando — se habilitará{pedidosEnEspera.length===1?"":"n"} cuando termines tu ruta actual.
+          <Ico n="package" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Tienes {pedidosEnEspera.length} pedido{pedidosEnEspera.length===1?"":"s"} de una nueva carga esperando — se habilitará{pedidosEnEspera.length===1?"":"n"} cuando termines tu ruta actual.
         </div>
       )}
 
@@ -1317,7 +1350,7 @@ function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, ini
             color:C.white, border:"none", padding:16, borderRadius:14,
             fontSize:15, fontWeight:800, cursor:"pointer",
             marginBottom:16, boxShadow:"0 6px 16px #10B98144" }}>
-          🏁 Finalizar mi ruta de hoy
+          <Ico n="flag" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Finalizar mi ruta de hoy
         </button>
       )}
 
@@ -1326,7 +1359,7 @@ function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, ini
           style={{ width:"100%", background:C.white, border:`2px solid ${C.gold}`,
             color:C.goldDk, padding:12, borderRadius:14,
             fontSize:13, fontWeight:800, cursor:"pointer", marginBottom:10 }}>
-          🗺️ Ordenar mi ruta ({misP.length} pedidos)
+          <Ico n="map" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Ordenar mi ruta ({misP.length} pedidos)
         </button>
       )}
 
@@ -1335,14 +1368,14 @@ function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, ini
           style={{ width:"100%", background:C.white, border:`2px solid #7C3AED`,
             color:"#7C3AED", padding:12, borderRadius:14,
             fontSize:13, fontWeight:800, cursor:"pointer", marginBottom:16 }}>
-          📍 Ver mapa de mi ruta
+          <Ico n="pin" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Ver mapa de mi ruta
         </button>
       )}
 
       <div style={{ display:"flex", alignItems:"center", gap:8, background:C.white,
         border:`1px solid ${C.border}`, borderRadius:12, padding:"4px 6px 4px 12px", marginBottom:12 }}>
         <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }`}</style>
-        <span style={{ fontSize:16 }}>🔍</span>
+        <span style={{ fontSize:16 }}><Ico n="search" size={16} style={{ display:"inline-block", verticalAlign:"middle" }}/></span>
         <input value={busqueda} onChange={e=>setBusqueda(e.target.value)}
           placeholder={escuchando ? "Escuchando…" : "Buscar pedido, cliente, dirección, teléfono"}
           style={{ flex:1, border:"none", outline:"none", fontSize:14, padding:"10px 0",
@@ -1354,7 +1387,7 @@ function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, ini
         <button onClick={dictar} title="Dictar"
           style={{ width:38, height:38, borderRadius:10, border:"none", fontSize:18, cursor:"pointer",
             background: escuchando ? C.red : "#F1F5F9", color: escuchando ? "#fff" : C.textPri,
-            animation: escuchando ? "pulse 1s infinite" : "none" }}>🎤</button>
+            animation: escuchando ? "pulse 1s infinite" : "none" }}><Ico n="mic" size={22} style={{ display:"inline-block", verticalAlign:"middle" }}/></button>
       </div>
       {buscando && (
         <div style={{ fontSize:12, color:C.textMut, marginBottom:10 }}>
@@ -1364,9 +1397,9 @@ function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, ini
 
       <div style={{ display: buscando ? "none" : "grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:16 }}>
         {[
-          { id:"ruta", label:"En ruta", value: misP.length, color:"#7C3AED", icon:"🛵" },
-          { id:"entregados", label:"Entregados", value: entregadosHoy.length, color:C.green, icon:"✅" },
-          { id:"no_entregados", label:"No entreg.", value: noEntregadosHoy.length, color:C.red, icon:"⚠️" },
+          { id:"ruta", label:"En ruta", value: misP.length, color:"#7C3AED", icon:"bike" },
+          { id:"entregados", label:"Entregados", value: entregadosHoy.length, color:C.green, icon:"check" },
+          { id:"no_entregados", label:"No entreg.", value: noEntregadosHoy.length, color:C.red, icon:"alert" },
         ].map((k,i)=>(
           <div key={i} onClick={()=>setFiltroLista(k.id)}
             style={{ background:C.white, borderRadius:12, padding:14,
@@ -1374,7 +1407,7 @@ function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, ini
               border: filtroLista===k.id ? `2px solid ${k.color}` : `1px solid ${C.border}`,
               boxShadow: filtroLista===k.id ? `0 4px 12px ${k.color}33` : "0 2px 8px #0D1E3D0A",
               borderTop:`3px solid ${k.color}`, transition:"all 0.15s" }}>
-            <div style={{ fontSize:20, marginBottom:4 }}>{k.icon}</div>
+            <div style={{ fontSize:20, marginBottom:4 }}><Ico n={k.icon} size={22} color={k.color} style={{ margin:"0 auto" }}/></div>
             <div style={{ fontSize:20, fontWeight:800, color:C.textPri }}>{k.value}</div>
             <div style={{ fontSize:10, color: filtroLista===k.id ? k.color : C.textMut,
               textTransform:"uppercase", fontWeight: filtroLista===k.id ? 700 : 400 }}>{k.label}</div>
@@ -1386,7 +1419,7 @@ function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, ini
         <div style={{ background:C.white, borderRadius:14, padding:32,
           textAlign:"center", color:C.textMut, border:`1px solid #E2E8F0` }}>
           <div style={{ fontSize:36, marginBottom:8 }}>
-            {buscando ? "🔍" : filtroLista==="ruta" ? "🎉" : filtroLista==="entregados" ? "📦" : "✅"}
+            <Ico n={buscando ? "search" : filtroLista==="entregados" ? "package" : "check"} size={36} color={filtroLista==="ruta" && !buscando ? C.green : C.textMut} style={{ margin:"0 auto" }}/>
           </div>
           <div style={{ fontSize:14, fontWeight:600 }}>
             {buscando ? "Sin resultados para tu búsqueda" : filtroLista==="ruta" ? "¡Sin pedidos pendientes!" : filtroLista==="entregados" ? "Aún no hay entregas hoy" : "Sin pedidos no entregados"}
@@ -1426,7 +1459,7 @@ function Inicio({ repartidor, pedidos, onVerPedido, onLogout, onIniciarRuta, ini
                 {p.dest_nombre}
               </div>
               <div style={{ fontSize:12, color:C.textSec, marginBottom:4 }}>
-                📍 {p.dest_direccion}
+                <Ico n="pin" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>{p.dest_direccion}
               </div>
               <div style={{ display:"flex", justifyContent:"space-between",
                 alignItems:"center", marginTop:8 }}>
@@ -1475,7 +1508,7 @@ function DetallePedido({ pedido: p, posicionRuta, onVolver, onActualizar, onActu
         ? { estado:"entregado", fecha_entrega:new Date().toISOString(), recibido_por:recibidoPor, comentario_entrega:comentario.trim()||null }
         : { estado:"no_entregado", motivo_no_entrega:motivoFinal, comentario_no_entrega:comentario.trim()||null });
       toast(offline
-        ? "Sin conexión: guardado en el equipo, se sincronizará al recuperar señal ⏳"
+        ? "Sin conexión: guardado en el equipo, se sincronizará al recuperar señal"
         : (nuevoEstado==="entregado" ? "¡Pedido entregado! ✓" : "Registrado como no entregado ✓"));
       onVolver();
     } catch (err) {
@@ -1522,7 +1555,7 @@ function DetallePedido({ pedido: p, posicionRuta, onVolver, onActualizar, onActu
               color:C.textSec, padding:"8px 14px", borderRadius:10,
               fontSize:13, cursor:"pointer", fontWeight:600 }}>← Cancelar</button>
           <div style={{ fontSize:16, fontWeight:800, color: esEntrega?C.green:C.red }}>
-            {esEntrega ? "✅ Confirmar entrega" : "⚠️ Registrar no entrega"}
+            {esEntrega ? <><Ico n="check" size={16} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Confirmar entrega</> : <><Ico n="alert" size={16} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Registrar no entrega</>}
           </div>
         </div>
 
@@ -1631,19 +1664,19 @@ function DetallePedido({ pedido: p, posicionRuta, onVolver, onActualizar, onActu
         marginBottom:12, border:`1px solid #E2E8F0`,
         borderLeft:`4px solid ${C.gold}` }}>
         <div style={{ fontSize:11, fontWeight:700, color:C.navy, textTransform:"uppercase",
-          letterSpacing:"0.8px", marginBottom:12 }}>📦 Destinatario</div>
+          letterSpacing:"0.8px", marginBottom:12 }}><Ico n="package" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Destinatario</div>
         <div style={{ fontSize:16, fontWeight:800, color:C.textPri, marginBottom:4 }}>
           {p.dest_nombre}
         </div>
         <div style={{ fontSize:13, color:C.textSec, marginBottom:4 }}>
-          📍 {p.dest_direccion}
+          <Ico n="pin" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>{p.dest_direccion}
         </div>
         <div style={{ fontSize:13, color:C.textSec, marginBottom:4 }}>
-          🏙️ {p.dest_distrito}
+          <Ico n="building" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>{p.dest_distrito}
         </div>
         {p.dest_referencia && (
           <div style={{ fontSize:12, color:C.textMut, marginBottom:12 }}>
-            🏠 Ref: {p.dest_referencia}
+            <Ico n="home" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Ref: {p.dest_referencia}
           </div>
         )}
         {!p.dest_referencia && <div style={{ marginBottom:8 }}/>}
@@ -1653,13 +1686,13 @@ function DetallePedido({ pedido: p, posicionRuta, onVolver, onActualizar, onActu
             style={{ background:C.navy, color:C.white, border:"none",
               padding:"10px 6px", borderRadius:10, fontSize:11,
               fontWeight:700, cursor:"pointer", textAlign:"center" }}>
-            🗺️ Google Maps
+            <Ico n="map" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Google Maps
           </button>
           <button onClick={abrirWaze}
             style={{ background:"#33CCFF", color:C.navy, border:"none",
               padding:"10px 6px", borderRadius:10, fontSize:11,
               fontWeight:700, cursor:"pointer", textAlign:"center" }}>
-            🚗 Waze
+            <Ico n="truck" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Waze
           </button>
         </div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
@@ -1667,13 +1700,13 @@ function DetallePedido({ pedido: p, posicionRuta, onVolver, onActualizar, onActu
             style={{ background:C.green, color:C.white, border:"none",
               padding:"10px 6px", borderRadius:10, fontSize:11,
               fontWeight:700, cursor:"pointer", textAlign:"center" }}>
-            📞 Llamar
+            <Ico n="phone" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Llamar
           </button>
           <button onClick={whatsappCliente}
             style={{ background:"#25D366", color:C.white, border:"none",
               padding:"10px 6px", borderRadius:10, fontSize:11,
               fontWeight:700, cursor:"pointer", textAlign:"center" }}>
-            💬 WhatsApp
+            <Ico n="message" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>WhatsApp
           </button>
         </div>
       </div>
@@ -1681,7 +1714,7 @@ function DetallePedido({ pedido: p, posicionRuta, onVolver, onActualizar, onActu
       <div style={{ background:C.white, borderRadius:14, padding:18,
         marginBottom:12, border:`1px solid #E2E8F0` }}>
         <div style={{ fontSize:11, fontWeight:700, color:C.navy, textTransform:"uppercase",
-          letterSpacing:"0.8px", marginBottom:12 }}>📋 Paquete</div>
+          letterSpacing:"0.8px", marginBottom:12 }}><Ico n="filetext" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Paquete</div>
         <div>
           <div style={{ fontSize:10, color:C.textMut, textTransform:"uppercase" }}>Peso</div>
           <div style={{ fontSize:14, fontWeight:600, color:C.textPri }}>{p.peso_kg?p.peso_kg+" kg":"—"}</div>
@@ -1690,7 +1723,7 @@ function DetallePedido({ pedido: p, posicionRuta, onVolver, onActualizar, onActu
           <div style={{ marginTop:14, background:"#FFF7ED",
             border:"2px solid #FED7AA", borderRadius:10, padding:"12px 14px" }}>
             <div style={{ fontSize:12, fontWeight:700, color:"#C2410C", marginBottom:2 }}>
-              💵 COBRO EN DESTINO (COD)
+              <Ico n="banknote" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>COBRO EN DESTINO (COD)
             </div>
             <div style={{ fontSize:20, fontWeight:900, color:"#C2410C" }}>
               S/ {p.monto_cobrar}
@@ -1702,7 +1735,7 @@ function DetallePedido({ pedido: p, posicionRuta, onVolver, onActualizar, onActu
           <div style={{ marginTop:14, background:"#FEF2F2",
             border:"2px solid #FECACA", borderRadius:10, padding:"12px 14px" }}>
             <div style={{ fontSize:12, fontWeight:700, color:C.red, marginBottom:2 }}>
-              ⚠️ NO ENTREGADO
+              <Ico n="alert" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>NO ENTREGADO
             </div>
             <div style={{ fontSize:13, color:"#991B1B" }}>{p.motivo_no_entrega}</div>
             {p.comentario_no_entrega && (
@@ -1714,7 +1747,7 @@ function DetallePedido({ pedido: p, posicionRuta, onVolver, onActualizar, onActu
           <div style={{ marginTop:14, background:"#ECFDF5",
             border:"2px solid #A7F3D0", borderRadius:10, padding:"12px 14px" }}>
             <div style={{ fontSize:12, fontWeight:700, color:C.green, marginBottom:2 }}>
-              ✅ RECIBIDO POR: {p.recibido_por?.toUpperCase()}
+              <Ico n="check" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>RECIBIDO POR: {p.recibido_por?.toUpperCase()}
             </div>
             {p.comentario_entrega && (
               <div style={{ fontSize:13, color:"#065F46" }}>{p.comentario_entrega}</div>
@@ -1726,7 +1759,7 @@ function DetallePedido({ pedido: p, posicionRuta, onVolver, onActualizar, onActu
       <div style={{ background:C.white, borderRadius:14, padding:18,
         marginBottom:12, border:`1px solid #E2E8F0` }}>
         <div style={{ fontSize:11, fontWeight:700, color:C.navy, textTransform:"uppercase",
-          letterSpacing:"0.8px", marginBottom:14 }}>🔄 Actualizar estado</div>
+          letterSpacing:"0.8px", marginBottom:14 }}><Ico n="refresh" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Actualizar estado</div>
 
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
           {p.estado==="en_ruta" && (
@@ -1735,20 +1768,20 @@ function DetallePedido({ pedido: p, posicionRuta, onVolver, onActualizar, onActu
                 style={{ background:`linear-gradient(135deg,${C.green},#059669)`,
                   color:C.white, border:"none", padding:16, borderRadius:12,
                   fontSize:15, fontWeight:800, cursor:"pointer" }}>
-                ✅ Marcar entregado
+                <Ico n="check" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Marcar entregado
               </button>
               <button onClick={()=>{ setFotos([]); setMotivo(""); setDetalleOtro(""); setComentario(""); setVista("no_entrega"); }}
                 style={{ background:`linear-gradient(135deg,${C.red},#B91C1C)`,
                   color:C.white, border:"none", padding:16, borderRadius:12,
                   fontSize:15, fontWeight:800, cursor:"pointer" }}>
-                ⚠️ No entregado
+                <Ico n="alert" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>No entregado
               </button>
             </>
           )}
           {p.estado==="asignado" && (
             <div style={{ background:"#FFFBEB", border:"1px solid #FDE68A", borderRadius:12,
               padding:"14px 16px", textAlign:"center" }}>
-              <div style={{ fontSize:22, marginBottom:6 }}>🚦</div>
+              <div style={{ fontSize:22, marginBottom:6 }}><Ico n="clock" size={22} style={{ display:"inline-block", verticalAlign:"middle" }}/></div>
               <div style={{ fontSize:13, fontWeight:700, color:"#92400E", marginBottom:4 }}>
                 Todavía no puedes gestionar este pedido
               </div>
@@ -1763,7 +1796,7 @@ function DetallePedido({ pedido: p, posicionRuta, onVolver, onActualizar, onActu
       <div style={{ background:C.white, borderRadius:14, padding:18,
         border:`1px solid #E2E8F0` }}>
         <div style={{ fontSize:11, fontWeight:700, color:C.navy, textTransform:"uppercase",
-          letterSpacing:"0.8px", marginBottom:12 }}>🕒 Historial</div>
+          letterSpacing:"0.8px", marginBottom:12 }}><Ico n="clock" size={15} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>Historial</div>
         {historial.length===0 ? (
           <div style={{ fontSize:12, color:C.textMut, textAlign:"center", padding:"12px 0" }}>
             Sin eventos registrados aún.
@@ -1774,7 +1807,7 @@ function DetallePedido({ pedido: p, posicionRuta, onVolver, onActualizar, onActu
               <div key={i} style={{ display:"flex", gap:10, alignItems:"flex-start",
                 borderBottom: i<historial.length-1 ? "1px solid #F1F5F9" : "none",
                 paddingBottom:10 }}>
-                <span style={{ fontSize:16 }}>{ICONOS_HIST[h.tipo]||"•"}</span>
+                <span style={{ fontSize:16 }}><Ico n={ICONOS_HIST[h.tipo]||"clock"} size={16}/></span>
                 <div style={{ flex:1 }}>
                   <div style={{ fontSize:12, fontWeight:600, color:C.textPri }}>
                     {h.tipo==="llamada" && "Llamada al cliente"}
@@ -1889,13 +1922,13 @@ function MiLiquidacion({ repartidor, pedidos, onMarcarLiquidado, liquidando }) {
               color:C.navy, border:"none", padding:16, borderRadius:12,
               fontSize:15, fontWeight:800, cursor: liquidando?"default":"pointer",
               marginTop:8 }}>
-            {liquidando ? "Registrando..." : `💰 Marcar como liquidado a Boaz (S/ ${totalPorRendir.toFixed(2)})`}
+            {liquidando ? "Registrando..." : <><Ico n="dollar" size={16} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>{`Marcar como liquidado a Boaz (S/ ${totalPorRendir.toFixed(2)})`}</>}
           </button>
         </>
       ) : (
         <div style={{ background:C.white, borderRadius:14, padding:32,
           textAlign:"center", color:C.textMut, border:`1px solid #E2E8F0` }}>
-          <div style={{ fontSize:32, marginBottom:8 }}>✅</div>
+          <div style={{ fontSize:32, marginBottom:8 }}><Ico n="check" size={32} style={{ display:"inline-block", verticalAlign:"middle" }}/></div>
           <div style={{ fontSize:14 }}>No tienes cobros COD pendientes de rendir</div>
         </div>
       )}
@@ -1964,15 +1997,15 @@ function MiPerfil({ repartidor, pedidos, onLogout }) {
         <div style={{ fontSize:11, fontWeight:700, color:C.navy, textTransform:"uppercase",
           letterSpacing:"0.8px", marginBottom:12 }}>Mis datos</div>
         {[
-          ["📱","Teléfono",repartidor.telefono||"—"],
-          ["✉️","Email",repartidor.email||"—"],
-          ["🚗","Vehículo",repartidor.vehiculo||"—"],
-          ["🔑","Placa",repartidor.placa||"—"],
-          ["📍","Zona",repartidor.zona_default?.replace("_"," ")||"—"],
+          ["phone","Teléfono",repartidor.telefono||"—"],
+          ["mail","Email",repartidor.email||"—"],
+          ["truck","Vehículo",repartidor.vehiculo||"—"],
+          ["tag","Placa",repartidor.placa||"—"],
+          ["pin","Zona",repartidor.zona_default?.replace("_"," ")||"—"],
         ].map(([ic,k,v])=>(
           <div key={k} style={{ display:"flex", gap:10, padding:"8px 0",
             borderBottom:`1px solid #F1F5F9` }}>
-            <span style={{ fontSize:16 }}>{ic}</span>
+            <span style={{ fontSize:16 }}><Ico n={ic} size={16} color={C.textMut}/></span>
             <span style={{ fontSize:12, color:C.textSec, flex:1 }}>{k}</span>
             <span style={{ fontSize:12, fontWeight:600, color:C.textPri,
               textTransform:"capitalize" }}>{v}</span>
@@ -2014,27 +2047,28 @@ export default function BoazApp() {
 
   const cargar = useCallback(async () => {
     if (!repartidor) return;
-    const { data } = await sb.from("pedidos").select("*")
-      .eq("repartidor_id", repartidor.id)
-      .order("created_at",{ascending:false});
+    const { data } = await rpcApp("rep_pedidos");
     if (data) setPedidos(data);
     const hoy = fechaLocalHoy();
-    const { data: ruta } = await sb.from("rutas_repartidor").select("*")
-      .eq("repartidor_id", repartidor.id).eq("fecha", hoy).is("hora_fin", null)
-      .order("created_at",{ascending:false}).limit(1).maybeSingle();
-    setRutaActiva(ruta || null);
+    const { data: ruta } = await rpcApp("rep_ruta_activa", { p_fecha: hoy });
+    setRutaActiva((ruta && ruta[0]) || null);
   },[repartidor]);
 
   useEffect(() => { cargar(); }, [cargar]);
 
-  // Realtime
+  // Actualización periódica (cada 25 s, solo con la app visible) en lugar de tiempo real abierto
   useEffect(() => {
     if (!repartidor) return;
-    const ch = sb.channel("app-rt")
-      .on("postgres_changes",{event:"*",schema:"public",table:"pedidos"},cargar)
-      .subscribe();
-    return () => sb.removeChannel(ch);
+    const t = setInterval(() => { if (document.visibilityState === "visible") cargar(); }, 25000);
+    return () => clearInterval(t);
   },[repartidor,cargar]);
+
+  // Sesión vencida: volver al login
+  useEffect(() => {
+    const f = () => { setTokenApp(null); setRepartidor(null); showToast("Tu sesión venció. Ingresa de nuevo.","error"); };
+    window.addEventListener("boaz-sesion-expirada", f);
+    return () => window.removeEventListener("boaz-sesion-expirada", f);
+  },[showToast]);
 
   // Sincronización de la cola offline
   const [sincronizando, setSincronizando] = useState(false);
@@ -2073,14 +2107,13 @@ export default function BoazApp() {
     setIniciandoRuta(false);
     setPedidos(prev => prev.map(p => ids.includes(p.id) ? { ...p, estado:"en_ruta" } : p));
     setPendientesSync(leerCola().length);
-    showToast(offline ? "Sin conexión: se sincronizará al recuperar señal ⏳" : `Ruta iniciada con ${ids.length} pedidos ✓`);
+    showToast(offline ? "Sin conexión: se sincronizará al recuperar señal" : `Ruta iniciada con ${ids.length} pedidos ✓`);
 
     if (!rutaActiva) {
       const hoy = fechaLocalHoy();
-      const { data } = await sb.from("rutas_repartidor").insert([{
-        repartidor_id: repartidor.id, fecha: hoy, lote_id: loteId||null,
-        hora_inicio: new Date().toISOString(), total_pedidos: ids.length,
-      }]).select().single();
+      const { data } = await rpcApp("rep_ruta_crear", {
+        p_fecha: hoy, p_lote: loteId||null, p_total: ids.length, p_inicio: new Date().toISOString(),
+      });
       if (data) setRutaActiva(data);
     }
   };
@@ -2098,9 +2131,7 @@ export default function BoazApp() {
       p.historial?.some(h=>h.tipo==="estado" && h.timestamp >= rutaActiva.hora_inicio)
     ).length;
     const horaFin = new Date().toISOString();
-    await sb.from("rutas_repartidor").update({
-      hora_fin: horaFin, entregados: entregadosRuta, no_entregados: noEntregadosRuta,
-    }).eq("id", rutaActiva.id);
+    await rpcApp("rep_ruta_finalizar", { p_id: rutaActiva.id, p_fin: horaFin, p_ent: entregadosRuta, p_noent: noEntregadosRuta });
     setPantallaFinal({
       horaInicio: rutaActiva.hora_inicio, horaFin,
       entregados: entregadosRuta, noEntregados: noEntregadosRuta,
@@ -2111,7 +2142,7 @@ export default function BoazApp() {
   const marcarLiquidado = async (ids) => {
     if (!ids.length) return;
     setLiquidando(true);
-    const { error } = await sb.from("pedidos").update({ liquidado_cod:true }).in("id", ids);
+    const { error } = await rpcApp("rep_pedido_actualizar", { p_ids: ids, p_cambios: { liquidado_cod: true }, p_eventos: [] });
     setLiquidando(false);
     if (error) { showToast("Error: "+error.message,"error"); return; }
     setPedidos(prev => prev.map(p => ids.includes(p.id) ? { ...p, liquidado_cod:true } : p));
@@ -2123,9 +2154,9 @@ export default function BoazApp() {
   const pendientes = pedidos.filter(p=>p.estado==="asignado"||p.estado==="en_ruta");
 
   const NAV = [
-    { id:"inicio",       icon:"🏠", label:"Inicio",    badge: pendientes.length||null },
-    { id:"liquidacion",  icon:"💰", label:"Liquidación" },
-    { id:"perfil",       icon:"👤", label:"Perfil" },
+    { id:"inicio",       icon:"home", label:"Inicio",    badge: pendientes.length||null },
+    { id:"liquidacion",  icon:"dollar", label:"Liquidación" },
+    { id:"perfil",       icon:"user", label:"Perfil" },
   ];
 
   return (
@@ -2146,7 +2177,7 @@ export default function BoazApp() {
           {pendientesSync > 0 && (
             <span title="Cambios pendientes de sincronizar" style={{ fontSize:10, color:C.gold,
               background:"#2A1F0D", padding:"3px 8px", borderRadius:10, fontWeight:700 }}>
-              ⏳ {pendientesSync}
+              {pendientesSync} por sincronizar
             </span>
           )}
           <button onClick={()=>sincronizar(true)} disabled={sincronizando}
@@ -2154,7 +2185,7 @@ export default function BoazApp() {
             style={{ background:"none", border:"none", cursor: sincronizando?"default":"pointer",
               fontSize:16, padding:4, lineHeight:1,
               animation: sincronizando ? "girar 1s linear infinite" : "none" }}>
-            🔄
+            <Ico n="refresh" size={20} color="#E8EAF0" style={{ display:"inline-block", verticalAlign:"middle" }}/>
           </button>
           <style>{`@keyframes girar { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }`}</style>
           <div style={{ fontSize:12, color:C.textMut }}>
@@ -2225,7 +2256,7 @@ export default function BoazApp() {
                 color: tab===n.id?C.navy:C.textMut,
                 borderTop: tab===n.id?`3px solid ${C.gold}`:"3px solid transparent",
                 transition:"all 0.15s", position:"relative" }}>
-              <span style={{ fontSize:20 }}>{n.icon}</span>
+              <span style={{ fontSize:20 }}><Ico n={n.icon} size={22}/></span>
               <span style={{ fontSize:10, fontWeight: tab===n.id?700:400 }}>{n.label}</span>
               {n.badge&&n.badge>0&&(
                 <span style={{ position:"absolute", top:6, right:"calc(50% - 18px)",
@@ -2244,7 +2275,7 @@ export default function BoazApp() {
           color:C.white, padding:"10px 20px", borderRadius:20,
           fontSize:13, fontWeight:700, boxShadow:"0 4px 20px #0003",
           maxWidth:360, textAlign:"center" }}>
-          {toast.tipo==="error"?"❌":toast.tipo==="warn"?"⚠️":"✅"} {toast.msg}
+          <Ico n={toast.tipo==="error"?"xcircle":toast.tipo==="warn"?"alert":"check"} size={16} style={{ display:"inline-block", verticalAlign:"-3px", marginRight:6 }}/>{toast.msg}
         </div>
       )}
     </div>
