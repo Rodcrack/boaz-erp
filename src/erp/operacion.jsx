@@ -1,6 +1,6 @@
 // BOAZ ERP — módulo "operacion" (parte de BoazERP; ver src/BoazERP.jsx)
 import { useState, useEffect, useCallback, useRef, useMemo, Fragment } from "react";
-import { Ayuda, B, BtnIco, BtnPri, BtnSec, Buscador, CARD, Cargando, Confirm, EstadoVacio, Etiqueta, Ico, Kpi, KpiDS, TAB_CONT, TAB_SEG, Tabs, XLSX, asegurarXLSX, diaLocal, fmt, inp, kpiMini, lbl, sb, usePaginacion } from "./base.jsx";
+import { Ayuda, B, crearCuentaAcceso, emailValido, generarClaveTemporal, validarClave, BtnIco, BtnPri, BtnSec, Buscador, CARD, Cargando, Confirm, EstadoVacio, Etiqueta, Ico, Kpi, KpiDS, TAB_CONT, TAB_SEG, Tabs, XLSX, asegurarXLSX, diaLocal, fmt, inp, kpiMini, lbl, sb, usePaginacion } from "./base.jsx";
 import { esFeriadoPeru } from "./ventas.jsx";
 import { solN } from "./costos.jsx";
 
@@ -851,6 +851,9 @@ export function UsuariosAuditoria({ usuario, navModulos, onPermisosCambio, toast
   const [nuevoRol, setNuevoRol] = useState("");
   const [cargando, setCargando] = useState(true);
   const [activar, setActivar] = useState(null);
+  const [nuevo, setNuevo] = useState(null);      // formulario «Nuevo usuario»
+  const [creado, setCreado] = useState(null);    // datos de acceso para compartir
+  const [creando, setCreando] = useState(false);
   const [audit, setAudit] = useState([]);
   const [fTabla, setFTabla] = useState("");
   const [fOp, setFOp] = useState("");
@@ -898,6 +901,35 @@ export function UsuariosAuditoria({ usuario, navModulos, onPermisosCambio, toast
       if (r2.error) { toast("Error: " + r2.error.message, "error"); return; }
     }
     toast("Usuario activado ✓"); setActivar(null); cargar();
+  };
+
+  const abrirNuevo = () => setNuevo({ nombre:"", email:"", rol:"operaciones", clave:generarClaveTemporal(), err:"" });
+  const crearUsuario = async () => {
+    const nombre = nuevo.nombre.trim(), email = nuevo.email.trim().toLowerCase();
+    const fallo = (err) => setNuevo(n => ({ ...n, err }));
+    if (!nombre) return fallo("Escribe el nombre de la persona.");
+    if (!emailValido(email)) return fallo("Escribe un correo válido.");
+    if (usuarios.some(u => (u.email||"").toLowerCase()===email)) return fallo("Ese correo ya está en la lista de usuarios.");
+    if (pendientes.some(p => (p.email||"").toLowerCase()===email)) return fallo("Ese correo ya tiene cuenta: está arriba en «Cuentas pendientes». Usa Activar.");
+    const v = validarClave(nuevo.clave); if (v) return fallo(v);
+    setCreando(true);
+    try {
+      const { id, requiereConfirmar } = await crearCuentaAcceso(email, nuevo.clave);
+      let { error } = await sb.from("usuarios").insert({ id, nombre, rol:nuevo.rol, activo:true, email });
+      if (error) { const r2 = await sb.from("usuarios").insert({ id, nombre, rol:nuevo.rol, activo:true }); error = r2.error; }
+      if (error) {
+        // La cuenta existe pero no se pudo activar: queda en «pendientes» para activarla luego
+        toast("Se creó la cuenta pero no se pudo activar en el ERP. Aparece en «Cuentas pendientes»: usa Activar. (" + error.message + ")", "error");
+      } else toast("Usuario creado ✓");
+      setCreado({ nombre, email, clave:nuevo.clave, rol:nuevo.rol, requiereConfirmar, url:window.location.origin + window.location.pathname });
+      setNuevo(null); cargar();
+    } catch (e) { fallo(e.message); }
+    setCreando(false);
+  };
+  const textoAcceso = (c) => `Hola ${c.nombre.split(" ")[0]}, ya tienes acceso al ERP de Boaz.\n\nIngresa en: ${c.url}\nCorreo: ${c.email}\nContraseña temporal: ${c.clave}\n\n${c.requiereConfirmar ? "Antes de ingresar, abre el correo de confirmación que te llegó y haz clic en el enlace.\n" : ""}Al entrar por primera vez te pedirá cambiar la contraseña.`;
+  const copiarAcceso = async () => {
+    try { await navigator.clipboard.writeText(textoAcceso(creado)); toast("Datos copiados ✓"); }
+    catch { toast("No se pudo copiar. Selecciona el texto y cópialo a mano.", "error"); }
   };
 
   const modulosPorSeccion = useMemo(() => { const m = {}; navModulos.forEach(x => { (m[x.grupo] = m[x.grupo] || []).push(x); }); return m; }, [navModulos]);
@@ -951,6 +983,10 @@ export function UsuariosAuditoria({ usuario, navModulos, onPermisosCambio, toast
                 <BtnPri style={{ marginLeft:"auto", padding:"5px 14px", fontSize:12 }} onClick={()=>setActivar({ id:p.id, email:p.email, nombre:"", rol:"operaciones" })}>Activar</BtnPri>
               </div>))}
           </div>)}
+        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12, flexWrap:"wrap" }}>
+          <div style={{ fontSize:12.5, color:B.textSec }}>{usuarios.length} usuario{usuarios.length===1?"":"s"} · {usuarios.filter(u=>u.activo).length} activo{usuarios.filter(u=>u.activo).length===1?"":"s"}</div>
+          <BtnPri style={{ marginLeft:"auto" }} onClick={abrirNuevo}><Ico n="plus" size={15}/> Nuevo usuario</BtnPri>
+        </div>
         <div style={{ ...card, overflowX:"auto" }}>
           {cargando ? <Cargando filas={4}/> : <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead><tr><th style={th}>Nombre</th><th style={th}>Correo</th><th style={th}>Rol<Ayuda k="rol" size={13}/></th><th style={th}>Estado</th></tr></thead>
@@ -963,7 +999,7 @@ export function UsuariosAuditoria({ usuario, navModulos, onPermisosCambio, toast
               </tr>))}</tbody>
           </table>}
         </div>
-        <div style={{ fontSize:11, color:B.textMut, marginTop:8, lineHeight:1.6 }}>Para agregar a alguien: en Supabase → Authentication → Users → <b>Add user</b> (correo y contraseña). La cuenta aparecerá arriba como pendiente y aquí le asignas nombre y rol. Al desactivar a un usuario pierde el acceso de inmediato.</div>
+        <div style={{ fontSize:11.5, color:B.textMut, marginTop:8, lineHeight:1.6 }}>Para dar acceso a alguien usa <b>Nuevo usuario</b>: se crea su cuenta con una contraseña temporal que cambiará al primer ingreso. Para quitar el acceso, cámbialo a <b>Inactivo</b> (su historial en la auditoría se conserva).</div>
       </>)}
 
       {tab==="roles" && (
@@ -1020,6 +1056,36 @@ export function UsuariosAuditoria({ usuario, navModulos, onPermisosCambio, toast
             <label style={lbl}>Nombre</label><input style={{...inp,marginBottom:12}} value={activar.nombre} onChange={e=>setActivar(a=>({...a,nombre:e.target.value}))}/>
             <label style={lbl}>Rol</label><select style={{...inp,marginBottom:16}} value={activar.rol} onChange={e=>setActivar(a=>({...a,rol:e.target.value}))}>{nombresRol.map(r=><option key={r}>{r}</option>)}</select>
             <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}><BtnSec onClick={()=>setActivar(null)}>Cancelar</BtnSec><BtnPri onClick={confirmarActivar}>Activar</BtnPri></div>
+          </div>
+        </div>)}
+
+      {nuevo && (
+        <div role="dialog" aria-modal="true" aria-label="Nuevo usuario" style={{ position:"fixed", inset:0, background:"#0008", zIndex:1500, display:"flex", alignItems:"center", justifyContent:"center", padding:12 }}>
+          <div style={{ background:B.white, borderRadius:16, padding:24, width:460, maxWidth:"100%", maxHeight:"92vh", overflowY:"auto" }}>
+            <div style={{ fontSize:16, fontWeight:800, color:B.navy, marginBottom:4 }}>Nuevo usuario</div>
+            <div style={{ fontSize:12.5, color:B.textSec, marginBottom:16, lineHeight:1.5 }}>Crea la cuenta de acceso al ERP. La persona entrará con su correo y esta contraseña temporal, y el sistema le pedirá cambiarla.</div>
+            <label style={lbl}>Nombre</label><input style={{...inp,marginBottom:12}} value={nuevo.nombre} autoFocus placeholder="Ej. María Torres" onChange={e=>setNuevo(n=>({...n,nombre:e.target.value,err:""}))}/>
+            <label style={lbl}>Correo</label><input type="email" autoComplete="off" style={{...inp,marginBottom:12}} value={nuevo.email} placeholder="maria@empresa.com" onChange={e=>setNuevo(n=>({...n,email:e.target.value,err:""}))}/>
+            <label style={lbl}>Rol<Ayuda k="rol" size={13}/></label><select style={{...inp,marginBottom:12}} value={nuevo.rol} onChange={e=>setNuevo(n=>({...n,rol:e.target.value}))}>{nombresRol.map(r=><option key={r}>{r}</option>)}</select>
+            <label style={lbl}>Contraseña temporal</label>
+            <div style={{ display:"flex", gap:8, marginBottom:6 }}>
+              <input style={{...inp,fontFamily:"ui-monospace,Consolas,monospace"}} value={nuevo.clave} onChange={e=>setNuevo(n=>({...n,clave:e.target.value,err:""}))}/>
+              <BtnSec aria-label="Generar otra contraseña" onClick={()=>setNuevo(n=>({...n,clave:generarClaveTemporal(),err:""}))} style={{ flexShrink:0 }}><Ico n="refresh" size={15}/></BtnSec>
+            </div>
+            <div style={{ fontSize:11.5, color:B.textMut, marginBottom:14 }}>Ya viene generada. Podrás copiarla al terminar para enviársela.</div>
+            {nuevo.err && <div role="alert" style={{ background:"#FEF2F2", border:"1px solid #FECACA", color:"#B91C1C", borderRadius:8, padding:"9px 12px", fontSize:12.5, marginBottom:12, lineHeight:1.5 }}>{nuevo.err}</div>}
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}><BtnSec onClick={()=>setNuevo(null)} disabled={creando}>Cancelar</BtnSec><BtnPri onClick={crearUsuario} disabled={creando}>{creando?"Creando…":"Crear usuario"}</BtnPri></div>
+          </div>
+        </div>)}
+
+      {creado && (
+        <div role="dialog" aria-modal="true" aria-label="Usuario creado" style={{ position:"fixed", inset:0, background:"#0008", zIndex:1500, display:"flex", alignItems:"center", justifyContent:"center", padding:12 }}>
+          <div style={{ background:B.white, borderRadius:16, padding:24, width:480, maxWidth:"100%", maxHeight:"92vh", overflowY:"auto" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}><span style={{ width:30, height:30, borderRadius:"50%", background:"#DCFCE7", color:"#15803D", display:"flex", alignItems:"center", justifyContent:"center" }}><Ico n="check" size={17}/></span><div style={{ fontSize:16, fontWeight:800, color:B.navy }}>Cuenta creada para {creado.nombre}</div></div>
+            <div style={{ fontSize:12.5, color:B.textSec, marginBottom:12, lineHeight:1.5 }}>Envíale estos datos por un canal privado (WhatsApp o correo). La contraseña no se vuelve a mostrar.</div>
+            <pre style={{ background:"#F6F9FC", border:`1px solid ${B.border}`, borderRadius:10, padding:"12px 14px", fontSize:12.5, whiteSpace:"pre-wrap", wordBreak:"break-word", margin:"0 0 12px", fontFamily:"ui-monospace,Consolas,monospace", color:B.textPri, userSelect:"all" }}>{textoAcceso(creado)}</pre>
+            {creado.requiereConfirmar && <div style={{ background:"#FFF7ED", border:"1px solid #FDBA74", borderRadius:10, padding:"10px 12px", fontSize:12, color:"#9A3412", marginBottom:12, lineHeight:1.5 }}>Supabase le envió un correo de confirmación. <b>No podrá ingresar hasta hacer clic en ese enlace.</b> Si prefieres evitar este paso, desactiva «Confirm email» en Supabase.</div>}
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:10, flexWrap:"wrap" }}><BtnSec onClick={copiarAcceso}><Ico n="copy" size={15}/> Copiar datos</BtnSec><BtnPri onClick={()=>setCreado(null)}>Listo</BtnPri></div>
           </div>
         </div>)}
     </div>

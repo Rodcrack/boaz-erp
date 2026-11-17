@@ -1,7 +1,7 @@
 // BOAZ ERP — entrada principal: inicio de sesión, menú y carga de datos.
 // Los módulos están en la carpeta ./erp/
 import { useState, useEffect, useCallback, useRef, useMemo, Fragment } from "react";
-import { B, EstadoVacio, Ico, traducirError, PaletaComandos, ROLES_ACCESO, Toast, cargarPedidosLiviano, sb, setTarifasDistritoGlobal, traerTodo } from "./erp/base.jsx";
+import { B, EstadoVacio, Ico, ModalCambiarClave, emailValido, errorAuthEs, traducirError, PaletaComandos, ROLES_ACCESO, Toast, cargarPedidosLiviano, sb, setTarifasDistritoGlobal, traerTodo } from "./erp/base.jsx";
 import { Dashboard } from "./erp/dashboard.jsx";
 import { Pedidos } from "./erp/pedidos.jsx";
 import { Clientes, Repartidores } from "./erp/clientes.jsx";
@@ -18,6 +18,17 @@ export function Login({ onLogin }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
+  const [aviso, setAviso] = useState("");
+
+  const recuperar = async () => {
+    setAviso(""); setError("");
+    if (!emailValido(email)) { setError("Escribe tu correo arriba y vuelve a pulsar «¿Olvidaste tu contraseña?»."); return; }
+    setCargando(true);
+    const { error } = await sb.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo: window.location.origin + window.location.pathname });
+    setCargando(false);
+    if (error) { setError(errorAuthEs(error.message)); return; }
+    setAviso("Si el correo tiene una cuenta, te llegará un enlace para crear una contraseña nueva. Revisa también la carpeta de spam.");
+  };
 
   const entrar = async () => {
     if (!email || !password) { setError("Completa email y contraseña"); return; }
@@ -63,8 +74,10 @@ export function Login({ onLogin }) {
           style={{ width:"100%", background:"#D46A08",
             border:"none", color:"#fff", padding:"11px", borderRadius:8,
             cursor:cargando?"not-allowed":"pointer", fontSize:13, fontWeight:800 }}>
-          {cargando?"Ingresando...":"Ingresar"}
+          {cargando?"Procesando...":"Ingresar"}
         </button>
+        {aviso && <div role="status" style={{ background:"#052e1a", border:"1px solid #22C55E55", borderRadius:8, padding:"10px 12px", color:"#86EFAC", fontSize:12, marginTop:12, textAlign:"center", lineHeight:1.5 }}>{aviso}</div>}
+        <button onClick={recuperar} disabled={cargando} style={{ display:"block", margin:"14px auto 0", background:"none", border:"none", color:"#8FA3BA", fontSize:12, cursor:"pointer", textDecoration:"underline" }}>¿Olvidaste tu contraseña?</button>
       </div>
     </div>
   );
@@ -76,21 +89,36 @@ export default function BoazERP() {
   const [usuario, setUsuario] = useState(null);
   const [verificando, setVerificando] = useState(true);
 
+  // null | "voluntario" | "primer_ingreso" | "recuperacion"
+  const [cambiarClave, setCambiarClave] = useState(null);
   useEffect(() => {
+    // Al volver desde el enlace «¿Olvidaste tu contraseña?», Supabase avisa PASSWORD_RECOVERY
+    const esRecuperacion = /type=recovery/.test(window.location.hash || "");
+    if (esRecuperacion) setCambiarClave("recuperacion");
+    const { data:sub } = sb.auth.onAuthStateChange((evento, session) => {
+      if (evento==="PASSWORD_RECOVERY") { setCambiarClave("recuperacion"); if (session) cargarUsuario(session); }
+    });
     sb.auth.getSession().then(({data}) => {
       if (data.session) cargarUsuario(data.session);
       else setVerificando(false);
     });
+    return () => { try { sub.subscription.unsubscribe(); } catch {} };
   }, []);
 
   const cargarUsuario = async (session) => {
     const { data } = await sb.from("usuarios").select("*").eq("id", session.user.id).single();
     setSesion(session); setUsuario(data); setVerificando(false);
+    if (session?.user?.user_metadata?.debe_cambiar_clave) setCambiarClave(c => c || "primer_ingreso");
+  };
+  const claveCambiada = async () => {
+    setCambiarClave(null);
+    if (window.location.hash) history.replaceState(null, "", window.location.pathname + window.location.search);
+    const { data } = await sb.auth.getSession(); if (data.session) setSesion(data.session);
   };
 
   const cerrarSesion = async () => {
     await sb.auth.signOut();
-    setSesion(null); setUsuario(null);
+    setSesion(null); setUsuario(null); setCambiarClave(null);
   };
   const [seccion, setSeccionBase] = useState("dashboard");
   const [tabConfig, setTabConfig] = useState({ tab:"tarifas", n:0 });
@@ -432,6 +460,9 @@ if (verificando) {
     justifyContent:"center", fontSize:14, fontWeight:800, color:B.gold }}>
     {usuario.nombre?.[0]}
   </div>
+  <button onClick={()=>setCambiarClave("voluntario")} aria-label="Cambiar mi contraseña" title="Cambiar mi contraseña"
+    style={{ background:"none", border:`1px solid ${B.border}`, color:B.textSec,
+      padding: esMovil ? "9px 10px" : "6px 8px", borderRadius:6, cursor:"pointer", display:"flex", alignItems:"center" }}><Ico n="key" size={13}/></button>
   <button onClick={cerrarSesion} aria-label="Salir"
     style={{ background:"none", border:`1px solid ${B.border}`, color:B.textSec,
       fontSize:11, padding: esMovil ? "9px 10px" : "6px 10px", borderRadius:6, cursor:"pointer", display:"flex", alignItems:"center", gap:5 }}><Ico n="logout" size={13}/> <span className="bz-oculta-movil">Salir</span></button>
@@ -480,6 +511,7 @@ if (verificando) {
       </div>
 
       {toast && <Toast msg={toast.msg} tipo={toast.tipo} onClose={()=>setToast(null)}/>}
+      {cambiarClave && <ModalCambiarClave motivo={cambiarClave} toast={showToast} onListo={claveCambiada} onCancelar={()=>setCambiarClave(null)}/>}
       {paleta && <PaletaComandos onCerrar={()=>setPaleta(false)} onIr={setSeccion}
         modulos={modulosLista}
         pedidos={pedidos} empresas={empresas} unidades={unidades} repartidores={repartidores}/>}

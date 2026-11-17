@@ -397,6 +397,8 @@ export const ICONOS = {
   list:'<path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/>',
   message:'<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
   columns:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/>',
+  key:'<path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/>',
+  copy:'<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
   printer:'<path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/>',
   help:'<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
   book:'<path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/>',
@@ -790,3 +792,86 @@ export function PaletaComandos({ onCerrar, onIr, modulos, pedidos, empresas, uni
   );
 }
 
+
+
+// ── Cuentas de acceso (alta desde el ERP, cambio y recuperación de contraseña) ──
+// Contraseña temporal legible: sin 0/O ni 1/l para dictarla sin errores.
+export function generarClaveTemporal() {
+  const c = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  const a = new Uint32Array(10);
+  (globalThis.crypto || window.crypto).getRandomValues(a);
+  return "Bz-" + Array.from(a, x => c[x % c.length]).join("");
+}
+export function validarClave(clave) {
+  if (!clave || clave.length < 8) return "La contraseña debe tener al menos 8 caracteres.";
+  if (!/[A-Za-z]/.test(clave) || !/[0-9]/.test(clave)) return "La contraseña debe combinar letras y números.";
+  return "";
+}
+export const emailValido = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(e||"").trim());
+
+// Mensajes de Supabase Auth en español
+export function errorAuthEs(msg) {
+  const m = String(msg||"");
+  if (/already (been )?registered|already exists/i.test(m)) return "Ese correo ya tiene una cuenta. Si aparece en «Cuentas pendientes de activar», usa Activar.";
+  if (/signups? not allowed|signup.*disabled/i.test(m)) return "Supabase tiene desactivado el registro de cuentas. Actívalo en Supabase → Authentication → Sign In / Providers → «Allow new users to sign up».";
+  if (/rate limit|too many|over_email_send_rate_limit|For security purposes/i.test(m)) return "Supabase limitó el envío de correos (el correo gratuito permite muy pocos por hora). Espera un rato o desactiva «Confirm email» / configura tu propio SMTP en Supabase.";
+  if (/password should be at least|weak password|password.*(short|characters)/i.test(m)) return "Supabase rechazó la contraseña por débil. Usa al menos 8 caracteres con letras y números.";
+  if (/invalid.*email|unable to validate email/i.test(m)) return "El correo no es válido.";
+  if (/same.*password|different from the old/i.test(m)) return "La nueva contraseña debe ser distinta de la anterior.";
+  if (/not.*authenticated|session.*missing|auth session/i.test(m)) return "Tu sesión expiró. Vuelve a ingresar.";
+  return traducirError(m).texto;
+}
+
+// Crea la cuenta de acceso SIN cerrar la sesión del administrador:
+// usa un cliente aparte que no guarda sesión en el navegador.
+export async function crearCuentaAcceso(email, password) {
+  const tmp = createClient(SUPABASE_URL, SUPABASE_ANON, { auth:{ persistSession:false, autoRefreshToken:false, detectSessionInUrl:false, storageKey:"boaz-alta-temporal" } });
+  const { data, error } = await tmp.auth.signUp({ email:String(email).trim().toLowerCase(), password,
+    options:{ emailRedirectTo: window.location.origin + window.location.pathname, data:{ debe_cambiar_clave:true } } });
+  if (error) throw new Error(errorAuthEs(error.message));
+  const u = data && data.user;
+  // Con «Confirm email» activo, Supabase devuelve un usuario sin identidades cuando el correo ya existía
+  if (!u || (Array.isArray(u.identities) && u.identities.length===0)) throw new Error(errorAuthEs("already registered"));
+  try { if (data.session) await tmp.auth.signOut({ scope:"local" }); } catch {}
+  return { id:u.id, requiereConfirmar:!data.session };
+}
+
+// Modal para cambiar la contraseña propia (voluntario, primer ingreso o enlace de recuperación)
+export function ModalCambiarClave({ motivo="voluntario", onListo, onCancelar, toast }) {
+  const [c1, setC1] = useState(""); const [c2, setC2] = useState("");
+  const [ver, setVer] = useState(false); const [err, setErr] = useState(""); const [guardando, setGuardando] = useState(false);
+  const obligatorio = motivo!=="voluntario";
+  const titulo = motivo==="recuperacion" ? "Crea tu nueva contraseña" : motivo==="primer_ingreso" ? "Cambia tu contraseña temporal" : "Cambiar mi contraseña";
+  const texto = motivo==="recuperacion" ? "Entraste con el enlace de recuperación. Elige una contraseña nueva para terminar."
+    : motivo==="primer_ingreso" ? "Tu cuenta se creó con una contraseña temporal. Por seguridad, elige una propia que solo tú conozcas."
+    : "Elige una contraseña nueva. La usarás desde tu próximo ingreso.";
+  const guardar = async () => {
+    const v = validarClave(c1); if (v) { setErr(v); return; }
+    if (c1!==c2) { setErr("Las dos contraseñas no coinciden."); return; }
+    setGuardando(true); setErr("");
+    const { error } = await sb.auth.updateUser({ password:c1, data:{ debe_cambiar_clave:false } });
+    setGuardando(false);
+    if (error) { setErr(errorAuthEs(error.message)); return; }
+    toast && toast("Contraseña actualizada ✓");
+    onListo && onListo();
+  };
+  const campo = { ...inp, marginBottom:12 };
+  return (
+    <div role="dialog" aria-modal="true" aria-label={titulo} style={{ position:"fixed", inset:0, background:"#0B1B2Ecc", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:12 }}>
+      <div style={{ background:B.white, borderRadius:16, padding:24, width:400, maxWidth:"100%", boxShadow:"0 20px 60px #0006" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}><Ico n="key" size={20} color={B.gold}/><div style={{ fontSize:16, fontWeight:800, color:B.navy }}>{titulo}</div></div>
+        <div style={{ fontSize:12.5, color:B.textSec, marginBottom:16, lineHeight:1.5 }}>{texto}</div>
+        <label style={lbl}>Nueva contraseña</label>
+        <input type={ver?"text":"password"} autoComplete="new-password" style={campo} value={c1} onChange={e=>setC1(e.target.value)} autoFocus/>
+        <label style={lbl}>Repite la contraseña</label>
+        <input type={ver?"text":"password"} autoComplete="new-password" style={campo} value={c2} onChange={e=>setC2(e.target.value)} onKeyDown={e=>e.key==="Enter"&&guardar()}/>
+        <label style={{ display:"flex", alignItems:"center", gap:8, fontSize:12, color:B.textSec, marginBottom:12, cursor:"pointer" }}><input type="checkbox" checked={ver} onChange={e=>setVer(e.target.checked)}/> Mostrar contraseñas</label>
+        <div style={{ fontSize:11.5, color:B.textMut, marginBottom:12 }}>Mínimo 8 caracteres, con letras y números.</div>
+        {err && <div role="alert" style={{ background:"#FEF2F2", border:"1px solid #FECACA", color:"#B91C1C", borderRadius:8, padding:"9px 12px", fontSize:12.5, marginBottom:12 }}>{err}</div>}
+        <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
+          {!obligatorio && <BtnSec onClick={onCancelar}>Cancelar</BtnSec>}
+          <BtnPri onClick={guardar} disabled={guardando}>{guardando?"Guardando…":"Guardar contraseña"}</BtnPri>
+        </div>
+      </div>
+    </div>);
+}
