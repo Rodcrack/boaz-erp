@@ -218,6 +218,31 @@ export function montoAsignacionPeriodo(a, diasServicio, desde, hasta, pct, hoy =
   return { dias, monto:dias*tarifa, conCalendario:false };
 }
 
+// ── Facturación de unidades por día sin duplicar ──
+// Suma o resta un día a una fecha "AAAA-MM-DD" (sin problemas de zona horaria)
+export const sumarDia = (f, n) => { const d = new Date(f+"T12:00:00Z"); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); };
+// Tramos del período [desde, hasta] que NO están cubiertos por los tramos ya facturados (cubiertos: [{desde, hasta}])
+export function rangosLibres(desde, hasta, cubiertos=[]) {
+  const cs = cubiertos.map(c => ({ d:dia10(c.desde), h:dia10(c.hasta) })).filter(c => c.d<=hasta && c.h>=desde && c.d<=c.h).sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0);
+  const libres = []; let ini = desde;
+  for (const c of cs) {
+    if (c.d > ini) libres.push({ desde:ini, hasta: sumarDia(c.d,-1) < hasta ? sumarDia(c.d,-1) : hasta });
+    const sig = sumarDia(c.h, 1); if (sig > ini) ini = sig;
+    if (ini > hasta) return libres;
+  }
+  if (ini <= hasta) libres.push({ desde:ini, hasta });
+  return libres;
+}
+// Igual que montoAsignacionPeriodo, pero descontando los tramos que ya están en una factura.
+// Devuelve además los tramos pendientes (para registrarlos en la factura nueva) y los días ya facturados.
+export function montoAsignacionPendiente(a, diasServicio, desde, hasta, pct, cubiertos=[], hoy = diaLocal()) {
+  const total = montoAsignacionPeriodo(a, diasServicio, desde, hasta, pct, hoy);
+  const tramos = rangosLibres(desde, hasta, cubiertos.filter(c => c.asignacion_id===undefined || c.asignacion_id===a.id))
+    .map(r => ({ ...r, ...montoAsignacionPeriodo(a, diasServicio, r.desde, r.hasta, pct, hoy) })).filter(r => r.dias>0);
+  const dias = tramos.reduce((t,r)=>t+r.dias,0), monto = tramos.reduce((t,r)=>t+r.monto,0);
+  return { dias, monto, conCalendario: total.conCalendario, tramos, diasYaFacturados: Math.max(0, total.dias-dias) };
+}
+
 export function Rentabilidad({ pedidos, empresas, repartidores, unidades, asignaciones, diasServicio, recargoFeriadoPct, toast }) {
   const [desde, setDesde] = useState(diaLocal().slice(0,8)+"01");
   const [hasta, setHasta] = useState(diaLocal());

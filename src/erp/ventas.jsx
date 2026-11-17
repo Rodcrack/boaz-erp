@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo, Fragment } from "react";
 import { Ayuda, B, BtnIco, BtnPri, BtnSec, Buscador, CARD, Cargando, Confirm, EstadoVacio, Etiqueta, Ico, Kpi, KpiDS, TAB_CONT, TAB_SEG, TD, TDN, TDS, Tabs, Th, XLSX, asegurarXLSX, diaLocal, escHTML, fmt, inp, lbl, sb, traerTodo, usePaginacion } from "./base.jsx";
 import { clienteCobraPorPedido } from "./dashboard.jsx";
-import { TIPOS_SERV, cargarServicios, montoAsignacionPeriodo } from "./operacion.jsx";
+import { TIPOS_SERV, cargarServicios, montoAsignacionPendiente } from "./operacion.jsx";
 import { solN } from "./costos.jsx";
 
 // ══════════════════════════════════════════════════════════════
@@ -167,6 +167,8 @@ export function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }
   const [modalPago, setModalPago] = useState(null); // factura seleccionada para marcar pagada
   const [editandoFactura, setEditandoFactura] = useState(null);
   const [filtroPago, setFiltroPago] = useState("todas");
+  const [anular, setAnular] = useState(null);
+  const esAnulada = (fa) => fa.estado==="anulada" || fa.estado==="anulado";
   const facturaVacia = () => ({
     empresa_id:"", serie:"E001", numero:"", descripcion:
     "Servicio de transporte y distribución multipunto - Same Day",
@@ -194,15 +196,26 @@ export function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }
     cargarFacturas();
   };
 
+  // Las anuladas no cuentan en los totales ni como «por cobrar»
+  const vigentesF = facturas.filter(fa => !esAnulada(fa));
+  const nAnuladas = facturas.length - vigentesF.length;
   const facturasFiltradas = facturas.filter(fa =>
-    filtroPago==="todas" || (fa.estado_pago||"pendiente")===filtroPago
+    filtroPago==="todas" ? true : filtroPago==="anulada" ? esAnulada(fa) : !esAnulada(fa) && (fa.estado_pago||"pendiente")===filtroPago
   );
 
-  const totalFacturado = facturas.reduce((a,fa)=>a+(parseFloat(fa.total_s)||0),0);
-  const totalCobrado = facturas.filter(fa=>fa.estado_pago==="pagado").reduce((a,fa)=>a+(parseFloat(fa.total_s)||0),0);
+  const totalFacturado = vigentesF.reduce((a,fa)=>a+(parseFloat(fa.total_s)||0),0);
+  const totalCobrado = vigentesF.filter(fa=>fa.estado_pago==="pagado").reduce((a,fa)=>a+(parseFloat(fa.total_s)||0),0);
   const totalPorCobrar = totalFacturado - totalCobrado;
   const [busq, setBusq] = useState("");
-  const nPend = facturas.filter(fa=>fa.estado_pago!=="pagado").length;
+  const nPend = vigentesF.filter(fa=>fa.estado_pago!=="pagado").length;
+  const confirmarAnular = async () => {
+    const fa = anular;
+    const { error } = await sb.from("facturas").update({ estado:"anulada" }).eq("id", fa.id);
+    setAnular(null);
+    if (error) { toast("No se pudo anular: " + error.message, "error"); return; }
+    toast(`Factura ${fa.serie}-${fa.numero} anulada ✓` + (fa.origen==="prefacturacion" ? " — lo que incluía vuelve a la pre-facturación" : ""));
+    cargarFacturas();
+  };
   const qf = busq.trim().toLowerCase();
   const filasFact = !qf ? facturasFiltradas : facturasFiltradas.filter(fa => `${fa.serie}-${fa.numero} ${fa.empresas?.nombre||""}`.toLowerCase().includes(qf));
   const pg = usePaginacion(filasFact, 25, "facturas");
@@ -250,7 +263,7 @@ export function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }
   return (
     <div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14, marginBottom:20 }}>
-        <Kpi icon="receipt" label="Total facturado" valor={fmt.sol(totalFacturado)} sub={`${facturas.length} factura${facturas.length===1?"":"s"}`} color={B.navy}/>
+        <Kpi icon="receipt" label="Total facturado" valor={fmt.sol(totalFacturado)} sub={`${vigentesF.length} factura${vigentesF.length===1?"":"s"}${nAnuladas?` · ${nAnuladas} anulada${nAnuladas===1?"":"s"}`:""}`} color={B.navy}/>
         <Kpi icon="check" label="Cobrado" valor={fmt.sol(totalCobrado)} sub={totalFacturado>0 ? `${Math.round(totalCobrado/totalFacturado*100)}% del total` : null} color={B.green}/>
         <Kpi icon="clock" label="Por cobrar" valor={fmt.sol(totalPorCobrar)} sub={`${nPend} pendiente${nPend===1?"":"s"}`} color={B.red}/>
       </div>
@@ -258,11 +271,12 @@ export function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:12 }}>
         <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
           <Tabs valor={filtroPago} onChange={setFiltroPago}
-            tabs={[{ id:"todas", l:"Todas", n:facturas.length }, { id:"pendiente", l:"Por cobrar", n:nPend }, { id:"pagado", l:"Cobradas", n:facturas.length-nPend }]}/>
+            tabs={[{ id:"todas", l:"Todas", n:facturas.length }, { id:"pendiente", l:"Por cobrar", n:nPend }, { id:"pagado", l:"Cobradas", n:vigentesF.length-nPend }, ...(nAnuladas?[{ id:"anulada", l:"Anuladas", n:nAnuladas }]:[])]}/>
           <Buscador value={busq} onChange={setBusq} placeholder="Buscar por cliente o número" width={260}/>
         </div>
         <BtnPri onClick={abrirNuevaFactura}><Ico n="plus" size={15} sw={2.4}/> Registrar factura</BtnPri>
       </div>
+      <div style={{ fontSize:12, color:B.textMut, marginBottom:12 }}>Consejo: emite las facturas desde <b>Pre-facturación</b> («Emitir factura del período»). Así los pedidos, días de unidad y servicios quedan marcados y no se cobran dos veces. «Registrar factura» aquí es para casos sueltos.</div>
 
       <div style={{ ...CARD, overflow:"hidden" }}>
         <div style={{ overflowX:"auto" }}>
@@ -275,8 +289,9 @@ export function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }
           </thead>
           <tbody>
             {pg.visibles.map((fa)=>(
-              <tr key={fa.id}>
-                <td style={{ ...TD, fontWeight:700, color:B.navy, whiteSpace:"nowrap" }}>{fa.serie}-{fa.numero}</td>
+              <tr key={fa.id} style={esAnulada(fa)?{ opacity:.55 }:undefined}>
+                <td style={{ ...TD, fontWeight:700, color:B.navy, whiteSpace:"nowrap" }}><span style={esAnulada(fa)?{ textDecoration:"line-through" }:undefined}>{fa.serie}-{fa.numero}</span>
+                  {fa.origen==="prefacturacion" && <div style={{ fontSize:11, fontWeight:500, color:B.textMut }} title="Emitida desde Pre-facturación: sus pedidos, unidades y servicios están marcados">Pre-fact. {fa.periodo_desde?`${fmt.fecha(fa.periodo_desde)} – ${fmt.fecha(fa.periodo_hasta)}`:""}</div>}</td>
                 <td style={TD}>{fa.empresas?.nombre||"—"}</td>
                 <td style={{ ...TDS, whiteSpace:"nowrap" }}>{fmt.fecha(fa.fecha_emision)}</td>
                 <td style={{ ...TDN, color:B.textSec }}>{fmt.sol(fa.igv_s)}</td>
@@ -287,18 +302,19 @@ export function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }
                 <td style={{ ...TDN, fontWeight:800, color:B.navy }}>
                   {fmt.sol((parseFloat(fa.total_s)||0) - (parseFloat(fa.monto_detraccion)||0))}
                 </td>
-                <td style={TD}><Etiqueta tono={fa.estado_pago==="pagado"?"ok":"warn"}>{fa.estado_pago==="pagado"?"Pagada":"Pendiente"}</Etiqueta></td>
+                <td style={TD}>{esAnulada(fa) ? <Etiqueta tono="neutro">Anulada</Etiqueta> : <Etiqueta tono={fa.estado_pago==="pagado"?"ok":"warn"}>{fa.estado_pago==="pagado"?"Pagada":"Pendiente"}</Etiqueta>}</td>
                 <td style={{ ...TDS, whiteSpace:"nowrap" }}>
                   {fa.fecha_pago ? fmt.fecha(fa.fecha_pago) : "—"}
                   {fa.banco_pago && <div style={{ fontSize:12, color:B.textMut }}>{fa.banco_pago}{fa.numero_operacion?` · Op. ${fa.numero_operacion}`:""}</div>}
                 </td>
                 <td style={{ ...TD, padding:"6px 10px" }}>
                   <div style={{ display:"flex", alignItems:"center", justifyContent:"flex-end", gap:4, whiteSpace:"nowrap" }}>
-                  {fa.estado_pago!=="pagado" && (
+                  {fa.estado_pago!=="pagado" && !esAnulada(fa) && (
                     <button className="bz-btn-sec" onClick={()=>setModalPago(fa)}
                       style={{ fontSize:12, fontWeight:600, color:"#047857", background:B.white, border:`1px solid ${B.border}`, borderRadius:8, padding:"5px 10px", cursor:"pointer" }}>Registrar pago</button>
                   )}
-                  <BtnIco n="edit" title="Editar factura" onClick={()=>{setEditandoFactura(fa); setF({...fa, aplica_detraccion:(fa.porcentaje_detraccion||0)>0, porcentaje_detraccion: fa.porcentaje_detraccion?String(fa.porcentaje_detraccion):""}); setModal(true);}}/>
+                  {!esAnulada(fa) && <><BtnIco n="edit" title="Editar factura" onClick={()=>{setEditandoFactura(fa); setF({...fa, aplica_detraccion:(fa.porcentaje_detraccion||0)>0, porcentaje_detraccion: fa.porcentaje_detraccion?String(fa.porcentaje_detraccion):""}); setModal(true);}}/>
+                  <BtnIco n="xcircle" title="Anular factura" onClick={()=>setAnular(fa)}/></>}
                   </div>
                 </td>
               </tr>
@@ -313,6 +329,7 @@ export function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }
         {pg.pie}
       </div>
 
+      {anular && <Confirm msg={`¿Anular la factura ${anular.serie}-${anular.numero} por ${fmt.sol(anular.total_s)}? Dejará de contar en lo facturado y por cobrar.${anular.origen==="prefacturacion" ? " Sus pedidos, días de unidad y servicios volverán a aparecer en la pre-facturación." : ""}${anular.estado_pago==="pagado" ? " Ojo: está marcada como pagada." : ""} Recuerda anularla también en SUNAT (comunicación de baja o nota de crédito).`} onOk={confirmarAnular} onCancel={()=>setAnular(null)}/>}
       {modalPago && (
         <ModalMarcarPagada factura={modalPago} onClose={()=>setModalPago(null)} onConfirmar={marcarPagado}/>
       )}
@@ -822,7 +839,7 @@ export async function generarLiquidacionTransporte({ filasTransporte, empresa, f
   URL.revokeObjectURL(url);
 }
 
-export function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesUnidad, diasServicio, tarifarioVehiculoEstandar, recargoFeriadoPct, toast }) {
+export function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesUnidad, diasServicio, tarifarioVehiculoEstandar, recargoFeriadoPct, toast, onRefresh, onIr }) {
   const hoy = diaLocal();
   const primerDiaMes = hoy.slice(0,8)+"01";
   const [empresaId, setEmpresaId] = useState("todas");
@@ -832,15 +849,26 @@ export function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesU
   const [generandoLiquidacion, setGenerandoLiquidacion] = useState(false);
   // Viajes, recojos y servicios cotizados del período (se suman al total a facturar)
   const [servPer, setServPer] = useState([]);
+  const [servYaFact, setServYaFact] = useState(0);
+  // Tramos de unidades ya facturados (para no cobrar dos veces los mismos días)
+  const [unidFact, setUnidFact] = useState([]);
+  // null = verificando · true = el enlace con facturas está instalado · false = falta el SQL
+  const [enlaceOk, setEnlaceOk] = useState(null);
+  const [emitidos, setEmitidos] = useState(() => new Set()); // pedidos facturados en esta sesión (se ocultan al instante)
+  const [emitir, setEmitir] = useState(false);
+  const [recarga, setRecarga] = useState(0);
   useEffect(() => {
     if (!generado) return;
     let vivo = true;
     (async () => {
       try { const { data, error } = await cargarServicios(fechaInicio, fechaFin, empresaId==="todas" ? "" : empresaId);
-        if (vivo) setServPer(error ? [] : (data||[]).filter(x => x.estado==="realizado" && !x.facturado && (empresaId==="todas" || x.empresa_id===empresaId))); } catch { if (vivo) setServPer([]); }
+        const delCliente = error ? [] : (data||[]).filter(x => x.estado==="realizado" && (empresaId==="todas" || x.empresa_id===empresaId));
+        if (vivo) { setServPer(delCliente.filter(x => !x.facturado)); setServYaFact(delCliente.filter(x => x.facturado).length); } } catch { if (vivo) setServPer([]); }
+      try { const r = await sb.from("facturas_unidades").select("asignacion_id,desde,hasta,dias,factura_id").lte("desde", fechaFin).gte("hasta", fechaInicio);
+        if (vivo) { setEnlaceOk(!r.error); setUnidFact(r.error ? [] : (r.data||[])); } } catch { if (vivo) { setEnlaceOk(false); setUnidFact([]); } }
     })();
     return () => { vivo = false; };
-  }, [generado, fechaInicio, fechaFin, empresaId]);
+  }, [generado, fechaInicio, fechaFin, empresaId, recarga]);
   const subtotalServ = servPer.reduce((t,x)=>t+(parseFloat(x.monto)||0),0);
 
   // ¿A este cliente se le cobra por pedido? Si tiene modalidades definidas manda eso; si no, se
@@ -864,11 +892,14 @@ export function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesU
   };
 
   // Días y monto con la regla única del ERP (ver montoAsignacionPeriodo)
-  const filasTransporte = asignacionesUnidad.filter(a=>empresaId==="todas" || a.empresa_id===empresaId).map(a=>{
-        const { dias, monto, conCalendario } = montoAsignacionPeriodo(a, diasServicio, fechaInicio, fechaFin, recargoFeriadoPct||0);
+  // Solo los días que aún no están en una factura (ver montoAsignacionPendiente)
+  const filasTransporteTodas = asignacionesUnidad.filter(a=>empresaId==="todas" || a.empresa_id===empresaId).map(a=>{
+        const { dias, monto, conCalendario, tramos, diasYaFacturados } = montoAsignacionPendiente(a, diasServicio, fechaInicio, fechaFin, recargoFeriadoPct||0, unidFact.filter(u=>u.asignacion_id===a.id));
         const unidad = unidades.find(u=>u.id===a.unidad_id);
-        return { asignacion:a, unidad, dias, monto, igv: monto*0.18, total: monto*1.18, estimado: !conCalendario };
-      }).filter(f=>f.dias>0);
+        return { asignacion:a, unidad, dias, monto, igv: monto*0.18, total: monto*1.18, estimado: !conCalendario, tramos, diasYaFacturados };
+      });
+  const filasTransporte = filasTransporteTodas.filter(f=>f.dias>0);
+  const diasUnidYaFact = filasTransporteTodas.reduce((t,f)=>t+f.diasYaFacturados,0);
   const subtotalTransporte = filasTransporte.reduce((s,f)=>s+f.monto,0);
   const igvTransporte = subtotalTransporte*0.18;
   const totalTransporte = subtotalTransporte*1.18;
@@ -883,7 +914,9 @@ export function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesU
 
   const enRango = pedidos.filter(p => (empresaId==="todas" || p.empresa_id===empresaId) && dentroDelRango(p));
   const noCobrables = enRango.filter(p => !cobraPorPedido(p.empresa_id)).length;
-  const filtrados = enRango.filter(p => cobraPorPedido(p.empresa_id))
+  const yaFacturado = (p) => !!p.factura_id || emitidos.has(p.id);
+  const pedYaFact = enRango.filter(p => cobraPorPedido(p.empresa_id) && yaFacturado(p)).length;
+  const filtrados = enRango.filter(p => cobraPorPedido(p.empresa_id) && !yaFacturado(p))
     .sort((a,b)=> new Date(a.created_at) - new Date(b.created_at));
 
   const nombreEmpresa = (id) => empresas.find(e=>e.id===id)?.nombre || "—";
@@ -1053,6 +1086,19 @@ export function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesU
               </div>
             )}
 
+            {(pedYaFact>0 || servYaFact>0 || diasUnidYaFact>0) && (
+              <div style={{ background:"#F0FDF4", border:"1px solid #BBF7D0", borderRadius:10, padding:"10px 14px", marginBottom:16, fontSize:12.5, color:"#166534", display:"flex", gap:8, alignItems:"flex-start" }}>
+                <Ico n="check" size={16} style={{ marginTop:1 }}/>
+                <div>Ya facturado en este período y <b>no se vuelve a sumar</b>: {[pedYaFact>0 && `${pedYaFact.toLocaleString("en-US")} pedido${pedYaFact===1?"":"s"}`, diasUnidYaFact>0 && `${diasUnidYaFact} día${diasUnidYaFact===1?"":"s"} de unidad`, servYaFact>0 && `${servYaFact} servicio${servYaFact===1?"":"s"}`].filter(Boolean).join(" · ")}. Si una factura estuvo mal, anúlala en Facturación y todo vuelve a aparecer aquí.</div>
+              </div>
+            )}
+
+            {enlaceOk===false && (
+              <div style={{ background:"#FFF7ED", border:"1px solid #FDBA74", borderRadius:10, padding:"10px 14px", marginBottom:16, fontSize:12.5, color:"#9A3412" }}>
+                Para emitir la factura desde aquí y que lo facturado no se repita, falta ejecutar <b>facturacion_enlace_boaz.sql</b> en Supabase. Mientras tanto, la pre-facturación funciona como antes.
+              </div>
+            )}
+
             {todas && Object.keys(porCliente).length>1 && (
               <div style={{ marginBottom:16, display:"flex", flexWrap:"wrap", gap:8 }}>
                 {Object.values(porCliente).filter(c=>(c.pedidos+c.unidades+c.servicios)>0).map((c,i)=>(
@@ -1064,11 +1110,13 @@ export function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesU
             )}
 
             <div style={{ display:"flex", gap:10, marginBottom:8, flexWrap:"wrap" }}>
+              {hayAlgo && <BtnPri onClick={()=>{ if (todas) { toast("Elige un cliente: cada factura es para un solo cliente","error"); return; } if (!enlaceOk) { toast("Primero ejecuta facturacion_enlace_boaz.sql en Supabase","error"); return; } setEmitir(true); }}
+                title={todas ? "Elige un cliente para emitir su factura" : "Registra la factura con todo lo pendiente de este período"} style={todas||!enlaceOk?{ opacity:.55 }:{}}><Ico n="receipt" size={15}/> Emitir factura del período</BtnPri>}
               <BtnSec onClick={exportarExcel}><Ico n="download" size={15}/> Exportar a Excel</BtnSec>
               <BtnSec onClick={imprimir}><Ico n="printer" size={15}/> Imprimir / PDF</BtnSec>
               {!todas && filtrados.length>0 && <BtnSec onClick={()=>generarLiquidacion("entregas")} style={generandoLiquidacion?{opacity:.6,pointerEvents:"none"}:{}}><Ico n="filetext" size={15}/> Liquidación de Entregas (formato Boaz)</BtnSec>}
               {!todas && filasTransporte.length>0 && <BtnSec onClick={()=>generarLiquidacion("transporte")} style={generandoLiquidacion?{opacity:.6,pointerEvents:"none"}:{}}><Ico n="filetext" size={15}/> Liquidación de Transporte (formato Boaz)</BtnSec>}
-              {servPer.length>0 && <BtnSec onClick={marcarServiciosFacturados} style={{ marginLeft:"auto" }}><Ico n="check" size={15}/> Marcar servicios como facturados</BtnSec>}
+              {servPer.length>0 && enlaceOk===false && <BtnSec onClick={marcarServiciosFacturados} style={{ marginLeft:"auto" }}><Ico n="check" size={15}/> Marcar servicios como facturados</BtnSec>}
             </div>
             <div style={{ fontSize:12, color:B.textMut, marginBottom:14 }}>
               El Excel y el PDF incluyen las tres secciones y el total. {todas ? "Elige un cliente específico para generar las liquidaciones con el formato Boaz." : "Las liquidaciones con formato Boaz traen una hoja adicional con los servicios del período."}
@@ -1163,8 +1211,143 @@ export function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesU
         );
       })()}
       {confirmar && <Confirm msg={confirmar.msg} onOk={confirmar.ok} onCancel={()=>setConfirmar(null)}/>}
+      {emitir && <ModalEmitirFactura empresa={empresas.find(e=>e.id===empresaId)} desde={fechaInicio} hasta={fechaFin}
+        pedidos={filtrados} subtotalPed={subtotal} filasTransporte={filasTransporte} subtotalUnid={subtotalTransporte} servicios={servPer} subtotalServ={subtotalServ}
+        toast={toast} onClose={()=>setEmitir(false)}
+        onEmitida={(ids) => { setEmitir(false); setEmitidos(prev => { const n = new Set(prev); ids.forEach(i=>n.add(i)); return n; }); setRecarga(r=>r+1); onRefresh && onRefresh({ silencioso:true }); }}
+        onIrFacturacion={onIr ? ()=>onIr("facturacion") : null}/>}
     </div>
   );
+}
+
+// ── Emitir factura desde la pre-facturación ──
+// Registra UNA factura con todo lo pendiente del período y marca cada pedido, servicio y día de unidad
+// con esa factura, para que no vuelva a aparecer en la próxima pre-facturación.
+const r2 = (v) => Math.round((parseFloat(v)||0)*100)/100;
+export function siguienteNumero(numeros) {
+  // numeros: lista de textos ("00000012", "13"…). Devuelve el siguiente con el mismo ancho que el mayor.
+  let max = 0, ancho = 0;
+  (numeros||[]).forEach(n => { const t = String(n||"").trim(); if (!/^\d+$/.test(t)) return; const v = parseInt(t,10); if (v>=max) { max = v; ancho = t.length; } });
+  const sig = String(max+1); return ancho>sig.length ? sig.padStart(ancho,"0") : sig;
+}
+export function descripcionFactura({ desde, hasta, nPed, nDiasUnid, nUnid, nServ }) {
+  const partes = [];
+  if (nPed) partes.push(`${nPed.toLocaleString("en-US")} entrega${nPed===1?"":"s"}`);
+  if (nDiasUnid) partes.push(`${nDiasUnid} día${nDiasUnid===1?"":"s"} de unidad${nUnid>1?` (${nUnid} unidades)`:""}`);
+  if (nServ) partes.push(`${nServ} servicio${nServ===1?"":"s"} adicional${nServ===1?"":"es"}`);
+  return `Servicio de transporte y distribución del ${fmt.fecha(desde)} al ${fmt.fecha(hasta)}` + (partes.length ? `: ${partes.join(", ")}` : "");
+}
+const enLotes = async (ids, fn, tam=150) => { for (let i=0; i<ids.length; i+=tam) { const { error } = await fn(ids.slice(i,i+tam)); if (error) return error; } return null; };
+
+export function ModalEmitirFactura({ empresa, desde, hasta, pedidos, subtotalPed, filasTransporte, subtotalUnid, servicios, subtotalServ, toast, onClose, onEmitida, onIrFacturacion }) {
+  const nDiasUnid = filasTransporte.reduce((t,f)=>t+f.dias,0);
+  const subtotal = r2(subtotalPed + subtotalUnid + subtotalServ);
+  const sinTarifa = pedidos.filter(p => !(parseFloat(p.tarifa_s)>0)).length;
+  const [f, setF] = useState({ serie:"E001", numero:"", fecha:diaLocal(), descripcion: descripcionFactura({ desde, hasta, nPed:pedidos.length, nDiasUnid, nUnid:filasTransporte.length, nServ:servicios.length }), det:false, pct:"4" });
+  const [numeros, setNumeros] = useState([]);
+  const [paso, setPaso] = useState("");   // texto de progreso mientras guarda
+  const [err, setErr] = useState("");
+  const set = (k,v) => setF(p => ({ ...p, [k]:v }));
+  useEffect(() => { let vivo = true; (async () => {
+    const [u, c] = await Promise.all([
+      sb.from("facturas").select("serie,numero,created_at").order("created_at",{ ascending:false }).limit(200),
+      sb.from("facturas").select("porcentaje_detraccion").eq("empresa_id", empresa.id).order("fecha_emision",{ ascending:false }).limit(1),
+    ]);
+    if (!vivo) return;
+    const lista = u.data||[]; setNumeros(lista);
+    const serie = (lista[0] && lista[0].serie) || "E001";
+    const pctPrev = c.data && c.data[0] && parseFloat(c.data[0].porcentaje_detraccion);
+    setF(p => ({ ...p, serie, numero: p.numero || siguienteNumero(lista.filter(x=>x.serie===serie).map(x=>x.numero)), det: pctPrev>0, pct: pctPrev>0 ? String(pctPrev) : p.pct }));
+  })(); return () => { vivo = false; }; }, []);
+  const cambiarSerie = (serie) => setF(p => ({ ...p, serie, numero: siguienteNumero(numeros.filter(x=>x.serie===serie).map(x=>x.numero)) }));
+
+  const igv = r2(subtotal*0.18), total = r2(subtotal+igv);
+  const montoDet = f.det ? r2(total*(parseFloat(f.pct)||0)/100) : 0;
+  const ocupado = !!paso;
+
+  const emitir = async () => {
+    setErr("");
+    if (!f.serie.trim() || !f.numero.trim()) { setErr("Completa la serie y el número de la factura."); return; }
+    if (numeros.some(x => x.serie===f.serie.trim() && String(x.numero).trim()===f.numero.trim())) { setErr(`Ya existe la factura ${f.serie}-${f.numero}. Usa otro número.`); return; }
+    if (!(subtotal>0)) { setErr("El total es S/ 0. Revisa las tarifas antes de facturar."); return; }
+    setPaso("Registrando la factura…");
+    const { data:fac, error } = await sb.from("facturas").insert([{
+      empresa_id: empresa.id, serie:f.serie.trim(), numero:f.numero.trim(), descripcion:f.descripcion.trim(), cantidad:1, valor_unit_s:subtotal,
+      fecha_emision:f.fecha, tipo_servicio_id:null, igv_s:igv, total_s:total,
+      porcentaje_detraccion: f.det ? (parseFloat(f.pct)||0) : 0, monto_detraccion: montoDet, unidad_medida:"ZZ",
+      estado:"emitida", estado_pago:"pendiente", origen:"prefacturacion", periodo_desde:desde, periodo_hasta:hasta,
+    }]).select("id").single();
+    if (error) { setPaso(""); setErr("No se pudo registrar la factura: " + error.message); return; }
+    const numTxt = `${f.serie.trim()}-${f.numero.trim()}`;
+    const fallos = [];
+    if (pedidos.length) {
+      setPaso(`Marcando ${pedidos.length.toLocaleString("en-US")} pedidos…`);
+      const e1 = await enLotes(pedidos.map(p=>p.id), (ids) => sb.from("pedidos").update({ factura_id:fac.id }).in("id", ids).is("factura_id", null));
+      if (e1) fallos.push("pedidos: " + e1.message);
+    }
+    if (servicios.length) {
+      setPaso("Marcando servicios…");
+      const e2 = await enLotes(servicios.map(x=>x.id), (ids) => sb.from("servicios_cliente").update({ facturado:true, factura_id:fac.id }).in("id", ids));
+      if (e2) fallos.push("servicios: " + e2.message);
+    }
+    const filasU = filasTransporte.flatMap(fl => (fl.tramos||[]).map(t => ({ factura_id:fac.id, asignacion_id:fl.asignacion.id, desde:t.desde, hasta:t.hasta, dias:t.dias, monto:r2(t.monto) })));
+    if (filasU.length) {
+      setPaso("Registrando días de unidad…");
+      const { error:e3 } = await sb.from("facturas_unidades").insert(filasU);
+      if (e3) fallos.push("unidades: " + e3.message);
+    }
+    setPaso("");
+    if (fallos.length) toast(`La factura ${numTxt} se registró, pero no se pudo marcar todo (${fallos.join(" · ")}). Anúlala en Facturación y vuelve a emitirla.`, "error");
+    else toast(`Factura ${numTxt} registrada por ${fmt.sol(total)} ✓ — lo facturado ya no aparecerá en la pre-facturación`);
+    onEmitida(pedidos.map(p=>p.id));
+  };
+
+  const fila = (ico, txt, monto) => (<div style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 0", fontSize:13, color:B.textPri }}><Ico n={ico} size={15} color={B.textMut}/><span style={{ flex:1 }}>{txt}</span><b>{fmt.sol(monto)}</b></div>);
+  return (
+    <div role="dialog" aria-modal="true" aria-label="Emitir factura del período" style={{ position:"fixed", inset:0, background:"#0008", zIndex:1200, display:"flex", alignItems:"center", justifyContent:"center", padding:12 }}>
+      <div style={{ background:B.white, borderRadius:16, padding:24, width:600, maxWidth:"100%", maxHeight:"94vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:4 }}>
+          <div style={{ fontSize:16, fontWeight:800, color:B.navy }}>Emitir factura — {empresa.nombre}</div>
+          <button onClick={onClose} disabled={ocupado} aria-label="Cerrar" style={{ background:"none", border:"none", fontSize:18, color:B.textSec, cursor:"pointer" }}>✕</button>
+        </div>
+        <div style={{ fontSize:12.5, color:B.textSec, marginBottom:14, lineHeight:1.5 }}>Del {fmt.fecha(desde)} al {fmt.fecha(hasta)}{empresa.ruc ? ` · RUC ${empresa.ruc}` : ""}. Se registra la factura en el ERP y todo lo incluido queda marcado para no volver a cobrarlo. <b>Emite el comprobante en SUNAT con estos mismos datos.</b></div>
+
+        <div style={{ background:"#F6F9FC", borderRadius:10, padding:"8px 14px", marginBottom:14 }}>
+          {pedidos.length>0 && fila("package", `${pedidos.length.toLocaleString("en-US")} pedido${pedidos.length===1?"":"s"}`, subtotalPed)}
+          {filasTransporte.length>0 && fila("truck", `${nDiasUnid} día${nDiasUnid===1?"":"s"} de ${filasTransporte.length} unidad${filasTransporte.length===1?"":"es"}`, subtotalUnid)}
+          {servicios.length>0 && fila("map", `${servicios.length} viaje${servicios.length===1?"":"s"}, recojo${servicios.length===1?"":"s"} o servicio${servicios.length===1?"":"s"}`, subtotalServ)}
+        </div>
+        {sinTarifa>0 && <div style={{ background:"#FFF7ED", border:"1px solid #FDBA74", borderRadius:10, padding:"9px 12px", fontSize:12.5, color:"#9A3412", marginBottom:14 }}>{sinTarifa} pedido{sinTarifa===1?"":"s"} no tiene{sinTarifa===1?"":"n"} tarifa y entraría{sinTarifa===1?"":"n"} en S/ 0. Si deben cobrarse, cierra esta ventana y corrige su tarifa primero.</div>}
+
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
+          <div><label style={lbl}>Serie</label><input style={inp} value={f.serie} onChange={e=>cambiarSerie(e.target.value.toUpperCase())}/></div>
+          <div><label style={lbl}>Número</label><input style={inp} value={f.numero} onChange={e=>set("numero",e.target.value)}/></div>
+          <div><label style={lbl}>Fecha de emisión</label><input type="date" style={inp} value={f.fecha} onChange={e=>set("fecha",e.target.value)}/></div>
+          <div style={{ gridColumn:"1 / -1" }}><label style={lbl}>Descripción (como irá en el comprobante)</label><textarea rows={2} style={{ ...inp, resize:"vertical", fontFamily:"inherit" }} value={f.descripcion} onChange={e=>set("descripcion",e.target.value)}/></div>
+        </div>
+
+        <div style={{ marginTop:12, padding:"10px 14px", background:B.bg, borderRadius:10, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
+          <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", fontSize:12.5, fontWeight:600, color:B.textPri }}><input type="checkbox" checked={f.det} onChange={e=>set("det",e.target.checked)}/> Aplica detracción<Ayuda k="detraccion" size={13}/></label>
+          {f.det && <select style={{ ...inp, width:110 }} value={f.pct} onChange={e=>set("pct",e.target.value)}><option value="4">4%</option><option value="10">10%</option><option value="12">12%</option></select>}
+          {!f.det && total>700 && <span style={{ fontSize:11.5, color:B.textMut }}>El total supera S/ 700: revisa si a este cliente le corresponde.</span>}
+        </div>
+
+        <div style={{ display:"grid", gridTemplateColumns:`repeat(${f.det?5:3},1fr)`, gap:10, marginTop:12, padding:14, background:"#FFF8EF", border:`1px solid ${B.gold}55`, borderRadius:10 }}>
+          <div><div style={{ fontSize:10, color:B.textMut }}>VALOR VENTA</div><div style={{ fontSize:15, fontWeight:700, color:B.navy }}>{fmt.sol(subtotal)}</div></div>
+          <div><div style={{ fontSize:10, color:B.textMut }}>IGV 18%</div><div style={{ fontSize:15, fontWeight:700, color:B.navy }}>{fmt.sol(igv)}</div></div>
+          <div><div style={{ fontSize:10, color:B.textMut }}>TOTAL</div><div style={{ fontSize:17, fontWeight:800, color:B.goldDk }}>{fmt.sol(total)}</div></div>
+          {f.det && <><div><div style={{ fontSize:10, color:B.textMut }}>DETRACCIÓN</div><div style={{ fontSize:15, fontWeight:700, color:"#B91C1C" }}>− {fmt.sol(montoDet)}</div></div>
+          <div><div style={{ fontSize:10, color:B.textMut }}>NETO A COBRAR</div><div style={{ fontSize:17, fontWeight:800, color:"#047857" }}>{fmt.sol(total-montoDet)}</div></div></>}
+        </div>
+
+        {err && <div role="alert" style={{ background:"#FEF2F2", border:"1px solid #FECACA", color:"#B91C1C", borderRadius:8, padding:"9px 12px", fontSize:12.5, marginTop:12 }}>{err}</div>}
+        <div style={{ display:"flex", gap:10, marginTop:18, justifyContent:"flex-end", alignItems:"center", flexWrap:"wrap" }}>
+          {paso && <span style={{ fontSize:12.5, color:B.textSec, marginRight:"auto" }}>{paso}</span>}
+          <BtnSec onClick={onClose} disabled={ocupado}>Cancelar</BtnSec>
+          <BtnPri onClick={emitir} disabled={ocupado}><Ico n="receipt" size={15}/> {ocupado ? "Guardando…" : `Registrar factura por ${fmt.sol(total)}`}</BtnPri>
+        </div>
+      </div>
+    </div>);
 }
 
 export function ModalMarcarPagada({ factura, onClose, onConfirmar }) {

@@ -16,6 +16,7 @@ WITH c AS (
     to_regclass('public.login_intentos') IS NOT NULL AS seg6,
     EXISTS (SELECT 1 FROM pg_proc WHERE proname='rep_pedidos') AS seg6b1,
     EXISTS (SELECT 1 FROM pg_proc WHERE proname='pedidos_lista') AS rend6c,
+    to_regclass('public.facturas_unidades') IS NOT NULL AS fact_enlace,
     NOT has_table_privilege('anon', 'public.pedidos', 'SELECT') AS seg6b2
 )
 SELECT * FROM (
@@ -28,5 +29,6 @@ SELECT * FROM (
   UNION ALL SELECT 7, 'tarifarios_v3_boaz.sql', CASE WHEN v3_a AND v3_b THEN 'OK - aplicado' ELSE 'FALTA ejecutar' END FROM c
   UNION ALL SELECT 8, 'servicios_cliente_boaz.sql', CASE WHEN servicios THEN 'OK - aplicado' ELSE 'FALTA ejecutar' END FROM c
   UNION ALL SELECT 9, 'finanzas_conexion_boaz.sql', CASE WHEN finanzas THEN 'OK - aplicado' ELSE 'FALTA ejecutar' END FROM c
-  UNION ALL SELECT 10, 'seguridad_6b_paso2_boaz.sql (EL ÚLTIMO, después de probar)', CASE WHEN seg6b2 THEN 'OK - aplicado' ELSE 'Pendiente: ejecutar solo al final' END FROM c
+  UNION ALL SELECT 10, 'facturacion_enlace_boaz.sql', CASE WHEN fact_enlace THEN 'OK - aplicado' ELSE 'FALTA ejecutar' END FROM c
+  UNION ALL SELECT 11, 'seguridad_6b_paso2_boaz.sql (EL ÚLTIMO, después de probar)', CASE WHEN seg6b2 THEN 'OK - aplicado' ELSE 'Pendiente: ejecutar solo al final' END FROM c
 ) t ORDER BY orden;
