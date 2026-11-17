@@ -400,7 +400,8 @@ export function Planilla({ toast, repartidores=[] }) {
                     </tr>
                   );
                 })}
-                {personal.length===0 && <tr><td colSpan={9} style={{ padding:30, textAlign:"center", color:B.textMut, fontSize:13 }}>Sin personal registrado</td></tr>}
+                {personal.length===0 && <tr><td colSpan={9}><EstadoVacio icono="users" titulo="Aún no hay personal en planilla" texto="Aquí va el personal con contrato: el ERP calcula el descuento de pensión (ONP o AFP), el EsSalud que paga la empresa y el neto a pagar. Los repartidores que cobran por entrega no van aquí, sino en Liq. Repartidores."
+                pasos={["Pulsa «Nuevo trabajador» y completa datos personales, laborales y bancarios.","Cada mes usa «Registrar pago»: el neto se calcula solo y pasa a Finanzas como egreso."]}/></td></tr>}
               </tbody>
             </table>
           </div>
@@ -428,7 +429,7 @@ export function Planilla({ toast, repartidores=[] }) {
                     </td>
                   </tr>
                 ))}
-                {pagosPlanilla.length===0 && <tr><td colSpan={5} style={{ padding:24, textAlign:"center", color:B.textMut, fontSize:13 }}>Sin pagos registrados</td></tr>}
+                {pagosPlanilla.length===0 && <tr><td colSpan={5} style={{ padding:20, textAlign:"center", color:B.textMut, fontSize:12.5 }}>Sin pagos registrados aún. Usa «Registrar pago» en la fila de cada trabajador.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -470,7 +471,8 @@ export function Planilla({ toast, repartidores=[] }) {
                     </td>
                   </tr>
                 ))}
-                {terceros.length===0 && <tr><td colSpan={6} style={{ padding:30, textAlign:"center", color:B.textMut, fontSize:13 }}>Sin terceros registrados</td></tr>}
+                {terceros.length===0 && <tr><td colSpan={6}><EstadoVacio icono="user" titulo="Aún no hay terceros" texto="Terceros son quienes te emiten recibo por honorarios o factura: un contador, un mecánico, un chofer eventual. Se registra cada pago con su retención si aplica."
+                pasos={["Pulsa «Nuevo tercero» con su RUC o DNI y el servicio que presta.","Registra cada pago con el número de recibo o factura; si supera el umbral, el ERP calcula la retención."]}/></td></tr>}
               </tbody>
             </table>
           </div>
@@ -502,7 +504,7 @@ export function Planilla({ toast, repartidores=[] }) {
                     </td>
                   </tr>
                 ))}
-                {pagosTerceros.length===0 && <tr><td colSpan={7} style={{ padding:24, textAlign:"center", color:B.textMut, fontSize:13 }}>Sin pagos registrados</td></tr>}
+                {pagosTerceros.length===0 && <tr><td colSpan={7} style={{ padding:20, textAlign:"center", color:B.textMut, fontSize:12.5 }}>Sin pagos registrados aún. Usa «Registrar pago» en la fila de cada tercero.</td></tr>}
               </tbody>
             </table>
           </div>

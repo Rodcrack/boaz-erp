@@ -1,6 +1,6 @@
 // BOAZ ERP — módulo "pedidos" (parte de BoazERP; ver src/BoazERP.jsx)
 import { useState, useEffect, useCallback, useRef, useMemo, Fragment } from "react";
-import { B, BADGE_SERVICIO, BtnIco, BtnPri, BtnSec, Buscador, CARD, Chip, Confirm, ESTADOS_PEDIDO, EstadoVacio, ICONOS_HIST, Ico, TD, TDN, TDS, Tabs, Th, XLSX, agruparHistorial, asegurarXLSX, calcularTarifaPedido, diaLocal, esperar, fmt, geocodificarDireccion, getTarifaSameDay, inp, lbl, sb, usePaginacion } from "./base.jsx";
+import { Ayuda, B, BADGE_SERVICIO, BtnIco, BtnPri, BtnSec, Buscador, CARD, Chip, Confirm, ESTADOS_PEDIDO, EstadoVacio, ICONOS_HIST, Ico, TD, TDN, TDS, Tabs, Th, XLSX, agruparHistorial, asegurarXLSX, calcularTarifaPedido, diaLocal, esperar, fmt, geocodificarDireccion, getTarifaSameDay, inp, lbl, sb, usePaginacion } from "./base.jsx";
 import { bandaDePeso } from "./ventas.jsx";
 
 // ══════════════════════════════════════════════════════════════
@@ -174,7 +174,7 @@ export function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, ta
         </BtnSec>
         <div style={{ marginLeft:"auto", display:"flex", gap:8, flexWrap:"wrap" }}>
           {sinGeo > 0 && (
-            <BtnSec onClick={()=>setModalGeocodificar(true)}><Ico n="pin" size={15}/> Geocodificar ({sinGeo})</BtnSec>
+            <BtnSec onClick={()=>setModalGeocodificar(true)}><Ico n="pin" size={15}/> Geocodificar ({sinGeo})<Ayuda k="geocodificar" size={13}/></BtnSec>
           )}
           <div style={{ position:"relative" }}>
             <BtnSec onClick={()=>setVerCols(v=>!v)}><Ico n="columns" size={15}/> Columnas</BtnSec>
@@ -237,11 +237,11 @@ export function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, ta
             <tr>
               <Th style={{ width:36, paddingRight:0 }}><input type="checkbox" checked={pagSel} onChange={togglePag} aria-label="Seleccionar los pedidos de esta página"/></Th>
               {[
-                ["Tracking","tracking"],["N° orden","orden_cliente"],["Cliente","cliente"],["Destinatario","destinatario"],["Dirección","direccion"],
-                ["Peso","peso","right"],["Tamaño","tamano"],["Servicio","servicio"],["Ámbito","ambito"],["Repartidor","repartidor"],
+                ["Tracking","tracking",null,"tracking"],["N° orden","orden_cliente",null,"orden"],["Cliente","cliente"],["Destinatario","destinatario"],["Dirección","direccion"],
+                ["Peso","peso","right"],["Tamaño","tamano",null,"tamano"],["Servicio","servicio",null,"servicio"],["Ámbito","ambito",null,"ambito"],["Repartidor","repartidor"],
                 ["Estado","estado"],["Fecha","fecha"],["",null],
-              ].map(([h,col,al],k)=>(
-                <Th key={k} col={col} align={al||"left"} orden={{ col:ordenCol, dir:ordenDir }} onOrden={ordenarPor}>{h}</Th>
+              ].map(([h,col,al,ay],k)=>(
+                <Th key={k} col={col} align={al||"left"} orden={{ col:ordenCol, dir:ordenDir }} onOrden={ordenarPor} ayuda={ay}>{h}</Th>
               ))}
             </tr>
           </thead>
@@ -388,8 +388,8 @@ export function ModalNuevoPedido({ repartidores, empresas, tarifariosCliente, ta
   const Row = ({ children }) => (
     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12 }}>{children}</div>
   );
-  const Field = ({ label, children }) => (
-    <div><label style={lbl}>{label}</label>{children}</div>
+  const Field = ({ label, children, ayuda }) => (
+    <div><label style={lbl}>{label}{ayuda && <Ayuda k={ayuda}/>}</label>{children}</div>
   );
 
   const ZONAS = {
@@ -425,7 +425,7 @@ export function ModalNuevoPedido({ repartidores, empresas, tarifariosCliente, ta
           <Field label="Dirección completa"><input style={inp} value={f.dest_direccion} onChange={e=>setF(p=>({...p,dest_direccion:e.target.value}))}/></Field>
         </div>
         <Row>
-          <Field label="Ámbito">
+          <Field label="Ámbito" ayuda="ambito">
             <select style={inp} value={f.ambito} onChange={e=>setF(p=>({...p,ambito:e.target.value,dest_distrito:""}))}>
               <option value="urbano">Urbano</option>
               <option value="semi_urbano">Semi Urbano</option>
@@ -448,7 +448,7 @@ export function ModalNuevoPedido({ repartidores, empresas, tarifariosCliente, ta
           borderBottom:`2px solid ${B.gold}` }}>Datos del paquete</div>
         <Row>
           <Field label="Peso (kg)"><input type="number" style={inp} value={f.peso_kg} onChange={e=>setF(p=>({...p,peso_kg:e.target.value}))}/></Field>
-          <Field label="Tipo de servicio">
+          <Field label="Tipo de servicio" ayuda="servicio">
             <select style={inp} value={f.tipo_servicio} onChange={e=>setF(p=>({...p,tipo_servicio:e.target.value}))}>
               <option value="same_day">Same Day</option>
               <option value="next_day">Next Day</option>
@@ -484,7 +484,7 @@ export function ModalNuevoPedido({ repartidores, empresas, tarifariosCliente, ta
               <input type="checkbox" id="cobro" checked={f.cobro_destino}
                 onChange={e=>setF(p=>({...p,cobro_destino:e.target.checked}))}
                 style={{ width:16, height:16 }}/>
-              <label htmlFor="cobro" style={{ fontSize:13, color:B.textPri, cursor:"pointer" }}>Cobro en destino</label>
+              <label htmlFor="cobro" style={{ fontSize:13, color:B.textPri, cursor:"pointer" }}>Cobro en destino</label><Ayuda k="cod"/>
             </div>
             {f.cobro_destino && <input type="number" placeholder="Monto S/" style={inp} value={f.monto_cobrar} onChange={e=>setF(p=>({...p,monto_cobrar:e.target.value}))}/>}
           </div>
@@ -682,7 +682,7 @@ export function ModalEtiquetas({ pedidos, empresas, onClose }) {
         <div style={{ border:`1px solid ${B.border}`, borderRadius:10, overflow:"hidden", marginBottom:20 }}>
           {pedidos.length===0 && (
             <div style={{ padding:24, textAlign:"center", color:B.textMut, fontSize:13 }}>
-              No hay pedidos en la vista actual
+              No hay pedidos en la vista actual. Cambia el filtro de estado o el texto de búsqueda.
             </div>
           )}
           {pedidos.map((p,i)=>(

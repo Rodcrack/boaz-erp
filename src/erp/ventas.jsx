@@ -1,6 +1,6 @@
 // BOAZ ERP — módulo "ventas" (parte de BoazERP; ver src/BoazERP.jsx)
 import { useState, useEffect, useCallback, useRef, useMemo, Fragment } from "react";
-import { B, BtnIco, BtnPri, BtnSec, Buscador, CARD, Cargando, Confirm, EstadoVacio, Etiqueta, Ico, Kpi, KpiDS, TAB_CONT, TAB_SEG, TD, TDN, TDS, Tabs, Th, XLSX, asegurarXLSX, diaLocal, escHTML, fmt, inp, lbl, sb, traerTodo, usePaginacion } from "./base.jsx";
+import { Ayuda, B, BtnIco, BtnPri, BtnSec, Buscador, CARD, Cargando, Confirm, EstadoVacio, Etiqueta, Ico, Kpi, KpiDS, TAB_CONT, TAB_SEG, TD, TDN, TDS, Tabs, Th, XLSX, asegurarXLSX, diaLocal, escHTML, fmt, inp, lbl, sb, traerTodo, usePaginacion } from "./base.jsx";
 import { clienteCobraPorPedido } from "./dashboard.jsx";
 import { TIPOS_SERV, cargarServicios } from "./operacion.jsx";
 import { solN } from "./costos.jsx";
@@ -149,7 +149,8 @@ export function Liquidaciones({ repartidores, pedidos, toast, onRefresh }) {
               </tr>
             ))}
             {historial.length===0&&<tr><td colSpan={6} style={{ padding:32,
-              textAlign:"center", color:B.textMut, fontSize:13 }}>No hay liquidaciones aún</td></tr>}
+              textAlign:"center", color:B.textMut, fontSize:13 }}><EstadoVacio icono="wallet" titulo="Aún no hay liquidaciones de repartidores" texto="Una liquidación calcula lo que Boaz le paga a un repartidor por un período: sus entregas por la tarifa acordada, o su sueldo fijo prorrateado."
+                pasos={["Arriba elige el repartidor y el rango de fechas y pulsa «Generar».","Revisa el detalle; si está bien, «Marcar pagado» cuando le pagues. Desde ese momento cuenta como egreso en Finanzas."]}/></td></tr>}
           </tbody>
         </table>
       </div>
@@ -269,7 +270,7 @@ export function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }
           <thead>
             <tr>
               <Th>N° factura</Th><Th>Cliente</Th><Th>Emisión</Th><Th align="right">IGV</Th><Th align="right">Total</Th>
-              <Th align="right">Detracción</Th><Th align="right">Neto a cobrar</Th><Th>Estado</Th><Th>Pago</Th><Th align="right"></Th>
+              <Th align="right" ayuda="detraccion">Detracción</Th><Th align="right" ayuda="detraccion">Neto a cobrar</Th><Th>Estado</Th><Th>Pago</Th><Th align="right"></Th>
             </tr>
           </thead>
           <tbody>
@@ -1014,7 +1015,7 @@ export function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesU
   return (
     <div>
       <div style={{ fontSize:13, color:B.textSec, marginBottom:14, maxWidth:720 }}>
-        Elige un cliente y un rango de fechas para ver todo lo que entra en su facturación del período: pedidos, unidades por día y viajes, recojos o servicios cotizados.
+        Elige un cliente y un rango de fechas para ver todo lo que entra en su facturación del período: pedidos, unidades por día y viajes, recojos o servicios cotizados.<Ayuda k="prefacturacion"/>
       </div>
 
       <div style={{ ...CARD, padding:16, display:"grid", gridTemplateColumns:"1.4fr 1fr 1fr auto", gap:10, marginBottom:16, alignItems:"end" }}>
@@ -1498,8 +1499,8 @@ export function Cobranza({ pedidos, empresas, repartidores, onRefresh, toast }) 
 
       <div style={{ ...TAB_CONT, marginBottom:14 }}>
         <TabBtn id="cxc" n={pend.filter(f=>f.dias>60).length}>Cuentas por cobrar</TabBtn>
-        <TabBtn id="det" n={detPend.length}>Detracciones</TabBtn>
-        <TabBtn id="cod" n={codPend.length}>Contraentrega (COD)</TabBtn>
+        <TabBtn id="det" n={detPend.length}>Detracciones<Ayuda k="detraccion" size={13}/></TabBtn>
+        <TabBtn id="cod" n={codPend.length}>Contraentrega (COD)<Ayuda k="cod" size={13}/></TabBtn>
       </div>
 
       {tab==="cxc" && (<>
@@ -1531,7 +1532,7 @@ export function Cobranza({ pedidos, empresas, repartidores, onRefresh, toast }) 
             {cargando ? <Cargando filas={5}/> : lista.length===0 ?
               <EstadoVacio icono="check" titulo="Sin facturas pendientes" texto="No hay facturas por cobrar con estos filtros."/> :
               <><table style={{ width:"100%", borderCollapse:"collapse" }}>
-                <thead><tr><th style={th}>Cliente</th><th style={th}>Factura</th><th style={th}>Emisión</th><th style={{...th,textAlign:"right"}}>Días</th><th style={{...th,textAlign:"right"}}>Total</th><th style={{...th,textAlign:"right"}}>Neto a cobrar</th><th style={th}></th></tr></thead>
+                <thead><tr><th style={th}>Cliente</th><th style={th}>Factura</th><th style={th}>Emisión</th><th style={{...th,textAlign:"right"}}>Días<Ayuda k="antiguedad" size={13}/></th><th style={{...th,textAlign:"right"}}>Total</th><th style={{...th,textAlign:"right"}}>Neto a cobrar<Ayuda k="detraccion" size={13} derecha/></th><th style={th}></th></tr></thead>
                 <tbody>{pgCxc.visibles.map(f => {
                   const b = BUCKETS_CXC.find(x => f.dias>=x.min && f.dias<=x.max) || BUCKETS_CXC[0];
                   return (

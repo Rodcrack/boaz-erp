@@ -181,9 +181,9 @@ export async function geocodificarDireccion(direccion, distrito) {
 export const esperar = (ms) => new Promise(r => setTimeout(r, ms));
 
 export const ROLES_ACCESO = {
-  admin: ["dashboard","pedidos","servicios","repartidores","unidades","incidencias","inventario","clientes","cotizaciones","catalogo","liquidacion-clientes","facturacion","cobranza","liquidaciones","liquidacion-transporte","planilla","gastos","reportes","rentabilidad","usuarios","configuracion"],
-  operaciones: ["dashboard","pedidos","servicios","repartidores","unidades","incidencias","inventario","clientes","cotizaciones","catalogo"],
-  finanzas: ["dashboard","servicios","clientes","cotizaciones","catalogo","liquidacion-clientes","facturacion","cobranza","liquidaciones","liquidacion-transporte","planilla","gastos","reportes","rentabilidad"],
+  admin: ["dashboard","ayuda","pedidos","servicios","repartidores","unidades","incidencias","inventario","clientes","cotizaciones","catalogo","liquidacion-clientes","facturacion","cobranza","liquidaciones","liquidacion-transporte","planilla","gastos","reportes","rentabilidad","usuarios","configuracion"],
+  operaciones: ["dashboard","ayuda","pedidos","servicios","repartidores","unidades","incidencias","inventario","clientes","cotizaciones","catalogo"],
+  finanzas: ["dashboard","ayuda","servicios","clientes","cotizaciones","catalogo","liquidacion-clientes","facturacion","cobranza","liquidaciones","liquidacion-transporte","planilla","gastos","reportes","rentabilidad"],
 };
 export const Chip = ({ estado, size="sm" }) => {
   const s = ESTADOS_PEDIDO[estado] || { bg:"#F3F4F6", color:"#374151", label: estado };
@@ -311,6 +311,8 @@ export const ICONOS = {
   message:'<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
   columns:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/>',
   printer:'<path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/>',
+  help:'<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
+  book:'<path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/>',
   inbox:'<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
 };
 export const diaLocal = (d=new Date()) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
@@ -381,6 +383,13 @@ if (typeof document !== "undefined" && !document.getElementById("bz-css")) {
       @keyframes bz-slide { from{transform:translateX(40px); opacity:0} to{transform:none; opacity:1} }
       .bz-panel { animation:bz-slide .18s ease-out; }
       .bz-fila-sel td { background:#FFF7ED !important; }
+      .bz-ayuda { position:relative; display:inline-flex; vertical-align:middle; margin-left:5px; color:#8FA3BA; cursor:help; }
+      .bz-ayuda:hover, .bz-ayuda:focus-within { color:#E8780A; }
+      .bz-ayuda-txt { display:none; position:absolute; left:50%; bottom:calc(100% + 8px); transform:translateX(-50%); width:260px; max-width:70vw; background:#0D1E3D; color:#E8EAF0; font-size:12px; font-weight:400; line-height:1.45; text-transform:none; letter-spacing:0; padding:9px 11px; border-radius:8px; box-shadow:0 8px 24px #0D1E3D44; z-index:400; white-space:normal; text-align:left; pointer-events:none; }
+      .bz-ayuda-txt::after { content:""; position:absolute; top:100%; left:50%; margin-left:-6px; border:6px solid transparent; border-top-color:#0D1E3D; }
+      .bz-ayuda:hover .bz-ayuda-txt, .bz-ayuda:focus-within .bz-ayuda-txt { display:block; }
+      .bz-ayuda.bz-ayuda-der .bz-ayuda-txt { left:auto; right:-6px; transform:none; } .bz-ayuda.bz-ayuda-der .bz-ayuda-txt::after { left:auto; right:10px; margin-left:0; }
+      .bz-ayuda.bz-ayuda-abajo .bz-ayuda-txt { bottom:auto; top:calc(100% + 8px); } .bz-ayuda.bz-ayuda-abajo .bz-ayuda-txt::after { top:auto; bottom:100%; border-top-color:transparent; border-bottom-color:#0D1E3D; }
       .bz-card-hover { transition:box-shadow .15s, transform .15s; } .bz-card-hover:hover { box-shadow:0 8px 24px #0D1E3D1A !important; transform:translateY(-1px); }
     `;
     document.head.appendChild(st);
@@ -396,15 +405,23 @@ export function Cargando({ filas=4 }) {
   );
 }
 // Estado vacío con ícono y mensaje
-export function EstadoVacio({ icono="inbox", titulo, texto, children }) {
+export function EstadoVacio({ icono="inbox", titulo, texto, children, pasos, ir, onIr }) {
   return (
     <div style={{ padding:"40px 20px", textAlign:"center" }}>
       <div style={{ width:52, height:52, margin:"0 auto 12px", borderRadius:14, background:B.bg, display:"flex", alignItems:"center", justifyContent:"center", color:B.textMut }}>
         <Ico n={icono} size={24}/>
       </div>
       <div style={{ fontSize:14, fontWeight:700, color:B.textPri }}>{titulo}</div>
-      {texto && <div style={{ fontSize:12, color:B.textSec, marginTop:4 }}>{texto}</div>}
-      {children && <div style={{ marginTop:14 }}>{children}</div>}
+      {texto && <div style={{ fontSize:12, color:B.textSec, marginTop:4, maxWidth:520, margin:"4px auto 0" }}>{texto}</div>}
+      {pasos && pasos.length>0 && (
+        <ol style={{ textAlign:"left", display:"inline-block", margin:"16px auto 0", padding:"12px 16px 12px 34px", background:"#F6F9FC", borderRadius:10, fontSize:12.5, color:B.textPri, lineHeight:1.6, maxWidth:520 }}>
+          {pasos.map((t,i)=><li key={i}>{t}</li>)}
+        </ol>
+      )}
+      {(children || (ir && onIr)) && <div style={{ marginTop:14, display:"flex", gap:8, justifyContent:"center", flexWrap:"wrap" }}>
+        {children}
+        {ir && onIr && <BtnSec onClick={()=>onIr(ir.id)}>{ir.label} <Ico n="arrow" size={14}/></BtnSec>}
+      </div>}
     </div>
   );
 }
@@ -448,13 +465,13 @@ export function Sparkline({ datos, color=B.navy, w=90, h=28 }) {
 }
 
 // Tarjeta de indicador (única para todo el ERP)
-export function Kpi({ icon, label, valor, sub, color=B.navy, cv, delta, deltaTxt="", invertir=false, serie }) {
+export function Kpi({ icon, label, valor, sub, color=B.navy, cv, delta, deltaTxt="", invertir=false, serie, ayuda }) {
   const bueno = delta==null ? null : (invertir ? delta<=0 : delta>=0);
   return (
     <div className="bz-card-hover" style={{ ...CARD, padding:"16px 18px", minWidth:0 }}>
       <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
         {icon && <div style={{ width:28, height:28, borderRadius:8, background:`${color}14`, color, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><Ico n={icon} size={16}/></div>}
-        <div style={{ fontSize:12, fontWeight:600, color:B.textSec, flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={label}>{label}</div>
+        <div style={{ fontSize:12, fontWeight:600, color:B.textSec, flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={label}>{label}{ayuda && <Ayuda k={ayuda} size={13}/>}</div>
         {delta!=null && <span style={{ fontSize:11, fontWeight:700, padding:"2px 7px", borderRadius:8, whiteSpace:"nowrap", background: bueno?"#ECFDF5":"#FEF2F2", color: bueno?"#047857":"#B91C1C" }}>{delta>=0?"▲":"▼"} {Math.abs(delta)}%{deltaTxt}</span>}
       </div>
       <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", gap:8 }}>
@@ -529,7 +546,7 @@ export function Buscador({ value, onChange, placeholder="Buscar…", width=320 }
 }
 
 // Encabezado de columna (con orden opcional)
-export function Th({ children, col, orden, onOrden, align="left", style }) {
+export function Th({ children, col, orden, onOrden, align="left", style, ayuda }) {
   const on = col && orden && orden.col===col;
   return (
     <th onClick={()=>col && onOrden && onOrden(col)} className={col?"bz-th-orden":undefined}
@@ -538,6 +555,7 @@ export function Th({ children, col, orden, onOrden, align="left", style }) {
       <span style={{ display:"inline-flex", alignItems:"center", gap:4 }}>
         {children}
         {col && <Ico n={on && orden.dir==="desc" ? "chevdown" : "chevup"} size={12} sw={2.4} style={{ opacity:on?1:0.25 }}/>}
+        {ayuda && <Ayuda k={ayuda} size={13}/>}
       </span>
     </th>
   );
@@ -566,6 +584,53 @@ export function usePaginacion(filas, tamInicial=25, nombre="registros") {
     </div>
   );
   return { visibles, pie, irA:setPag };
+}
+
+// Glosario: explicación corta de los conceptos propios del ERP. Se usa en los tooltips (?) y en Primeros pasos.
+export const GLOSARIO = {
+  ambito: ["Ámbito", "Zona de Lima donde se entrega: Urbano (centro), Semi urbano o Periférico. Define la tarifa base del pedido. El distrito decide el ámbito."],
+  tamano: ["Tamaño", "Banda de peso del paquete: XS hasta 1 kg, S hasta 3 kg, M hasta 7 kg. Sobre 7 kg se cobra un extra por kilo."],
+  servicio: ["Tipo de servicio", "Same Day se entrega el mismo día; Next Day al día siguiente; Especial es un servicio cotizado aparte."],
+  tracking: ["Tracking Boaz", "Código único que Boaz asigna a cada pedido. Es el que el destinatario usa para rastrear en la web."],
+  orden: ["N° de orden", "Número con el que el cliente identifica el pedido en su propio sistema. Es opcional, pero ayuda a conciliar con él."],
+  cod: ["Cobro en destino (COD)", "El repartidor cobra al destinatario al entregar. Ese dinero es del cliente: queda «sin rendir» hasta que el repartidor lo entrega a Boaz."],
+  rendir: ["Rendir", "Entregar a Boaz el dinero cobrado en destino. Se registra en Cobranza → Contraentrega."],
+  lote: ["Lote", "Grupo de pedidos cargados juntos desde un Excel. Permite asignarlos y rastrearlos como un conjunto."],
+  geocodificar: ["Geocodificar", "Convertir la dirección escrita en un punto del mapa. Sin esto el pedido no aparece en el mapa del repartidor."],
+  modalidad: ["Modalidad de cobro", "Cómo se le cobra al cliente: por pedido (cada entrega), por vehículo (unidad por día) o por viaje (recojo o ruta). Un cliente puede tener más de una."],
+  modo_pedido: ["Forma de cobro por pedido", "Según tarifario (ámbito, servicio y peso), precio fijo por pedido, o tarifa por distrito. Se define en la ficha del cliente."],
+  embalaje: ["Recargo por embalaje", "Monto extra que se suma solo a los pedidos marcados como «requiere embalaje» (por ejemplo, pedidos de agencia)."],
+  tarifa_dia: ["Tarifa por día", "Lo que se cobra por cada día que una unidad trabaja para el cliente. Se multiplica por los días del calendario de servicio."],
+  recargo_periferico: ["Recargo periférico", "Monto adicional a la tarifa por día cuando la unidad trabaja en zona periférica."],
+  recargo_feriado: ["Recargo por feriado", "Porcentaje que se suma a la tarifa por día cuando un día de servicio cae en feriado oficial de Perú."],
+  prefacturacion: ["Pre-facturación", "Resumen de todo lo que se le cobra a un cliente en un período (pedidos, unidades, servicios). Sirve para revisar y acordar antes de emitir la factura."],
+  detraccion: ["Detracción", "Porcentaje de la factura que el cliente deposita en la cuenta de detracciones del Banco de la Nación, no a Boaz. El neto a cobrar es el total menos la detracción."],
+  igv: ["IGV", "Impuesto General a las Ventas (18%). Las tarifas del ERP son sin IGV; se suma al facturar."],
+  liquidacion_rep: ["Liquidación de repartidor", "Cálculo de lo que Boaz le paga a un repartidor por un período, según sus entregas o su sueldo fijo."],
+  liquidacion_cliente: ["Liquidación formato Boaz", "Documento Excel con el formato oficial de Boaz que se envía al cliente como sustento de la factura."],
+  servicio_cotizado: ["Servicio cotizado", "Trabajo eventual con precio acordado en el momento (una unidad exclusiva, entregas extra). Se registra en Viajes y servicios con su referencia."],
+  asignacion: ["Asignación de unidad", "Vínculo entre una unidad de la flota y un cliente, con fecha de inicio, tarifa por día y calendario de días trabajados."],
+  calendario: ["Calendario de servicio", "Días exactos en que la unidad trabajó para el cliente. Si no se registra, el ERP estima por el rango de fechas."],
+  antiguedad: ["Antigüedad", "Días desde que se emitió la factura. A más días sin cobrar, más urgente el seguimiento."],
+  margen: ["Margen", "Ingresos sin IGV menos egresos (gastos, pagos a repartidores, planilla y terceros)."],
+  efectividad: ["Efectividad", "Porcentaje de pedidos entregados sobre el total de pedidos finalizados (entregados + no entregados)."],
+  rol: ["Rol", "Define qué módulos puede ver cada usuario: admin ve todo; operaciones y finanzas ven solo lo suyo. Se ajusta en Roles y permisos."],
+  modo_pago_rep: ["Modo de pago del repartidor", "Por pedido (una tarifa por cada entrega) o sueldo fijo mensual. Define cómo se calcula su liquidación."],
+};
+// Botón (?) con explicación al pasar el mouse o enfocar. Se usa junto a etiquetas y encabezados.
+export function Ayuda({ k, texto, size=14, derecha }) {
+  const g = k && GLOSARIO[k];
+  const t = texto || (g && g[1]);
+  const [pos, setPos] = useState("");
+  if (!t) return null;
+  // Si está cerca del borde superior o derecho, el texto se abre hacia abajo o a la izquierda
+  const ubicar = (e) => { const r = e.currentTarget.getBoundingClientRect(); setPos((r.top<120?" bz-ayuda-abajo":"")+(derecha||r.right>window.innerWidth-150?" bz-ayuda-der":"")); };
+  return (
+    <span className={"bz-ayuda"+pos} tabIndex={0} role="img" aria-label={t} onMouseEnter={ubicar} onFocus={ubicar}>
+      <Ico n="help" size={size}/>
+      <span className="bz-ayuda-txt">{g && <b style={{ display:"block", color:"#FFB347", marginBottom:3 }}>{g[0]}</b>}{t}</span>
+    </span>
+  );
 }
 
 // Título de sección dentro de una pantalla

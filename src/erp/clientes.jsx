@@ -1,6 +1,6 @@
 // BOAZ ERP — módulo "clientes" (parte de BoazERP; ver src/BoazERP.jsx)
 import { useState, useEffect, useCallback, useRef, useMemo, Fragment } from "react";
-import { B, BtnIco, BtnPri, BtnSec, Buscador, CARD, EstadoVacio, Ico, TAB_CONT, TAB_SEG, Tabs, XLSX, ZONAS_LIMA, asegurarXLSX, fmt, inp, lbl, normDist, obtenerTarifaEstandar, sb } from "./base.jsx";
+import { Ayuda, B, BtnIco, BtnPri, BtnSec, Buscador, CARD, EstadoVacio, Ico, TAB_CONT, TAB_SEG, Tabs, XLSX, ZONAS_LIMA, asegurarXLSX, fmt, inp, lbl, normDist, obtenerTarifaEstandar, sb } from "./base.jsx";
 
 // ══════════════════════════════════════════════════════════════
 // MÓDULO 3: REPARTIDORES
@@ -227,7 +227,7 @@ export function Repartidores({ repartidores, pedidos, onRefresh, toast }) {
             <div style={{ marginTop:12, padding:"12px 14px", background:B.bg, borderRadius:10 }}>
               <div style={{ fontSize:11, fontWeight:700, color:B.navy, textTransform:"uppercase",
                 letterSpacing:"0.7px", marginBottom:10 }}>Costo de reparto (para el modelo de rentabilidad)</div>
-              <label style={lbl}>¿Cómo se le paga?</label>
+              <label style={lbl}>¿Cómo se le paga?<Ayuda k="modo_pago_rep"/></label>
               <select style={{ ...inp, marginBottom:12 }} value={f.modo_pago} onChange={e=>setF(p=>({...p,modo_pago:e.target.value}))}>
                 <option value="por_pedido">Tarifa fija por pedido/día entregado</option>
                 <option value="sueldo_fijo">Sueldo fijo mensual (no varía por volumen)</option>
@@ -430,7 +430,7 @@ export function Clientes({ tarifasDistrito=[], empresas, pedidos, lineasNegocio,
               </div>
             </div>
             <div style={{ marginTop:16, padding:"12px 14px", background:"#FFF8EF", border:`1px solid ${B.gold}55`, borderRadius:10 }}>
-              <div style={{ fontSize:12, fontWeight:800, color:B.navy, marginBottom:4 }}>Tarifario habilitado para este cliente</div>
+              <div style={{ fontSize:12, fontWeight:800, color:B.navy, marginBottom:4 }}>Tarifario habilitado para este cliente<Ayuda k="modalidad"/></div>
               <div style={{ fontSize:11, color:B.textMut, marginBottom:10 }}>Marca cómo se le cobra según el acuerdo comercial. Puedes habilitar más de una; después configuras las tarifas de cada una desde su tarjeta.</div>
               <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                 {MODALIDADES_TARIFA.map(m => {
@@ -628,7 +628,7 @@ export function FormaCobroPedido({ empresa, tarifasDistrito=[], onSaved, toast }
 
   return (
     <div style={{ border:`1px solid ${B.border}`, borderRadius:12, padding:16, marginBottom:18, background:"#FBFCFE" }}>
-      <div style={{ fontSize:13, fontWeight:700, color:B.navy, marginBottom:4 }}>Cómo se cobra cada pedido</div>
+      <div style={{ fontSize:13, fontWeight:700, color:B.navy, marginBottom:4 }}>Cómo se cobra cada pedido<Ayuda k="modo_pedido"/></div>
       <div style={{ fontSize:12, color:B.textMut, marginBottom:10 }}>Define la regla principal de este cliente. El tarifario por ámbito de abajo se usa cuando la regla no aplica (por ejemplo, un distrito sin tarifa).</div>
       <Tabs valor={modo} onChange={setModo} tabs={[{ id:"tarifario", l:"Según tarifario" }, { id:"fijo", l:"Precio fijo por pedido" }, { id:"distrito", l:"Por distrito" }]}/>
 
@@ -665,7 +665,7 @@ export function FormaCobroPedido({ empresa, tarifasDistrito=[], onSaved, toast }
       )}
 
       <div style={{ display:"flex", alignItems:"flex-end", gap:10, flexWrap:"wrap", marginTop:14, paddingTop:14, borderTop:`1px solid ${B.border}` }}>
-        <div><label style={lbl}>Recargo por embalaje (S/, opcional)</label>
+        <div><label style={lbl}>Recargo por embalaje (S/, opcional)<Ayuda k="embalaje"/></label>
           <input type="number" step="0.01" min="0" style={{ ...inp, width:180, background:B.white }} value={recargo} onChange={e=>setRecargo(e.target.value)} placeholder="0.00"/></div>
         <div style={{ fontSize:12, color:B.textSec, flex:"1 1 200px", paddingBottom:10 }}>Se suma solo a los pedidos que marques con «Requiere embalaje» (por ejemplo, pedidos de agencia).</div>
         <BtnPri onClick={guardar} disabled={guardando}>{guardando ? "Guardando…" : "Guardar forma de cobro"}</BtnPri>
@@ -1048,7 +1048,7 @@ export function ModalTarifarioVehiculoEstandar({ tarifarioVehiculoEstandar, onCl
                     <input type="number" style={inp} value={v.base} onChange={e=>set(tv,"base",e.target.value)}/>
                   </div>
                   <div>
-                    <label style={{ ...lbl, marginBottom:4 }}>Recargo periférico (S/ adicional)</label>
+                    <label style={{ ...lbl, marginBottom:4 }}>Recargo periférico (S/ adicional)<Ayuda k="recargo_periferico"/></label>
                     <input type="number" style={inp} value={v.recargo} onChange={e=>set(tv,"recargo",e.target.value)}/>
                   </div>
                 </div>
@@ -1153,7 +1153,7 @@ export function ModalTarifarioVehiculo({ empresa, tarifarioVehiculoCliente, tari
                     <input type="number" style={inp} value={v.base} onChange={e=>set(tv,"base",e.target.value)}/>
                   </div>
                   <div>
-                    <label style={{ ...lbl, marginBottom:4 }}>Recargo periférico (S/ adicional)</label>
+                    <label style={{ ...lbl, marginBottom:4 }}>Recargo periférico (S/ adicional)<Ayuda k="recargo_periferico"/></label>
                     <input type="number" style={inp} value={v.recargo} onChange={e=>set(tv,"recargo",e.target.value)}/>
                   </div>
                 </div>

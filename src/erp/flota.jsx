@@ -1,6 +1,6 @@
 // BOAZ ERP — módulo "flota" (parte de BoazERP; ver src/BoazERP.jsx)
 import { useState, useEffect, useCallback, useRef, useMemo, Fragment } from "react";
-import { B, BtnPri, BtnSec, Ico, Kpi, TAB_CONT, TAB_SEG, diaLocal, fmt, inp, lbl, sb } from "./base.jsx";
+import { Ayuda, B, BtnPri, BtnSec, EstadoVacio, Ico, Kpi, TAB_CONT, TAB_SEG, diaLocal, fmt, inp, lbl, sb } from "./base.jsx";
 import { esFeriadoPeru } from "./ventas.jsx";
 import { FlotaDocs } from "./operacion.jsx";
 
@@ -106,7 +106,8 @@ export function Unidades({ unidades, asignaciones, empresas, tiposServicio, repa
                 </tr>
                 );
               })}
-              {unidades.length===0 && <tr><td colSpan={6} style={{ padding:32, textAlign:"center", color:B.textMut, fontSize:13 }}>No hay unidades registradas</td></tr>}
+              {unidades.length===0 && <tr><td colSpan={6}><EstadoVacio icono="truck" titulo="Aún no hay unidades en la flota" texto="Una unidad es un vehículo (placa y tipo) que puedes asignar a un cliente por día. Es la base de los clientes que pagan por vehículo, como Deliverman."
+                pasos={["Pulsa «Nueva unidad» y registra placa, tipo de vehículo y conductor habitual.","En la pestaña Asignaciones, vincúlala a un cliente con su tarifa por día.","En Documentos y mantenimiento, carga SOAT y revisión técnica para recibir avisos de vencimiento."]}/></td></tr>}
             </tbody>
           </table>
         </div>
@@ -148,7 +149,8 @@ export function Unidades({ unidades, asignaciones, empresas, tiposServicio, repa
                   </tr>
                 );
               })}
-              {asignaciones.length===0 && <tr><td colSpan={7} style={{ padding:32, textAlign:"center", color:B.textMut, fontSize:13 }}>No hay asignaciones registradas</td></tr>}
+              {asignaciones.length===0 && <tr><td colSpan={7}><EstadoVacio icono="calendar" titulo="Aún no hay unidades asignadas a clientes" texto="Una asignación dice qué unidad trabaja para qué cliente, desde cuándo y a qué tarifa por día. Con eso Liq. Transporte y Pre-facturación calculan lo que se cobra."
+                pasos={["Primero registra la unidad en la pestaña Flota.","Pulsa «Nueva asignación», elige unidad, cliente y fecha de inicio; la tarifa por día se sugiere desde el tarifario.","Cada día trabajado márcalo en «Calendario» para que el cobro sea exacto (si no, se estima por el rango de fechas)."]}/></td></tr>}
             </tbody>
           </table>
         </div>
@@ -172,7 +174,7 @@ export function Unidades({ unidades, asignaciones, empresas, tiposServicio, repa
 // MÓDULO: LIQUIDACIÓN TRANSPORTE (Finanzas — cálculo de IGV/total
 // y calendario de días de servicio para clientes de Transporte y Carga)
 // ══════════════════════════════════════════════════════════════
-export function LiquidacionTransporte({ unidades, asignaciones, empresas, tiposServicio, diasServicio, recargoFeriadoPct, onRefresh, toast }) {
+export function LiquidacionTransporte({ unidades, asignaciones, empresas, tiposServicio, diasServicio, recargoFeriadoPct, onRefresh, toast, onIr }) {
   const [modalCalendario, setModalCalendario] = useState(null);
 
   const marcarLiquidado = async (a) => {
@@ -248,7 +250,7 @@ export function LiquidacionTransporte({ unidades, asignaciones, empresas, tiposS
                 </tr>
               );
             })}
-            {asignaciones.length===0 && <tr><td colSpan={12} style={{ padding:32, textAlign:"center", color:B.textMut, fontSize:13 }}>No hay asignaciones registradas</td></tr>}
+            {asignaciones.length===0 && <tr><td colSpan={12}><EstadoVacio icono="calendar" titulo="Nada que liquidar todavía" texto="Aquí se calcula cuánto se le cobra a cada cliente por sus unidades (días trabajados × tarifa por día, más recargo por feriados). Aparece en cuanto haya asignaciones en Flota." ir={{ id:"unidades", label:"Ir a Flota" }} onIr={onIr}/></td></tr>}
           </tbody>
         </table>
       </div>
@@ -560,7 +562,7 @@ export function ModalAsignacionUnidad({ unidades, empresas, tiposServicio, repar
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12 }}>
           <div><label style={lbl}>Fecha de inicio</label>
             <input type="date" style={inp} value={f.fecha_inicio} onChange={e=>setF(p=>({...p,fecha_inicio:e.target.value}))}/></div>
-          <div><label style={lbl}>Tarifa por día (S/)</label>
+          <div><label style={lbl}>Tarifa por día (S/)<Ayuda k="tarifa_dia"/></label>
             <input type="number" style={inp} value={f.tarifa_dia} onChange={e=>setF(p=>({...p,tarifa_dia:e.target.value}))}/>
             {tarifaSugerida && parseFloat(f.tarifa_dia)!==tarifaSugerida.monto && (
               <button type="button" onClick={()=>setF(p=>({...p,tarifa_dia:tarifaSugerida.monto}))}

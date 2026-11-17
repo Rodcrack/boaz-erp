@@ -81,9 +81,9 @@ export function BarrasAgrupadas({ etiquetas, series, alto=190, formato=(v)=>Stri
   );
 }
 
-export function KpiComparado({ icon, label, valor, previo, valorFmt, serie, color, invertir=false }) {
+export function KpiComparado({ icon, label, valor, previo, valorFmt, serie, color, invertir=false, ayuda }) {
   const delta = previo ? Math.round(((valor-previo)/previo)*100) : null;
-  return <Kpi icon={icon} label={label} valor={valorFmt} delta={delta} invertir={invertir} serie={serie} color={color} sub={delta!=null ? "vs. mismo período del mes anterior" : null}/>;
+  return <Kpi icon={icon} label={label} ayuda={ayuda} valor={valorFmt} delta={delta} invertir={invertir} serie={serie} color={color} sub={delta!=null ? "vs. mismo período del mes anterior" : null}/>;
 }
 
 export const nombreMes = (d) => d.toLocaleDateString("es-PE",{month:"short"}).replace(".","");
@@ -122,7 +122,7 @@ export function ComparativoMes({ pedidos, ingExtra=()=>0, cobraPedido=()=>true }
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14 }}>
         <KpiComparado icon="package" label="Pedidos del mes" valor={a.n} previo={b.n} valorFmt={a.n} serie={sPed} color={B.navy}/>
         <KpiComparado icon="check" label="Entregados" valor={a.ent} previo={b.ent} valorFmt={a.ent} serie={sEnt} color={B.green}/>
-        <KpiComparado icon="trend" label="Efectividad" valor={a.ef} previo={b.ef} valorFmt={a.ef+"%"} serie={sEf} color={B.gold}/>
+        <KpiComparado icon="trend" label="Efectividad" valor={a.ef} previo={b.ef} valorFmt={a.ef+"%"} serie={sEf} color={B.gold} ayuda="efectividad"/>
         <KpiComparado icon="dollar" label="Ingresos estimados (sin IGV)" valor={a.ing} previo={b.ing} valorFmt={fmt.sol(a.ing)} serie={sIng} color={B.goldDk}/>
       </div>
     </div>
@@ -210,7 +210,7 @@ export function DashboardFinanzas() {
         <KpiComparado icon="receipt" label="Facturado del mes" valor={factMes[i]} previo={factMes[i-1]} valorFmt={fmt.sol(factMes[i])} serie={factMes} color={B.navy}/>
         <KpiComparado icon="banknote" label="Cobrado del mes" valor={cobMes[i]} previo={cobMes[i-1]} valorFmt={fmt.sol(cobMes[i])} serie={cobMes} color={B.green}/>
         <KpiComparado icon="wallet" label="Egresos del mes" valor={gastMes[i]} previo={gastMes[i-1]} valorFmt={fmt.sol(gastMes[i])} serie={gastMes} color={B.red} invertir/>
-        <KpiComparado icon="trend" label="Margen (ventas sin IGV − egresos)" valor={margenMes[i]} previo={margenMes[i-1]} valorFmt={fmt.sol(margenMes[i])} serie={margenMes} color={margenMes[i]>=0?B.goldDk:B.red}/>
+        <KpiComparado icon="trend" label="Margen (ventas sin IGV − egresos)" ayuda="margen" valor={margenMes[i]} previo={margenMes[i-1]} valorFmt={fmt.sol(margenMes[i])} serie={margenMes} color={margenMes[i]>=0?B.goldDk:B.red}/>
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr", gap:14, marginBottom:14 }}>
         <div style={tarj}>
@@ -630,7 +630,7 @@ export function DashboardOperacion({ pedidos, repartidores, liquidaciones, cotiz
                 </tr>
               ))}
               {recientes.length===0&&<tr><td colSpan={8} style={{ padding:32, textAlign:"center",
-                color:B.textMut, fontSize:13 }}>No hay pedidos aún</td></tr>}
+                color:B.textMut, fontSize:13 }}>Aún no hay pedidos. Regístralos en Pedidos («Nuevo pedido» o «Carga masiva») y aparecerán aquí los más recientes.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -664,7 +664,7 @@ export function DashboardOperacion({ pedidos, repartidores, liquidaciones, cotiz
             </div>
           ))}
           {repartidores.length===0 && (
-            <div style={{ padding:20, textAlign:"center", color:B.textMut, fontSize:12 }}>Sin repartidores</div>
+            <div style={{ padding:20, textAlign:"center", color:B.textMut, fontSize:12 }}>Sin repartidores. Regístralos en Repartidores para ver aquí su rendimiento.</div>
           )}
         </div>
       </div>

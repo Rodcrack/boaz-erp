@@ -1,6 +1,6 @@
 // BOAZ ERP — módulo "inventario" (parte de BoazERP; ver src/BoazERP.jsx)
 import { useState, useEffect, useCallback, useRef, useMemo, Fragment } from "react";
-import { B, BtnPri, BtnSec, Cargando, Ico, Kpi, TAB_CONT, TAB_SEG, XLSX, asegurarXLSX, fmt, inp, lbl, sb } from "./base.jsx";
+import { B, BtnPri, BtnSec, Cargando, EstadoVacio, Ico, Kpi, TAB_CONT, TAB_SEG, XLSX, asegurarXLSX, fmt, inp, lbl, sb } from "./base.jsx";
 import { normalizarTextoAdmin } from "./pedidos.jsx";
 
 // ══════════════════════════════════════════════════════════════
@@ -175,7 +175,8 @@ export function Inventario({ empresas, toast }) {
                     </tr>
                   );
                 })}
-                {variantes.length===0 && <tr><td colSpan={8} style={{ padding:30, textAlign:"center", color:B.textMut, fontSize:13 }}>Sin productos registrados</td></tr>}
+                {variantes.length===0 && <tr><td colSpan={8}><EstadoVacio icono="warehouse" titulo="Aún no hay productos en el almacén" texto="Este módulo es para clientes a los que les guardas mercadería: registras productos con sus variantes (talla, color), controlas el stock y despachas órdenes con picking por código de barras."
+                pasos={["Crea un producto con «Nuevo producto» o sube varios con «Carga masiva» desde la plantilla Excel.","Registra el ingreso de stock en la pestaña Movimientos.","Cuando el cliente pida, crea una orden en Órdenes y despáchala escaneando los códigos."]}/></td></tr>}
               </tbody>
             </table>
           </div>

@@ -1,6 +1,6 @@
 // BOAZ ERP — módulo "operacion" (parte de BoazERP; ver src/BoazERP.jsx)
 import { useState, useEffect, useCallback, useRef, useMemo, Fragment } from "react";
-import { B, BtnIco, BtnPri, BtnSec, Buscador, CARD, Cargando, Confirm, EstadoVacio, Etiqueta, Ico, Kpi, KpiDS, TAB_CONT, TAB_SEG, Tabs, XLSX, asegurarXLSX, diaLocal, fmt, inp, kpiMini, lbl, sb, usePaginacion } from "./base.jsx";
+import { Ayuda, B, BtnIco, BtnPri, BtnSec, Buscador, CARD, Cargando, Confirm, EstadoVacio, Etiqueta, Ico, Kpi, KpiDS, TAB_CONT, TAB_SEG, Tabs, XLSX, asegurarXLSX, diaLocal, fmt, inp, kpiMini, lbl, sb, usePaginacion } from "./base.jsx";
 import { esFeriadoPeru } from "./ventas.jsx";
 import { solN } from "./costos.jsx";
 
@@ -947,7 +947,7 @@ export function UsuariosAuditoria({ usuario, navModulos, onPermisosCambio, toast
           </div>)}
         <div style={{ ...card, overflowX:"auto" }}>
           {cargando ? <Cargando filas={4}/> : <table style={{ width:"100%", borderCollapse:"collapse" }}>
-            <thead><tr><th style={th}>Nombre</th><th style={th}>Correo</th><th style={th}>Rol</th><th style={th}>Estado</th></tr></thead>
+            <thead><tr><th style={th}>Nombre</th><th style={th}>Correo</th><th style={th}>Rol<Ayuda k="rol" size={13}/></th><th style={th}>Estado</th></tr></thead>
             <tbody>{usuarios.map(u => (
               <tr key={u.id}>
                 <td style={{...td,fontWeight:700}}>{u.nombre}{u.id===usuario.id && <span style={{ marginLeft:8, fontSize:10, background:B.bg, color:B.textSec, padding:"1px 8px", borderRadius:10 }}>tú</span>}</td>

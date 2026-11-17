@@ -11,6 +11,7 @@ import { Incidencias, Rentabilidad, ServiciosCliente, UsuariosAuditoria } from "
 import { Gastos, Planilla } from "./erp/costos.jsx";
 import { Inventario } from "./erp/inventario.jsx";
 import { Catalogo, Configuracion, Reportes } from "./erp/reportes.jsx";
+import { PrimerosPasos } from "./erp/ayuda.jsx";
 
 export function Login({ onLogin }) {
   const [email, setEmail] = useState("");
@@ -92,6 +93,18 @@ export default function BoazERP() {
     setSesion(null); setUsuario(null);
   };
   const [seccion, setSeccion] = useState("dashboard");
+  // Conteos ligeros para la página Primeros pasos
+  const [nFacturasAyuda, setNFacturasAyuda] = useState(0);
+  const [nUsuariosAyuda, setNUsuariosAyuda] = useState(1);
+  useEffect(() => {
+    if (seccion!=="ayuda") return;
+    let vivo = true;
+    (async () => { try {
+      const [f,u] = await Promise.all([sb.from("facturas").select("id",{count:"exact",head:true}), sb.from("usuarios").select("id",{count:"exact",head:true})]);
+      if (vivo) { if (f.count!=null) setNFacturasAyuda(f.count); if (u.count!=null) setNUsuariosAyuda(Math.max(1,u.count)); }
+    } catch {} })();
+    return () => { vivo = false; };
+  }, [seccion]);
   const [pedidos, setPedidos] = useState([]);
   const [repartidores, setRepartidores] = useState([]);
   const [empresas, setEmpresas] = useState([]);
@@ -189,6 +202,7 @@ export default function BoazERP() {
   const NAV = [
     { section:"OPERACIÓN" },
     { id:"dashboard",    icon:"dashboard", label:"Dashboard" },
+    { id:"ayuda",        icon:"book",      label:"Primeros pasos" },
     { id:"pedidos",      icon:"package",   label:"Pedidos",
       badge: pedidos.filter(p=>p.estado==="sin_asignar").length || null },
     { id:"servicios",    icon:"map",       label:"Viajes y servicios" },
@@ -265,7 +279,7 @@ if (verificando) {
     return <Login onLogin={cargarUsuario}/>;
   }
 
-  const modulosRol = usuario.rol==="admin" ? ROLES_ACCESO.admin : [...new Set(["dashboard", ...((permisosDB && permisosDB[usuario.rol]) || ROLES_ACCESO[usuario.rol] || [])])];
+  const modulosRol = usuario.rol==="admin" ? ROLES_ACCESO.admin : [...new Set(["dashboard","ayuda", ...((permisosDB && permisosDB[usuario.rol]) || ROLES_ACCESO[usuario.rol] || [])])];
   const navVisible = NAV.filter(n => n.section || modulosRol.includes(n.id)).filter((n,i,arr) => !n.section || (arr[i+1] && !arr[i+1].section));
   const seccionOk = modulosRol.includes(seccion);
   const navConSeccion = (() => { let act = null; return navVisible.map(n => { if (n.section) act = n.section; return { ...n, _sec: act }; }); })();
@@ -393,6 +407,9 @@ if (verificando) {
               style={{ background:B.bg, border:`1px solid ${B.border}`,
                 color:B.textSec, padding:"7px 14px", borderRadius:8,
                 cursor:"pointer", fontSize:12, display:"flex", alignItems:"center", gap:6 }}><Ico n="refresh" size={14}/> <span className="bz-oculta-movil">Actualizar</span></button>
+            <button onClick={()=>setSeccion("ayuda")} title="Primeros pasos, preguntas frecuentes y glosario" aria-label="Ayuda"
+              style={{ background: seccion==="ayuda" ? `${B.gold}1A` : B.bg, border:`1px solid ${seccion==="ayuda" ? B.gold : B.border}`, color: seccion==="ayuda" ? B.goldDk : B.textSec,
+                width:34, height:34, borderRadius:8, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}><Ico n="help" size={17}/></button>
             <div style={{ display:"flex", alignItems:"center", gap:8 }}>
   <div className="bz-oculta-movil" style={{ textAlign:"right" }}>
     <div style={{ fontSize:12, fontWeight:700, color:B.navy }}>{usuario.nombre}</div>
@@ -433,7 +450,7 @@ if (verificando) {
               {seccionOk && seccion==="cotizaciones"  && <Cotizaciones toast={showToast} onCambio={setCotizNuevas}/>}
               {seccionOk && seccion==="catalogo"      && <Catalogo empresas={empresas} tarifasDistrito={tarifasDistrito} tarifariosCliente={tarifariosCliente} tarifarioVehiculoCliente={tarifarioVehiculoCliente} tarifasViajeCliente={tarifasViajeCliente} tarifarioViajeEstandar={tarifarioViajeEstandar} lineasNegocio={lineasNegocio} tiposServicio={tiposServicio} tarifarioEstandar={tarifarioEstandar} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} recargoFeriadoPct={recargoFeriadoPct} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccionOk && seccion==="liquidaciones" && <Liquidaciones repartidores={repartidores} pedidos={pedidos} liquidaciones={liquidaciones} onRefresh={cargarSilencioso} toast={showToast}/>}
-              {seccionOk && seccion==="liquidacion-transporte" && <LiquidacionTransporte unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} diasServicio={diasServicio} recargoFeriadoPct={recargoFeriadoPct} onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccionOk && seccion==="liquidacion-transporte" && <LiquidacionTransporte onIr={setSeccion} unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} diasServicio={diasServicio} recargoFeriadoPct={recargoFeriadoPct} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccionOk && seccion==="liquidacion-clientes" && <LiquidacionClientes pedidos={pedidos} empresas={empresas} unidades={unidades} asignacionesUnidad={asignacionesUnidad} diasServicio={diasServicio} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} recargoFeriadoPct={recargoFeriadoPct} toast={showToast}/>}
               {seccionOk && seccion==="facturacion"   && <Facturacion empresas={empresas} pedidos={pedidos} tiposServicio={tiposServicio} usuario={usuario} toast={showToast}/>}
               {seccionOk && seccion==="servicios"     && <ServiciosCliente empresas={empresas} repartidores={repartidores} unidades={unidades} tarifasViajeCliente={tarifasViajeCliente} tarifarioViajeEstandar={tarifarioViajeEstandar} usuario={usuario} toast={showToast}/>}
@@ -445,6 +462,7 @@ if (verificando) {
               {seccionOk && seccion==="rentabilidad"  && <Rentabilidad pedidos={pedidos} empresas={empresas} repartidores={repartidores} unidades={unidades} asignaciones={asignacionesUnidad} diasServicio={diasServicio} recargoFeriadoPct={recargoFeriadoPct} toast={showToast}/>}
               {seccionOk && seccion==="reportes"      && <Reportes pedidos={pedidos} repartidores={repartidores} empresas={empresas} toast={showToast} onIr={setSeccion}/>}
               {seccionOk && seccion==="configuracion" && <Configuracion onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccionOk && seccion==="ayuda"         && <PrimerosPasos empresas={empresas} repartidores={repartidores} unidades={unidades} pedidos={pedidos} nFacturas={nFacturasAyuda} nUsuarios={nUsuariosAyuda} onIr={setSeccion}/>}
             </>
           )}
         </div>

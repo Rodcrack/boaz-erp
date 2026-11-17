@@ -1,6 +1,6 @@
 // BOAZ ERP — módulo "reportes" (parte de BoazERP; ver src/BoazERP.jsx)
 import { useState, useEffect, useCallback, useRef, useMemo, Fragment } from "react";
-import { B, BtnPri, BtnSec, Ico, Kpi, Tabs, fmt, inp, lbl, sb } from "./base.jsx";
+import { Ayuda, B, BtnPri, BtnSec, Ico, Kpi, Tabs, fmt, inp, lbl, sb } from "./base.jsx";
 import { ModalTarifarioCliente, ModalTarifarioEstandar, ModalTarifarioVehiculo, ModalTarifarioVehiculoEstandar, ModalTarifarioViaje, modalidadesDe } from "./clientes.jsx";
 import { TIPOS_SERVICIO } from "./ventas.jsx";
 
@@ -370,7 +370,7 @@ export function Reportes({ pedidos, repartidores, empresas, toast, onIr }) {
           {topDistritos.map(([d,v])=>(
             <BarraHorizontal key={d} label={d} valor={v} max={maxDistrito} color={B.gold}/>
           ))}
-          {topDistritos.length===0 && <div style={{ fontSize:12, color:B.textMut, textAlign:"center" }}>Sin datos</div>}
+          {topDistritos.length===0 && <div style={{ fontSize:12, color:B.textMut, textAlign:"center", padding:10 }}>Sin pedidos con distrito en este período. Al registrar pedidos indica el distrito para ver aquí dónde entregas más.</div>}
         </div>
         <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12,
           padding:20, boxShadow:"0 1px 2px #0D1E3D0D" }}>
@@ -429,7 +429,7 @@ export function Reportes({ pedidos, repartidores, empresas, toast, onIr }) {
                 </tr>
               ))}
               {stats.length===0&&<tr><td colSpan={6} style={{ padding:24, textAlign:"center",
-                color:B.textMut }}>Sin datos</td></tr>}
+                color:B.textMut }}>Sin entregas de repartidores en este período. Cambia las fechas arriba o asigna pedidos en Pedidos.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -778,7 +778,7 @@ export function Catalogo({ tarifasDistrito=[], lineasNegocio, tiposServicio, tar
       <div style={{ background:B.white, border:`1px solid ${B.border}`,
         borderRadius:12, padding:20, boxShadow:"0 1px 2px #0D1E3D0D", gridColumn:"span 2" }}>
         <div style={{ fontSize:14, fontWeight:800, color:B.navy, marginBottom:12,
-          paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>Recargo por feriados</div>
+          paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>Recargo por feriados<Ayuda k="recargo_feriado"/></div>
         <div style={{ fontSize:12, color:B.textMut, marginBottom:12 }}>
           Se aplica automáticamente sobre la tarifa/día de Transporte y Carga cuando un día marcado como activo en el calendario de servicio cae en un feriado oficial de Perú.
         </div>
@@ -797,7 +797,7 @@ export function Catalogo({ tarifasDistrito=[], lineasNegocio, tiposServicio, tar
         borderRadius:12, padding:20, boxShadow:"0 1px 2px #0D1E3D0D" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
           marginBottom:12, paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>
-          <div style={{ fontSize:14, fontWeight:800, color:B.navy }}>Tarifario estándar por pedido</div>
+          <div style={{ fontSize:14, fontWeight:800, color:B.navy }}>Tarifario estándar por pedido<Ayuda k="ambito"/></div>
           <button onClick={()=>setModalTarifarioEstandar(true)}
             style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer", fontWeight:700 }}>
             <Ico n="edit" size={13} style={{ display:"inline-block", verticalAlign:"-2px", marginRight:5 }}/>Editar
@@ -853,7 +853,7 @@ export function Catalogo({ tarifasDistrito=[], lineasNegocio, tiposServicio, tar
         borderRadius:12, padding:20, boxShadow:"0 1px 2px #0D1E3D0D" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
           marginBottom:16, paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>
-          <div style={{ fontSize:14, fontWeight:800, color:B.navy }}>Tarifario estándar por unidad</div>
+          <div style={{ fontSize:14, fontWeight:800, color:B.navy }}>Tarifario estándar por unidad<Ayuda k="tarifa_dia"/></div>
           <button onClick={()=>setModalTarifarioVehiculoEstandar(true)}
             style={{ fontSize:11, color:B.blue, background:"none", border:"none", cursor:"pointer", fontWeight:700 }}>
             <Ico n="edit" size={13} style={{ display:"inline-block", verticalAlign:"-2px", marginRight:5 }}/>Editar
@@ -895,7 +895,7 @@ export function Catalogo({ tarifasDistrito=[], lineasNegocio, tiposServicio, tar
       {/* Tarifario estándar por viaje */}
       <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:20, boxShadow:"0 1px 2px #0D1E3D0D", gridColumn:"span 2" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, paddingBottom:8, borderBottom:`2px solid ${B.gold}` }}>
-          <div style={{ fontSize:14, fontWeight:800, color:B.navy }}>Tarifario estándar por viaje</div>
+          <div style={{ fontSize:14, fontWeight:800, color:B.navy }}>Tarifario estándar por viaje<Ayuda k="modalidad"/></div>
           <button onClick={()=>setModalViajeEstandar(true)} style={{ fontSize:11, color:B.blue, background:"none", border:`1px solid ${B.border}`, borderRadius:8, padding:"5px 12px", cursor:"pointer", fontWeight:700 }}><Ico n="edit" size={13} style={{ display:"inline-block", verticalAlign:"-2px", marginRight:5 }}/>Editar</button>
         </div>
         {tarifarioViajeEstandar.filter(t=>t.activo).length===0 ? (
@@ -926,7 +926,7 @@ export function Catalogo({ tarifasDistrito=[], lineasNegocio, tiposServicio, tar
         </div>
         {lineasNegocio.length===0 ? (
           <div style={{ padding:24, textAlign:"center", color:B.textMut, fontSize:13 }}>
-            Aún no hay líneas de negocio registradas
+            Aún no hay líneas de negocio. Son las grandes familias de servicio (Transporte y Carga, Distribución y Última Milla); cada una tiene tipos de servicio que luego eliges al facturar.
           </div>
         ) : (
           <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
