@@ -196,15 +196,102 @@ export const Chip = ({ estado, size="sm" }) => {
   );
 };
 
+// ── ERRORES EN LENGUAJE HUMANO ────────────────────────────────
+// Los errores de la base de datos llegan en inglés técnico ("permission denied for table…").
+// Aquí se traducen a qué pasó y qué hacer. El texto original se conserva como "detalle técnico".
+const NOMBRE_TABLA = {
+  pedidos:"pedidos", empresas:"clientes", repartidores:"repartidores", facturas:"facturas", gastos:"gastos", liquidaciones:"liquidaciones de repartidores",
+  liquidacion_pedidos:"liquidaciones de repartidores", unidades_transporte:"unidades de la flota", asignaciones_unidad:"asignaciones de unidades",
+  dias_servicio_unidad:"calendario de servicio", vehiculo_documentos:"documentos de flota", incidencias:"incidencias", cotizaciones:"cotizaciones",
+  usuarios:"usuarios", roles_permisos:"roles y permisos", auditoria:"auditoría", personal_planilla:"personal en planilla", terceros_planilla:"terceros",
+  pagos_planilla:"pagos de planilla", pagos_terceros:"pagos a terceros", tarifarios_cliente:"tarifas por pedido", tarifario_estandar:"tarifario estándar",
+  tarifarios_vehiculo_cliente:"tarifas por vehículo", tarifario_vehiculo_estandar:"tarifario estándar por unidad", tarifarios_viaje_cliente:"tarifas por viaje",
+  tarifario_viaje_estandar:"tarifario estándar por viaje", tarifas_distrito_cliente:"tarifas por distrito", servicios_cliente:"viajes y servicios",
+  lineas_negocio:"líneas de negocio", tipos_servicio:"tipos de servicio", configuracion_recargos:"recargo por feriados", productos:"productos",
+  producto_variantes:"productos", inventario_movimientos:"movimientos de inventario", ordenes_despacho:"órdenes de despacho", clientes_usuarios:"usuarios del portal",
+  empresas_codigo_seq:"código de clientes",
+};
+const CAMPO = { ruc:"RUC", placa:"placa", codigo:"código", codigo_interno:"código", dni:"DNI", usuario:"usuario", usuario_app:"usuario de la app", email:"correo",
+  omd:"tracking", numero:"número", serie:"serie", nombre:"nombre", nombres:"nombres", empresa_id:"cliente", repartidor_id:"repartidor", unidad_id:"unidad",
+  fecha:"fecha", monto:"monto", tarifa:"tarifa", concepto:"concepto", distrito:"distrito", sku:"SKU", periodo:"período", cantidad:"cantidad",
+  tarifa_unit:"tarifa", tarifa_dia:"tarifa por día", modo_pedido:"forma de cobro por pedido", precio_fijo_pedido:"precio fijo por pedido",
+  recargo_embalaje:"recargo por embalaje", modalidades_tarifa:"modalidad de cobro", fecha_pago:"fecha de pago", con_embalaje:"embalaje", estado:"estado", tipo:"tipo" };
+const FEMENINO = new Set(["placa","fecha","tarifa","serie","cantidad","tarifa_unit","tarifa_dia","forma de cobro por pedido","modalidad de cobro","fecha_pago"]);
+const conArticulo = (c) => `${FEMENINO.has(c) ? "esa misma" : "ese mismo"} ${nomCampo(c)}`;
+const nomTabla = (t) => NOMBRE_TABLA[t] || (t||"").replace(/_/g," ");
+const nomCampo = (c) => CAMPO[c] || (c||"").replace(/_/g," ");
+const SQL_VERIF = "Pide a quien administra el sistema que ejecute en Supabase el SQL pendiente (verificar_instalacion_boaz.sql muestra cuál falta).";
+const REGLAS_ERROR = [
+  [/sesion_invalida|jwt expired|invalid jwt|refresh token|not authenticated|auth session missing/i, () => "Tu sesión expiró. Cierra sesión y vuelve a entrar."],
+  [/invalid login credentials/i, () => "Correo o contraseña incorrectos."],
+  [/email not confirmed/i, () => "Este correo aún no está confirmado. Revisa la bandeja de entrada o pide que lo confirmen en Supabase."],
+  [/failed to fetch|networkerror|network request failed|load failed|err_internet|timeout|timed out|fetch failed/i, () => "No hay conexión con el servidor. Revisa tu internet e intenta de nuevo."],
+  [/too many|rate limit|demasiados intentos/i, () => "Demasiados intentos seguidos. Espera un minuto y vuelve a intentar."],
+  [/permission denied for (?:table|relation|view) "?(\w+)"?/i, (m) => `No tienes permiso para modificar ${nomTabla(m[1])}. Pide a un administrador que lo habilite en Usuarios y auditoría → Roles y permisos.`],
+  [/permission denied for sequence "?(\w+)"?/i, (m) => `No se pudo generar el ${nomTabla(m[1])} porque falta un permiso en la base de datos. Pide a quien administra el sistema que ejecute fix_secuencias_boaz.sql en Supabase.`],
+  [/permission denied for function "?(\w+)"?/i, () => `No tienes permiso para esta acción. Si eres administrador, ${SQL_VERIF.charAt(0).toLowerCase()+SQL_VERIF.slice(1)}`],
+  [/new row violates row-level security policy(?: for table "?(\w+)"?)?|row-level security/i, (m) => `Tu usuario no tiene permiso para guardar ${m[1] ? nomTabla(m[1]) : "este dato"}. Revisa que tu cuenta esté activa y que tu rol tenga acceso a este módulo.`],
+  [/relation "?(?:public\.)?(\w+)"? does not exist|could not find the table '?(?:public\.)?(\w+)'?/i, (m) => `Falta activar «${nomTabla(m[1]||m[2])}» en la base de datos. ${SQL_VERIF}`],
+  [/column "?(?:\w+\.)?(\w+)"? (?:of relation "?\w+"? )?does not exist|could not find the '?(\w+)'? column/i, (m) => `La base de datos no tiene el campo «${nomCampo(m[1]||m[2])}»: falta una actualización. ${SQL_VERIF}`],
+  [/function .*?(\w+)\(.*\) does not exist|could not find the function/i, () => `Falta una función en la base de datos. ${SQL_VERIF}`],
+  [/duplicate key value violates unique constraint "?(\w+)"?(?:[\s\S]*Key \((\w+)\))?/i, (m) => { const c = m[2] || (Object.keys(CAMPO).find(k => (m[1]||"").includes(k))); return c ? `Ya existe un registro con ${conArticulo(c)}. Revisa que no esté duplicado.` : "Ya existe un registro igual. Revisa que no esté duplicado."; }],
+  [/update or delete on table "?(\w+)"? violates foreign key constraint[\s\S]*on table "?(\w+)"?/i, (m) => `No se puede eliminar porque tiene ${nomTabla(m[2])} vinculados. Elimina o reasigna esos registros primero, o desactívalo en lugar de borrarlo.`],
+  [/violates foreign key constraint/i, () => "El registro al que haces referencia ya no existe (por ejemplo, un cliente o repartidor eliminado). Recarga la página y vuelve a elegirlo."],
+  [/null value in column "?(\w+)"?/i, (m) => `Falta completar el campo «${nomCampo(m[1])}».`],
+  [/violates check constraint "?(\w+)"?/i, (m) => { const c = Object.keys(CAMPO).find(k => (m[1]||"").includes(k)); return `Un valor no es válido${c ? ` en «${nomCampo(c)}»` : ""}: revisa que los montos no sean negativos y que las opciones elegidas sean de la lista.`; }],
+  [/invalid input syntax for type (\w+)/i, (m) => /date|time/i.test(m[1]) ? "Una fecha no tiene el formato correcto." : /uuid/i.test(m[1]) ? "Falta elegir un elemento de la lista (cliente, repartidor u otro)." : "Un campo numérico tiene texto o un formato incorrecto. Usa solo números y punto decimal."],
+  [/value too long for type/i, () => "Uno de los textos es demasiado largo. Acórtalo e intenta de nuevo."],
+  [/numeric field overflow|out of range/i, () => "Un número es demasiado grande. Revisa los montos o cantidades."],
+  [/payload too large|exceeded the maximum allowed size|entity too large/i, () => "El archivo es demasiado grande. Usa uno más liviano (por ejemplo, una foto en menor resolución)."],
+  [/bucket not found/i, () => `Falta configurar el almacenamiento de archivos en Supabase. ${SQL_VERIF}`],
+  [/the resource already exists/i, () => "Ya existe un archivo con ese nombre. Cámbiale el nombre e intenta de nuevo."],
+  [/xlsx no cargado|exceljs|no se pudo cargar el generador/i, () => "No se pudo cargar la herramienta de Excel. Revisa tu conexión y vuelve a intentar."],
+];
+// Devuelve { texto, tecnico } — texto listo para mostrar; tecnico es el original si se tradujo
+export function traducirError(msg) {
+  const original = String(msg||"");
+  for (const [re, fn] of REGLAS_ERROR) {
+    const m = original.match(re);
+    if (!m) continue;
+    // Conserva solo una introducción en español escrita por el ERP ("No se pudo guardar la nota: …"); nunca restos en inglés
+    const cab = original.includes(":") ? original.slice(0, original.indexOf(":")).trim() : "";
+    let prefijo = /^(no se pud|error (al|preparando|guardando|cargando)|no fue posible)/i.test(cab) ? cab : "";
+    // Si el código ya traía un consejo específico ("— falta ejecutar X.sql"), se mantiene
+    const pista = (original.match(/—\s*(falta ejecutar[^]*)$/i)||[])[1];
+    let texto = fn(m);
+    // Evita repetir la misma idea ("No se pudo eliminar. No se puede eliminar…")
+    const verbo = (prefijo.match(/(\w+)\s*$/)||[])[1];
+    if (verbo && texto.slice(0,60).toLowerCase().includes(verbo.toLowerCase())) prefijo = "";
+    if (pista && /base de datos|SQL/i.test(texto)) texto = texto.replace(SQL_VERIF, `Falta ejecutar ${pista.replace(/^falta ejecutar\s*/i,"")}.`);
+    return { texto: (prefijo ? prefijo + ". " : "") + texto, tecnico: original };
+  }
+  return { texto: original, tecnico: null };
+}
+
 // ── TOAST ─────────────────────────────────────────────────────
 export function Toast({ msg, tipo, onClose }) {
-  useEffect(() => { const t = setTimeout(onClose, 3500); return () => clearTimeout(t); }, [onClose]);
+  const esError = tipo==="error";
+  const { texto, tecnico } = esError ? traducirError(msg) : { texto: msg, tecnico: null };
+  const [verDetalle, setVerDetalle] = useState(false);
+  const [fijo, setFijo] = useState(false);
+  // Los errores se quedan más tiempo (hay que leerlos); si el usuario abre el detalle, no se cierran solos
+  useEffect(() => { if (fijo) return; const t = setTimeout(onClose, esError ? 9000 : 3500); return () => clearTimeout(t); }, [onClose, esError, fijo]);
+  useEffect(() => { if (tecnico) console.warn("[Boaz ERP] Error técnico:", tecnico); }, [tecnico]);
   return (
-    <div className="bz-toast" role="status" style={{ position:"fixed", bottom:24, right:24, zIndex:9999,
-      background: tipo==="error" ? B.red : tipo==="warn" ? B.orange : B.green,
-      color:"#fff", padding:"14px 22px", borderRadius:12, fontWeight:600,
-      fontSize:13, boxShadow:"0 8px 32px #0003", display:"flex", alignItems:"center", gap:10 }}>
-      <Ico n={tipo==="error"?"xcircle":tipo==="warn"?"alert":"check"} size={18} color="#fff"/> {msg}
+    <div className="bz-toast" role={esError ? "alert" : "status"} style={{ position:"fixed", bottom:24, right:24, zIndex:9999, maxWidth:440,
+      background: esError ? "#B91C1C" : tipo==="warn" ? "#C2410C" : "#047857",
+      color:"#fff", padding:"13px 16px", borderRadius:12, fontWeight:600,
+      fontSize:13, lineHeight:1.45, boxShadow:"0 8px 32px #0003", display:"flex", alignItems:"flex-start", gap:10 }}>
+      <Ico n={esError?"xcircle":tipo==="warn"?"alert":"check"} size={18} color="#fff" style={{ marginTop:1 }}/>
+      <div style={{ flex:1, minWidth:0 }}>
+        <div>{texto}</div>
+        {tecnico && (
+          <button onClick={()=>{ setVerDetalle(v=>!v); setFijo(true); }} style={{ marginTop:6, background:"none", border:"none", color:"#FECACA", fontSize:11.5, fontWeight:600, cursor:"pointer", padding:0, textDecoration:"underline" }}>
+            {verDetalle ? "Ocultar detalle técnico" : "Ver detalle técnico"}</button>
+        )}
+        {verDetalle && tecnico && <div style={{ marginTop:6, padding:"6px 8px", background:"#00000026", borderRadius:6, fontSize:11.5, fontWeight:400, fontFamily:"ui-monospace,Consolas,monospace", wordBreak:"break-word", userSelect:"text" }}>{tecnico}</div>}
+      </div>
+      {(esError || fijo) && <button onClick={onClose} aria-label="Cerrar aviso" style={{ background:"none", border:"none", color:"#fff", opacity:.8, cursor:"pointer", padding:0, display:"flex" }}><Ico n="x" size={16}/></button>}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 // BOAZ ERP — entrada principal: inicio de sesión, menú y carga de datos.
 // Los módulos están en la carpeta ./erp/
 import { useState, useEffect, useCallback, useRef, useMemo, Fragment } from "react";
-import { B, EstadoVacio, Ico, PaletaComandos, ROLES_ACCESO, Toast, cargarPedidosLiviano, sb, setTarifasDistritoGlobal, traerTodo } from "./erp/base.jsx";
+import { B, EstadoVacio, Ico, traducirError, PaletaComandos, ROLES_ACCESO, Toast, cargarPedidosLiviano, sb, setTarifasDistritoGlobal, traerTodo } from "./erp/base.jsx";
 import { Dashboard } from "./erp/dashboard.jsx";
 import { Pedidos } from "./erp/pedidos.jsx";
 import { Clientes, Repartidores } from "./erp/clientes.jsx";
@@ -23,7 +23,7 @@ export function Login({ onLogin }) {
     if (!email || !password) { setError("Completa email y contraseña"); return; }
     setCargando(true); setError("");
     const { data, error } = await sb.auth.signInWithPassword({ email, password });
-    if (error) { setError("Credenciales incorrectas"); setCargando(false); return; }
+    if (error) { setError(/invalid login credentials/i.test(error.message||"") ? "Correo o contraseña incorrectos." : traducirError(error.message).texto); setCargando(false); return; }
     onLogin(data.session);
   };
 
