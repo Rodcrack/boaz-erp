@@ -197,19 +197,25 @@ export function FlotaDocs({ unidades, repartidores, toast, onIr }) {
 // ── RENTABILIDAD POR CLIENTE ──────────────────────────────────
 export const dia10 = (v) => String(v||"").slice(0,10);
 export const costoDiaPersona = (r) => !r ? 0 : (r.modo_pago==="sueldo_fijo" ? (parseFloat(r.sueldo_fijo_mensual)||0)/30 : (parseFloat(r.tarifa_variable)||0));
-export function montoAsignacionPeriodo(a, diasServicio, desde, hasta, pct) {
+// Días trabajados y monto (sin IGV) de una unidad asignada, dentro de un período. Regla única para todo el ERP
+// (Pre-facturación, Dashboard y Rentabilidad):
+//  · Si la asignación usa calendario de servicio, cuentan SOLO los días marcados como prestados dentro del período,
+//    con el recargo por feriado en los días que caen en feriado oficial.
+//  · Si no usa calendario, se estima por fechas: desde el inicio de la asignación hasta su fin, o hasta hoy si sigue
+//    abierta (nunca se cuentan días futuros). Sin recargo, porque no se sabe qué días exactos se trabajó.
+export function montoAsignacionPeriodo(a, diasServicio, desde, hasta, pct, hoy = diaLocal()) {
   const tarifa = parseFloat(a.tarifa_dia)||0;
   const reg = diasServicio.filter(d => d.asignacion_id===a.id);
   if (reg.length>0) {
     const l = reg.filter(d => d.prestado && dia10(d.fecha)>=desde && dia10(d.fecha)<=hasta);
-    return { dias:l.length, monto:l.reduce((s,d)=>s+tarifa+(esFeriadoPeru(dia10(d.fecha))?tarifa*(pct/100):0),0) };
+    return { dias:l.length, monto:l.reduce((s,d)=>s+tarifa+(esFeriadoPeru(dia10(d.fecha))?tarifa*((parseFloat(pct)||0)/100):0),0), conCalendario:true };
   }
   const ini = dia10(a.fecha_inicio) > desde ? dia10(a.fecha_inicio) : desde;
-  const finA = a.fecha_fin ? dia10(a.fecha_fin) : hasta;
+  const finA = a.fecha_fin ? dia10(a.fecha_fin) : (hoy < hasta ? hoy : hasta);
   const fin = finA < hasta ? finA : hasta;
-  if (fin < ini) return { dias:0, monto:0 };
+  if (fin < ini) return { dias:0, monto:0, conCalendario:false };
   const dias = Math.round((new Date(fin+"T00:00:00")-new Date(ini+"T00:00:00"))/86400000)+1;
-  return { dias, monto:dias*tarifa };
+  return { dias, monto:dias*tarifa, conCalendario:false };
 }
 
 export function Rentabilidad({ pedidos, empresas, repartidores, unidades, asignaciones, diasServicio, recargoFeriadoPct, toast }) {

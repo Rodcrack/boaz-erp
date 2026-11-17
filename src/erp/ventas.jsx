@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo, Fragment } from "react";
 import { Ayuda, B, BtnIco, BtnPri, BtnSec, Buscador, CARD, Cargando, Confirm, EstadoVacio, Etiqueta, Ico, Kpi, KpiDS, TAB_CONT, TAB_SEG, TD, TDN, TDS, Tabs, Th, XLSX, asegurarXLSX, diaLocal, escHTML, fmt, inp, lbl, sb, traerTodo, usePaginacion } from "./base.jsx";
 import { clienteCobraPorPedido } from "./dashboard.jsx";
-import { TIPOS_SERV, cargarServicios } from "./operacion.jsx";
+import { TIPOS_SERV, cargarServicios, montoAsignacionPeriodo } from "./operacion.jsx";
 import { solN } from "./costos.jsx";
 
 // ══════════════════════════════════════════════════════════════
@@ -863,22 +863,11 @@ export function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesU
     return Math.round((hasta-desde)/86400000)+1;
   };
 
+  // Días y monto con la regla única del ERP (ver montoAsignacionPeriodo)
   const filasTransporte = asignacionesUnidad.filter(a=>empresaId==="todas" || a.empresa_id===empresaId).map(a=>{
-        const tarifaDia = parseFloat(a.tarifa_dia)||0;
-        const registrados = diasServicio.filter(d=>d.asignacion_id===a.id && d.fecha>=fechaInicio && d.fecha<=fechaFin && d.prestado);
-        let dias, monto;
-        if (registrados.length > 0) {
-          dias = registrados.length;
-          monto = registrados.reduce((sum,d)=>{
-            const recargo = esFeriadoPeru(d.fecha) ? tarifaDia*(recargoFeriadoPct/100) : 0;
-            return sum + tarifaDia + recargo;
-          }, 0);
-        } else {
-          dias = diasTrabajadosEnRango(a); // sin fechas exactas registradas: estimado, sin recargo
-          monto = dias * tarifaDia;
-        }
+        const { dias, monto, conCalendario } = montoAsignacionPeriodo(a, diasServicio, fechaInicio, fechaFin, recargoFeriadoPct||0);
         const unidad = unidades.find(u=>u.id===a.unidad_id);
-        return { asignacion:a, unidad, dias, monto, igv: monto*0.18, total: monto*1.18 };
+        return { asignacion:a, unidad, dias, monto, igv: monto*0.18, total: monto*1.18, estimado: !conCalendario };
       }).filter(f=>f.dias>0);
   const subtotalTransporte = filasTransporte.reduce((s,f)=>s+f.monto,0);
   const igvTransporte = subtotalTransporte*0.18;
@@ -1130,7 +1119,7 @@ export function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesU
                         {todas && <td style={{ ...tdS, color:B.textSec }}>{nombreEmpresa(f.asignacion.empresa_id)}</td>}
                         <td style={{ ...tdS, fontWeight:700, color:B.navy }}>{f.unidad?.placa||"—"}</td>
                         <td style={{ ...tdS, textTransform:"capitalize" }}>{f.unidad?.tipo_vehiculo||"—"}</td>
-                        <td style={tdR}>{f.dias}</td>
+                        <td style={tdR} title={f.estimado ? "Estimado por fechas: esta asignación no tiene calendario de servicio" : "Días marcados en el calendario de servicio"}>{f.dias}{f.estimado && <span style={{ fontSize:11, color:"#B45309", fontWeight:600 }}> est.</span>}</td>
                         <td style={{ ...tdR, color:B.textSec }}>{fmt.sol(f.asignacion.tarifa_dia)}</td>
                         <td style={{ ...tdR, fontWeight:600 }}>{fmt.sol(f.monto)}</td>
                       </tr>
