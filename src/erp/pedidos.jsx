@@ -7,6 +7,10 @@ import { bandaDePeso } from "./ventas.jsx";
 // MÓDULO 2: PEDIDOS COMPLETO
 // ══════════════════════════════════════════════════════════════
 export function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, tarifarioEstandar, onRefresh, toast }) {
+  // En celular la lista se muestra como tarjetas y la barra de herramientas se compacta
+  const [movil, setMovil] = useState(() => typeof window!=="undefined" && window.innerWidth<=760);
+  useEffect(() => { const f = () => setMovil(window.innerWidth<=760); window.addEventListener("resize", f); return () => window.removeEventListener("resize", f); }, []);
+  const [verMas, setVerMas] = useState(false);
   const [filtroEstado, setFiltroEstado] = useState("todos");
   const [busqueda, setBusqueda] = useState("");
   const [modalNuevo, setModalNuevo] = useState(false);
@@ -168,10 +172,27 @@ export function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, ta
     <div>
       {/* Barra de herramientas */}
       <div style={{ display:"flex", gap:10, marginBottom:12, flexWrap:"wrap", alignItems:"center" }}>
-        <Buscador value={busqueda} onChange={setBusqueda} placeholder="Buscar por tracking, N° de orden, nombre, teléfono o distrito" width={380}/>
+        <div style={{ flex: movil ? "1 1 100%" : "0 1 380px", minWidth:0 }}><Buscador value={busqueda} onChange={setBusqueda} placeholder={movil ? "Buscar tracking, nombre, teléfono…" : "Buscar por tracking, N° de orden, nombre, teléfono o distrito"} width="100%"/></div>
         <BtnSec onClick={()=>setVerFiltros(v=>!v)} style={verFiltros||nFiltros ? { borderColor:B.gold, color:B.goldDk } : {}}>
           <Ico n="filter" size={15}/> Filtros{nFiltros>0 && <span style={{ background:B.gold, color:"#fff", fontSize:11, fontWeight:700, padding:"0 6px", borderRadius:10 }}>{nFiltros}</span>}
         </BtnSec>
+        {movil ? (
+          <div style={{ display:"flex", gap:8, marginLeft:"auto", position:"relative" }}>
+            <BtnSec onClick={()=>setVerMas(v=>!v)} style={{ padding:"8px 11px" }} aria-label="Más acciones"><Ico n="menu" size={16}/> Más</BtnSec>
+            {verMas && (<>
+              <div onClick={()=>setVerMas(false)} style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:50 }}/>
+              <div style={{ ...CARD, position:"absolute", right:0, top:"calc(100% + 6px)", zIndex:51, padding:6, width:230, boxShadow:"0 12px 32px #0D1E3D26" }}>
+                {[
+                  ...(sinGeo>0 ? [["pin", `Geocodificar (${sinGeo})`, ()=>setModalGeocodificar(true)]] : []),
+                  ["upload", "Carga masiva", ()=>setModalCarga(true)],
+                  ["download", "Exportar a Excel", ()=>exportarPedidos(filtrados)],
+                ].map(([ic,l,fn]) => (
+                  <button key={l} onClick={()=>{ setVerMas(false); fn(); }} style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"11px 10px", background:"none", border:"none", borderRadius:8, cursor:"pointer", fontSize:14, color:B.textPri, textAlign:"left" }}>
+                    <Ico n={ic} size={17} color={B.textSec}/>{l}</button>))}
+              </div></>)}
+            <BtnPri onClick={()=>setModalNuevo(true)} style={{ padding:"9px 13px" }}><Ico n="plus" size={16} sw={2.4}/> Nuevo</BtnPri>
+          </div>
+        ) : (
         <div style={{ marginLeft:"auto", display:"flex", gap:8, flexWrap:"wrap" }}>
           {sinGeo > 0 && (
             <BtnSec onClick={()=>setModalGeocodificar(true)}><Ico n="pin" size={15}/> Geocodificar ({sinGeo})<Ayuda k="geocodificar" size={13}/></BtnSec>
@@ -192,6 +213,7 @@ export function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, ta
           <BtnSec onClick={()=>setModalCarga(true)}><Ico n="upload" size={15}/> Carga masiva</BtnSec>
           <BtnPri onClick={()=>setModalNuevo(true)}><Ico n="plus" size={15} sw={2.4}/> Nuevo pedido</BtnPri>
         </div>
+        )}
       </div>
       {verFiltros && (
         <div style={{ ...CARD, padding:14, marginBottom:12, display:"flex", gap:12, flexWrap:"wrap", alignItems:"flex-end" }}>
@@ -211,11 +233,32 @@ export function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, ta
         tabs={[{ id:"todos", l:"Todos", n:pedidos.length }, ...Object.keys(ESTADOS_PEDIDO).map(e=>({ id:e, l:ESTADOS_PEDIDO[e].label, n:conteo[e]||0 }))]}/>
 
       {/* Acciones masivas */}
-      {selFilas.length>0 && (
-        <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", background:B.navy, color:"#fff", borderRadius:12, padding:"10px 14px", marginBottom:12 }}>
+      {selFilas.length>0 && movil && (
+        <div style={{ position:"fixed", left:8, right:8, bottom:8, zIndex:60, background:B.navy, color:"#fff", borderRadius:14, padding:"10px 12px", boxShadow:"0 10px 30px #0D1E3D66" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
+            <span style={{ fontSize:14, fontWeight:700 }}>{selFilas.length} seleccionado{selFilas.length===1?"":"s"}</span>
+            {selFilas.length<filtrados.length && <button onClick={()=>setSel(new Set(filtrados.map(p=>p.id)))} style={{ background:"none", border:"none", color:B.goldLt, fontSize:13, fontWeight:600, cursor:"pointer", padding:0 }}>Todos ({filtrados.length})</button>}
+            <button onClick={()=>setSel(new Set())} aria-label="Quitar selección" style={{ marginLeft:"auto", background:"none", border:"none", color:"#B9C6D6", cursor:"pointer", display:"inline-flex", padding:4 }}><Ico n="x" size={20}/></button>
+          </div>
+          <div style={{ display:"flex", gap:8 }}>
+            <select value="" onChange={e=>e.target.value && masivoRep(e.target.value)} aria-label="Asignar repartidor a los seleccionados" style={{ ...inp, flex:1, minWidth:0, background:B.white, padding:"9px 8px", fontSize:13 }}>
+              <option value="">Repartidor…</option>{repartidores.filter(r=>r.activo).map(r=><option key={r.id} value={r.id}>{r.nombres} {r.apellidos}</option>)}</select>
+            <select value="" onChange={e=>e.target.value && masivoEstado(e.target.value)} aria-label="Cambiar estado de los seleccionados" style={{ ...inp, flex:1, minWidth:0, background:B.white, padding:"9px 8px", fontSize:13 }}>
+              <option value="">Estado…</option>{Object.entries(ESTADOS_PEDIDO).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}</select>
+          </div>
+          <div style={{ display:"flex", gap:8, marginTop:8 }}>
+            {[["dollar","Tarifa",masivoTarifa],["printer","Etiquetas",()=>setModalEtiq(true)],["download","Excel",()=>exportarPedidos(selFilas)]].map(([ic,l,fn]) => (
+              <button key={l} onClick={fn} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:3, padding:"7px 4px", background:"#FFFFFF14", border:"1px solid #FFFFFF26", borderRadius:9, color:"#fff", fontSize:12, fontWeight:600, cursor:"pointer" }}>
+                <Ico n={ic} size={17}/>{l}</button>))}
+          </div>
+        </div>
+      )}
+      {selFilas.length>0 && !movil && (
+        <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", background:B.navy, color:"#fff", borderRadius:12, padding:"10px 14px", marginBottom:12,
+          ...(movil ? { position:"fixed", left:10, right:10, bottom:10, zIndex:60, marginBottom:0, boxShadow:"0 10px 30px #0D1E3D66" } : {}) }}>
           <span style={{ fontSize:13, fontWeight:700 }}>{selFilas.length} seleccionado{selFilas.length===1?"":"s"}</span>
           {selFilas.length<filtrados.length && <button onClick={()=>setSel(new Set(filtrados.map(p=>p.id)))} style={{ background:"none", border:"none", color:B.goldLt, fontSize:12, fontWeight:600, cursor:"pointer", textDecoration:"underline" }}>Seleccionar los {filtrados.length} de esta vista</button>}
-          <div style={{ marginLeft:"auto", display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+          <div style={{ marginLeft:"auto", display:"flex", gap:8, flexWrap:"wrap", alignItems:"center", ...(movil ? { width:"100%", marginLeft:0 } : {}) }}>
             <select value="" onChange={e=>e.target.value && masivoRep(e.target.value)} aria-label="Asignar repartidor a los seleccionados" style={{ ...inp, width:"auto", background:B.white, padding:"7px 10px" }}>
               <option value="">Asignar repartidor…</option>{repartidores.filter(r=>r.activo).map(r=><option key={r.id} value={r.id}>{r.nombres} {r.apellidos}</option>)}</select>
             <select value="" onChange={e=>e.target.value && masivoEstado(e.target.value)} aria-label="Cambiar estado de los seleccionados" style={{ ...inp, width:"auto", background:B.white, padding:"7px 10px" }}>
@@ -228,8 +271,87 @@ export function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, ta
         </div>
       )}
 
-      {/* Tabla */}
-      <div style={{ ...CARD, overflow:"hidden" }}>
+      {/* Celular: tarjetas */}
+      {movil && (
+        <div style={{ paddingBottom: selFilas.length>0 ? 170 : 0 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
+            <label style={{ display:"flex", alignItems:"center", gap:7, fontSize:13, color:B.textSec }}>
+              <input type="checkbox" checked={pagSel} onChange={togglePag} style={{ width:18, height:18 }} aria-label="Seleccionar los pedidos de esta página"/> Todos
+            </label>
+            <select value={`${ordenCol||"fecha"}:${ordenCol?ordenDir:"desc"}`} aria-label="Ordenar pedidos"
+              onChange={e=>{ const [c,d] = e.target.value.split(":"); setOrdenCol(c); setOrdenDir(d); }}
+              style={{ ...inp, width:"auto", marginLeft:"auto", background:B.white, padding:"7px 10px", fontSize:13 }}>
+              <option value="fecha:desc">Más recientes</option><option value="fecha:asc">Más antiguos</option>
+              <option value="estado:asc">Por estado</option><option value="destinatario:asc">Destinatario A-Z</option>
+              <option value="repartidor:asc">Por repartidor</option><option value="direccion:asc">Por dirección</option>
+            </select>
+          </div>
+          {filtrados.length===0 ? (
+            <div style={CARD}><EstadoVacio icono="package" titulo={pedidos.length===0 ? "Aún no hay pedidos" : "Ningún pedido coincide"}
+              texto={pedidos.length===0 ? "Registra el primero con «Nuevo» o súbelos desde un Excel en «Más»." : "Prueba con otro estado o cambia el texto de búsqueda."}>
+              {pedidos.length>0 && (busqueda || filtroEstado!=="todos" || nFiltros>0) && <BtnSec onClick={()=>{ setBusqueda(""); setFiltroEstado("todos"); limpiarFiltros(); }}>Quitar filtros</BtnSec>}
+            </EstadoVacio></div>
+          ) : (
+            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              {pg.visibles.map(p => {
+                const rep = repartidores.find(r=>r.id===p.repartidor_id);
+                const est = ESTADOS_PEDIDO[p.estado] || { bg:"#F1F5F9", color:"#475569", label:p.estado };
+                const marcado = sel.has(p.id);
+                const sinTar = !((parseFloat(p.tarifa_s)||0) > 0);
+                return (
+                  <div key={p.id} onClick={()=>setModalDetalle(p)}
+                    style={{ ...CARD, padding:"12px 14px", cursor:"pointer", borderLeft:`4px solid ${est.color}`, background: marcado ? "#FFF7ED" : B.white }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                      <span onClick={e=>e.stopPropagation()} style={{ display:"flex" }}>
+                        <input type="checkbox" checked={marcado} onChange={()=>toggleSel(p.id)} style={{ width:18, height:18 }} aria-label={`Seleccionar ${p.omd}`}/>
+                      </span>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:14, fontWeight:800, color:B.navy }}>{p.omd}</div>
+                        {(p.cliente_referencia || nomEmp[p.empresa_id]) && <div style={{ fontSize:12, color:B.textMut, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                          {[nomEmp[p.empresa_id], p.cliente_referencia && `Orden ${p.cliente_referencia}`].filter(Boolean).join(" · ")}</div>}
+                      </div>
+                      <span style={{ fontSize:11.5, fontWeight:700, padding:"4px 10px", borderRadius:20, background:est.bg, color:est.color, whiteSpace:"nowrap" }}>{est.label}</span>
+                    </div>
+                    <div style={{ marginTop:10, paddingLeft:28 }}>
+                      <div style={{ fontSize:14, fontWeight:600, color:B.textPri }}>{p.dest_nombre||"—"}</div>
+                      {(p.dest_direccion || p.dest_distrito) && <div style={{ display:"flex", gap:6, marginTop:3, fontSize:13, color:B.textSec }}>
+                        <Ico n="pin" size={14} color={B.textMut} style={{ marginTop:2 }}/>
+                        <span>{p.dest_direccion}{p.dest_distrito ? <span style={{ color:B.textMut }}>{p.dest_direccion ? " · " : ""}{p.dest_distrito}</span> : null}</span>
+                      </div>}
+                      <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:8 }}>
+                        {p.tipo_servicio && BADGE_SERVICIO[p.tipo_servicio] && <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:6, background:BADGE_SERVICIO[p.tipo_servicio].bg, color:BADGE_SERVICIO[p.tipo_servicio].color }}>{BADGE_SERVICIO[p.tipo_servicio].label}</span>}
+                        {p.peso_kg ? <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:6, background:"#F0F4F8", color:B.navy }}>{bandaDePeso(p.peso_kg)} · {p.peso_kg} kg</span> : null}
+                        {p.cobro_destino && <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:6, background:"#FFF7ED", color:"#B45309" }}>COD {fmt.sol(p.monto_cobrar)}</span>}
+                        {sinTar && <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:6, background:"#FEF2F2", color:"#B91C1C" }}>Sin tarifa</span>}
+                      </div>
+                    </div>
+                    <div onClick={e=>e.stopPropagation()} style={{ display:"flex", alignItems:"center", gap:8, marginTop:10, paddingTop:10, paddingLeft:28, borderTop:`1px solid ${B.border}` }}>
+                      <select value={p.repartidor_id||""} aria-label={`Repartidor de ${p.omd}`}
+                        onChange={e=>{ if (e.target.value) asignarRep(p.id, e.target.value, p.estado); }}
+                        style={{ ...inp, flex:1, minWidth:0, padding:"7px 8px", fontSize:13, background: rep ? B.white : `${B.gold}12`, border:`1px ${rep?"solid":"dashed"} ${rep?B.border:B.gold+"88"}`, color: rep ? B.textPri : B.goldDk, fontWeight: rep ? 500 : 700 }}>
+                        <option value="" disabled={!!rep}>{rep ? "Elegir repartidor" : "+ Asignar repartidor"}</option>
+                        {repartidores.filter(r=>r.activo || r.id===p.repartidor_id).map(r=><option key={r.id} value={r.id}>{r.nombres} {r.apellidos}</option>)}
+                      </select>
+                      <select value={p.estado} onChange={e=>cambiarEstado(p.id,e.target.value)} aria-label={`Estado de ${p.omd}`}
+                        style={{ ...inp, width:"auto", padding:"7px 8px", fontSize:12.5, fontWeight:700, background:est.bg, color:est.color, border:`1px solid ${est.color}33` }}>
+                        {Object.entries(ESTADOS_PEDIDO).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+                      </select>
+                    </div>
+                    <div style={{ display:"flex", justifyContent:"space-between", marginTop:8, paddingLeft:28, fontSize:12, color:B.textMut }}>
+                      <span>{fmt.fecha(p.created_at)}</span>
+                      <span style={{ fontWeight:700, color: sinTar ? "#B91C1C" : B.textSec }}>{sinTar ? "—" : fmt.sol(p.tarifa_s)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {filtrados.length>0 && <div style={{ ...CARD, marginTop:10, overflow:"hidden" }}>{pg.pie}</div>}
+        </div>
+      )}
+
+      {/* Escritorio: tabla */}
+      {!movil && <div style={{ ...CARD, overflow:"hidden" }}>
         <style>{ocultas.map(c => { const i = COLS_PED.findIndex(x=>x[0]===c)+2; return i>1 ? `.bz-ped th:nth-child(${i}),.bz-ped tbody tr:not(.bz-vacio) td:nth-child(${i}){display:none}` : ""; }).join("")}</style>
         <div style={{ overflowX:"auto" }}>
         <table className="bz-tabla bz-ped" style={{ width:"100%", borderCollapse:"collapse" }}>
@@ -331,7 +453,7 @@ export function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, ta
         </table>
         </div>
         {pg.pie}
-      </div>
+      </div>}
 
       {modalNuevo && <ModalNuevoPedido repartidores={repartidores} empresas={empresas} tarifariosCliente={tarifariosCliente} tarifarioEstandar={tarifarioEstandar}
         onClose={()=>setModalNuevo(false)} onSaved={()=>{setModalNuevo(false);onRefresh();}} toast={toast}/>}

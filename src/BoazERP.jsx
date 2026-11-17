@@ -395,35 +395,35 @@ if (verificando) {
               {NAV.find(n=>n.id===seccion)?.label}
             </div>
           </div>
-          <button onClick={()=>setPaleta(true)}
+          <button onClick={()=>setPaleta(true)} aria-label="Buscar"
             style={{ flex: esMovil ? "0 0 auto" : "0 1 380px", margin: esMovil ? 0 : "0 20px", display:"flex", alignItems:"center", gap:10, background:B.bg,
               border:`1px solid ${B.border}`, borderRadius:10, padding:"9px 14px", cursor:"pointer", color:B.textMut, fontSize:13, textAlign:"left" }}>
             <Ico n="search" size={16}/>
             <span className="bz-oculta-movil" style={{ flex:1 }}>Buscar pedido, cliente, placa…</span>
             <span className="bz-oculta-movil" style={{ fontSize:10, border:`1px solid ${B.border}`, borderRadius:6, padding:"2px 6px", background:B.white }}>Ctrl K</span>
           </button>
-          <div style={{ display:"flex", gap:10, alignItems:"center" }}>
-            <button onClick={cargar}
+          <div style={{ display:"flex", gap: esMovil ? 6 : 10, alignItems:"center", flexShrink:0 }}>
+            <button onClick={cargar} aria-label="Actualizar"
               style={{ background:B.bg, border:`1px solid ${B.border}`,
-                color:B.textSec, padding:"7px 14px", borderRadius:8,
-                cursor:"pointer", fontSize:12, display:"flex", alignItems:"center", gap:6 }}><Ico n="refresh" size={14}/> <span className="bz-oculta-movil">Actualizar</span></button>
-            <button onClick={()=>setSeccion("ayuda")} title="Primeros pasos, preguntas frecuentes y glosario" aria-label="Ayuda"
+                color:B.textSec, padding: esMovil ? "9px 10px" : "7px 14px", borderRadius:8,
+                cursor:"pointer", fontSize:12, display:"flex", alignItems:"center", gap:6 }}><Ico n="refresh" size={esMovil?16:14}/> <span className="bz-oculta-movil">Actualizar</span></button>
+            {!esMovil && <button onClick={()=>setSeccion("ayuda")} title="Primeros pasos, preguntas frecuentes y glosario" aria-label="Ayuda"
               style={{ background: seccion==="ayuda" ? `${B.gold}1A` : B.bg, border:`1px solid ${seccion==="ayuda" ? B.gold : B.border}`, color: seccion==="ayuda" ? B.goldDk : B.textSec,
-                width:34, height:34, borderRadius:8, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}><Ico n="help" size={17}/></button>
+                width:34, height:34, borderRadius:8, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}><Ico n="help" size={17}/></button>}
             <div style={{ display:"flex", alignItems:"center", gap:8 }}>
   <div className="bz-oculta-movil" style={{ textAlign:"right" }}>
     <div style={{ fontSize:12, fontWeight:700, color:B.navy }}>{usuario.nombre}</div>
     <div style={{ fontSize:10, color:B.textMut, textTransform:"capitalize" }}>{usuario.rol}</div>
   </div>
-  <div style={{ width:36, height:36,
+  <div className="bz-oculta-movil" style={{ width:36, height:36,
     background:`linear-gradient(135deg,${B.navy},${B.navyLt})`,
     borderRadius:"50%", display:"flex", alignItems:"center",
     justifyContent:"center", fontSize:14, fontWeight:800, color:B.gold }}>
     {usuario.nombre?.[0]}
   </div>
-  <button onClick={cerrarSesion}
+  <button onClick={cerrarSesion} aria-label="Salir"
     style={{ background:"none", border:`1px solid ${B.border}`, color:B.textSec,
-      fontSize:11, padding:"6px 10px", borderRadius:6, cursor:"pointer", display:"flex", alignItems:"center", gap:5 }}><Ico n="logout" size={13}/> <span className="bz-oculta-movil">Salir</span></button>
+      fontSize:11, padding: esMovil ? "9px 10px" : "6px 10px", borderRadius:6, cursor:"pointer", display:"flex", alignItems:"center", gap:5 }}><Ico n="logout" size={13}/> <span className="bz-oculta-movil">Salir</span></button>
 </div>
 </div>
 </div>

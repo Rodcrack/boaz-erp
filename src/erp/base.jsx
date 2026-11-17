@@ -200,7 +200,7 @@ export const Chip = ({ estado, size="sm" }) => {
 export function Toast({ msg, tipo, onClose }) {
   useEffect(() => { const t = setTimeout(onClose, 3500); return () => clearTimeout(t); }, [onClose]);
   return (
-    <div style={{ position:"fixed", bottom:24, right:24, zIndex:9999,
+    <div className="bz-toast" role="status" style={{ position:"fixed", bottom:24, right:24, zIndex:9999,
       background: tipo==="error" ? B.red : tipo==="warn" ? B.orange : B.green,
       color:"#fff", padding:"14px 22px", borderRadius:12, fontWeight:600,
       fontSize:13, boxShadow:"0 8px 32px #0003", display:"flex", alignItems:"center", gap:10 }}>
@@ -233,8 +233,8 @@ export function Confirm({ msg, onOk, onCancel }) {
 export const inp = { background:B.bg, border:`1px solid ${B.border}`, color:B.textPri,
   borderRadius:8, padding:"9px 12px", fontSize:13, width:"100%", outline:"none" };
 export const lbl = { fontSize:12, color:B.textSec, fontWeight:600, marginBottom:5, display:"block" };
-export const BtnPri = ({ children, onClick, disabled, style={} }) => (
-  <button onClick={onClick} disabled={disabled}
+export const BtnPri = ({ children, onClick, disabled, style={}, ...resto }) => (
+  <button onClick={onClick} disabled={disabled} {...resto}
     className="bz-btn-pri" style={{ background:"#D46A08",
       border:"none", color:"#fff", padding:"9px 16px", borderRadius:8,
       cursor: disabled?"not-allowed":"pointer", fontSize:13, fontWeight:700,
@@ -243,8 +243,8 @@ export const BtnPri = ({ children, onClick, disabled, style={} }) => (
     {children}
   </button>
 );
-export const BtnSec = ({ children, onClick, style={} }) => (
-  <button onClick={onClick}
+export const BtnSec = ({ children, onClick, style={}, ...resto }) => (
+  <button onClick={onClick} {...resto}
     className="bz-btn-sec" style={{ background:B.white, border:`1px solid ${B.border}`,
       color:B.textPri, padding:"8px 14px", borderRadius:8, fontWeight:600,
       cursor:"pointer", fontSize:13, display:"inline-flex", alignItems:"center", justifyContent:"center", gap:7,
@@ -390,6 +390,7 @@ if (typeof document !== "undefined" && !document.getElementById("bz-css")) {
       .bz-ayuda:hover .bz-ayuda-txt, .bz-ayuda:focus-within .bz-ayuda-txt { display:block; }
       .bz-ayuda.bz-ayuda-der .bz-ayuda-txt { left:auto; right:-6px; transform:none; } .bz-ayuda.bz-ayuda-der .bz-ayuda-txt::after { left:auto; right:10px; margin-left:0; }
       .bz-ayuda.bz-ayuda-abajo .bz-ayuda-txt { bottom:auto; top:calc(100% + 8px); } .bz-ayuda.bz-ayuda-abajo .bz-ayuda-txt::after { top:auto; bottom:100%; border-top-color:transparent; border-bottom-color:#0D1E3D; }
+      @media (max-width:760px) { .bz-toast { top:12px !important; bottom:auto !important; left:12px !important; right:12px !important; justify-content:center; } }
       .bz-card-hover { transition:box-shadow .15s, transform .15s; } .bz-card-hover:hover { box-shadow:0 8px 24px #0D1E3D1A !important; transform:translateY(-1px); }
     `;
     document.head.appendChild(st);
