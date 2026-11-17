@@ -69,7 +69,7 @@ export function Repartidores({ repartidores, pedidos, onRefresh, toast }) {
                 boxShadow:"0 1px 2px #0D1E3D0D" }}>
                 <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16 }}>
                   <div style={{ width:48, height:48, borderRadius:"50%",
-                    background:`linear-gradient(135deg,${B.navy},${B.navyLt})`,
+                    background:`linear-gradient(135deg,${B.navyFijo},${B.navyLt})`,
                     display:"flex", alignItems:"center", justifyContent:"center",
                     fontSize:16, fontWeight:800, color:B.gold, flexShrink:0 }}>
                     {r.nombres?.[0]}{r.apellidos?.[0]}
@@ -79,7 +79,7 @@ export function Repartidores({ repartidores, pedidos, onRefresh, toast }) {
                     <div style={{ fontSize:11, color:B.textMut }}>DNI: {r.dni}</div>
                   </div>
                   <span style={{ fontSize:10, padding:"3px 10px", borderRadius:20, fontWeight:700,
-                    background:r.activo?"#ECFDF5":"#F3F4F6",
+                    background:r.activo?"var(--bzf-ECFDF5, #ECFDF5)":"var(--bzf-F3F4F6, #F3F4F6)",
                     color:r.activo?B.green:B.textMut,
                     border:`1px solid ${r.activo?B.green+"44":B.border}` }}>
                     {r.activo?"Activo":"Inactivo"}
@@ -120,7 +120,7 @@ export function Repartidores({ repartidores, pedidos, onRefresh, toast }) {
           borderRadius:12, overflow:"hidden", boxShadow:"0 1px 2px #0D1E3D0D" }}>
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead>
-              <tr style={{ background:"#F6F9FC" }}>
+              <tr style={{ background:"var(--bzf-F6F9FC, #F6F9FC)" }}>
                 {["Nombre","DNI","Teléfono","Vehículo","Placa","Zona","Pedidos","Efectividad","Estado","Acciones"].map(h=>(
                   <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
                 ))}
@@ -148,7 +148,7 @@ export function Repartidores({ repartidores, pedidos, onRefresh, toast }) {
                     </td>
                     <td style={{ padding:"11px 14px" }}>
                       <span style={{ fontSize:10, padding:"3px 8px", borderRadius:10, fontWeight:700,
-                        background:r.activo?"#ECFDF5":"#F3F4F6",
+                        background:r.activo?"var(--bzf-ECFDF5, #ECFDF5)":"var(--bzf-F3F4F6, #F3F4F6)",
                         color:r.activo?B.green:B.textMut }}>
                         {r.activo?"Activo":"Inactivo"}
                       </span>
@@ -323,19 +323,19 @@ export function Clientes({ tarifasDistrito=[], empresas, pedidos, lineasNegocio,
               <Ico n={ico} size={14} color={B.textMut}/><span title={v||""} style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{v||"Sin registrar"}</span>
             </div>);
           const permiso = (ok, txt) => (
-            <span style={{ display:"inline-flex", alignItems:"center", gap:5, fontSize:12, color:ok?"#047857":B.textMut }}>
+            <span style={{ display:"inline-flex", alignItems:"center", gap:5, fontSize:12, color:ok?"var(--bzt-047857, #047857)":B.textMut }}>
               <Ico n={ok?"check":"xcircle"} size={14}/>{txt}
             </span>);
           return (
             <div key={e.id} className="bz-card-hover" style={{ ...CARD, padding:18, display:"flex", flexDirection:"column", gap:14 }}>
               <div style={{ display:"flex", alignItems:"flex-start", gap:12 }}>
-                <div style={{ width:40, height:40, borderRadius:10, background:B.navy, color:B.goldLt, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:800, flexShrink:0 }}>
+                <div style={{ width:40, height:40, borderRadius:10, background:B.navyFijo, color:B.goldLt, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:800, flexShrink:0 }}>
                   {(e.nombre||"?").trim().split(/\s+/).slice(0,2).map(w=>w[0]).join("").toUpperCase()}
                 </div>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
                     <span style={{ fontSize:15, fontWeight:800, color:B.navy }}>{e.nombre}</span>
-                    {e.codigo_interno && <span style={{ fontSize:11, fontWeight:700, color:B.textSec, background:"#F1F5F9", padding:"1px 7px", borderRadius:6 }}>{e.codigo_interno}</span>}
+                    {e.codigo_interno && <span style={{ fontSize:11, fontWeight:700, color:B.textSec, background:"var(--bzf-F1F5F9, #F1F5F9)", padding:"1px 7px", borderRadius:6 }}>{e.codigo_interno}</span>}
                   </div>
                   <div style={{ fontSize:12, color:B.textMut, marginTop:2 }}>RUC {e.ruc||"—"}{linea ? ` · ${linea.nombre}` : ""}</div>
                 </div>
@@ -347,9 +347,9 @@ export function Clientes({ tarifasDistrito=[], empresas, pedidos, lineasNegocio,
               </div>
 
               <button onClick={()=>setPanelCobro({ id:e.id, base:e })} className="bz-btn-sec" title="Ver y configurar cómo se le cobra"
-                style={{ textAlign:"left", width:"100%", background: mods.length ? "#F6F9FC" : "#FFF7ED", border:`1px ${mods.length?"solid":"dashed"} ${mods.length ? B.border : "#B4530988"}`, borderRadius:10, padding:"10px 12px", cursor:"pointer" }}>
+                style={{ textAlign:"left", width:"100%", background: mods.length ? "var(--bzf-F6F9FC, #F6F9FC)" : "var(--bzf-FFF7ED, #FFF7ED)", border:`1px ${mods.length?"solid":"dashed"} ${mods.length ? B.border : "#B4530988"}`, borderRadius:10, padding:"10px 12px", cursor:"pointer" }}>
                 <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, marginBottom: mods.length ? 7 : 0 }}>
-                  <span style={{ fontSize:11, fontWeight:700, color: mods.length ? B.textMut : "#B45309", letterSpacing:".3px", display:"flex", alignItems:"center", gap:6 }}>
+                  <span style={{ fontSize:11, fontWeight:700, color: mods.length ? B.textMut : "var(--bzt-B45309, #B45309)", letterSpacing:".3px", display:"flex", alignItems:"center", gap:6 }}>
                     {!mods.length && <Ico n="alert" size={14}/>}{mods.length ? "CÓMO SE COBRA" : "Falta definir cómo se le cobra"}</span>
                   <span style={{ fontSize:12, fontWeight:700, color:B.goldDk, display:"flex", alignItems:"center", gap:4 }}>{mods.length ? "Ver / editar" : "Definir"} <Ico n="arrow" size={13}/></span>
                 </div>
@@ -359,9 +359,9 @@ export function Clientes({ tarifasDistrito=[], empresas, pedidos, lineasNegocio,
                     const regla = m.id!=="pedido" ? "" : e.modo_pedido==="fijo" && e.precio_fijo_pedido!=null ? `${fmt.sol(e.precio_fijo_pedido)} fijo` : e.modo_pedido==="distrito" ? (n => `${n} distrito${n===1?"":"s"}`)(tarifasDistrito.filter(t=>t.empresa_id===e.id).length) : (x.n ? `${x.n} ${x.n===1?x.uno:x.otro}` : "estándar");
                     const ok = m.id==="viaje" ? x.n>0 : true;
                     return (
-                      <span key={m.id} style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:12, fontWeight:600, padding:"4px 9px", borderRadius:8, background:B.white, border:`1px solid ${ok?B.border:"#B4530966"}`, color:ok?B.textPri:"#B45309" }}>
+                      <span key={m.id} style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:12, fontWeight:600, padding:"4px 9px", borderRadius:8, background:B.white, border:`1px solid ${ok?B.border:"#B4530966"}`, color:ok?B.textPri:"var(--bzt-B45309, #B45309)" }}>
                         <Ico n={m.ico} size={14} color={ok?"#047857":"#B45309"}/>{m.label}
-                        <span style={{ fontWeight:500, color:ok?B.textMut:"#B45309" }}>{regla || (x.n ? `${x.n} ${x.n===1?x.uno:x.otro}` : "configurar")}</span>
+                        <span style={{ fontWeight:500, color:ok?B.textMut:"var(--bzt-B45309, #B45309)" }}>{regla || (x.n ? `${x.n} ${x.n===1?x.uno:x.otro}` : "configurar")}</span>
                       </span>);
                   })}
                 </div>}
@@ -430,7 +430,7 @@ export function Clientes({ tarifasDistrito=[], empresas, pedidos, lineasNegocio,
                 </select>
               </div>
             </div>
-            <div style={{ marginTop:16, padding:"10px 12px", background:"#F6F9FC", border:`1px solid ${B.border}`, borderRadius:10, fontSize:12.5, color:B.textSec, display:"flex", gap:8, alignItems:"flex-start" }}>
+            <div style={{ marginTop:16, padding:"10px 12px", background:"var(--bzf-F6F9FC, #F6F9FC)", border:`1px solid ${B.border}`, borderRadius:10, fontSize:12.5, color:B.textSec, display:"flex", gap:8, alignItems:"flex-start" }}>
               <Ico n="dollar" size={16} color={B.goldDk} style={{ marginTop:1 }}/>
               <span>{editando ? <>Cómo se le cobra (por pedido, por vehículo o por viaje) se configura en <b>«Cómo se cobra»</b>, en la tarjeta del cliente.</> : <>Al registrar el cliente se abrirá <b>«Cómo se cobra»</b> para que elijas la modalidad y sus tarifas.</>}</span>
             </div>
@@ -540,9 +540,9 @@ export function PanelCobroCliente({ empresa, tarifariosCliente=[], tarifarioVehi
             </div>
             <button onClick={onClose} aria-label="Cerrar" style={{ background:"none", border:"none", fontSize:20, color:B.textSec, cursor:"pointer" }}>✕</button>
           </div>
-          {esNuevo && <div style={{ marginTop:12, background:"#ECFDF5", border:"1px solid #A7F3D0", color:"#065F46", borderRadius:10, padding:"9px 12px", fontSize:12.5 }}>
+          {esNuevo && <div style={{ marginTop:12, background:"var(--bzf-ECFDF5, #ECFDF5)", border:"1px solid var(--bzl-A7F3D0, #A7F3D0)", color:"var(--bzt-065F46, #065F46)", borderRadius:10, padding:"9px 12px", fontSize:12.5 }}>
             Cliente registrado. Ahora elige cómo se le cobra: marca una o más modalidades y configura sus tarifas.</div>}
-          {!esNuevo && mods.length===0 && <div style={{ marginTop:12, background:"#FFF7ED", border:"1px solid #FDBA7488", color:"#9A3412", borderRadius:10, padding:"9px 12px", fontSize:12.5 }}>
+          {!esNuevo && mods.length===0 && <div style={{ marginTop:12, background:"var(--bzf-FFF7ED, #FFF7ED)", border:"1px solid #FDBA7488", color:"var(--bzt-9A3412, #9A3412)", borderRadius:10, padding:"9px 12px", fontSize:12.5 }}>
             Aún no se eligió cómo se le cobra. Sin esto, la pre-facturación de este cliente no sabrá qué sumar.</div>}
         </div>
 
@@ -556,7 +556,7 @@ export function PanelCobroCliente({ empresa, tarifariosCliente=[], tarifarioVehi
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:14, fontWeight:700, color:B.textPri }}>
                       <Ico n={m.ico} size={17} color={on ? B.goldDk : B.textMut}/>{m.label}
-                      {on && <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, background: r.listo ? "#ECFDF5" : "#FFF7ED", color: r.listo ? "#047857" : "#B45309" }}>{r.listo ? "Activa" : "Falta configurar"}</span>}
+                      {on && <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, background: r.listo ? "var(--bzf-ECFDF5, #ECFDF5)" : "var(--bzf-FFF7ED, #FFF7ED)", color: r.listo ? "var(--bzt-047857, #047857)" : "var(--bzt-B45309, #B45309)" }}>{r.listo ? "Activa" : "Falta configurar"}</span>}
                       {guardando===m.id && <span style={{ fontSize:11, color:B.textMut, fontWeight:500 }}>guardando…</span>}
                     </div>
                     <div style={{ fontSize:12.5, color:B.textSec, marginTop:3 }}>{m.ayuda}</div>
@@ -564,10 +564,10 @@ export function PanelCobroCliente({ empresa, tarifariosCliente=[], tarifarioVehi
                 </label>
                 {on && (
                   <div style={{ marginTop:12, marginLeft:30 }}>
-                    <ul style={{ margin:0, padding:"10px 12px 10px 28px", background:"#F6F9FC", borderRadius:8, fontSize:12.5, color:B.textPri, lineHeight:1.65 }}>
+                    <ul style={{ margin:0, padding:"10px 12px 10px 28px", background:"var(--bzf-F6F9FC, #F6F9FC)", borderRadius:8, fontSize:12.5, color:B.textPri, lineHeight:1.65 }}>
                       {r.filas.map((t,i)=><li key={i}>{t}</li>)}
                     </ul>
-                    {r.aviso && <div style={{ fontSize:12, color:"#B45309", marginTop:8, display:"flex", alignItems:"center", gap:6 }}><Ico n="alert" size={14}/>{r.aviso}</div>}
+                    {r.aviso && <div style={{ fontSize:12, color:"var(--bzt-B45309, #B45309)", marginTop:8, display:"flex", alignItems:"center", gap:6 }}><Ico n="alert" size={14}/>{r.aviso}</div>}
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, marginTop:10, flexWrap:"wrap" }}>
                       <span style={{ fontSize:11.5, color:B.textMut, flex:"1 1 200px" }}>{DONDE[m.id]}</span>
                       <BtnSec onClick={()=>onConfigurar(m.id, e)}><Ico n="edit" size={14}/> {TXT_CONF[m.id]}</BtnSec>
@@ -650,7 +650,7 @@ export function ModalTarifarioViaje({ empresa, filas, estandar=[], onClose, onSa
         <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
           {rows.length===0 && <div style={{ padding:20, textAlign:"center", fontSize:12, color:B.textMut, border:`1px dashed ${B.border}`, borderRadius:10 }}>Aún no hay tarifas. Agrega la primera.</div>}
           {rows.map((r,i)=>(
-            <div key={i} style={{ display:"grid", gridTemplateColumns:"2fr 1.1fr 1fr 0.9fr auto auto", gap:8, alignItems:"end", padding:10, border:`1px solid ${B.border}`, borderRadius:10, background:r.activo?"#FFF8EF":B.bg, opacity:r.activo?1:.65 }}>
+            <div key={i} style={{ display:"grid", gridTemplateColumns:"2fr 1.1fr 1fr 0.9fr auto auto", gap:8, alignItems:"end", padding:10, border:`1px solid ${B.border}`, borderRadius:10, background:r.activo?"var(--bzf-FFF8EF, #FFF8EF)":B.bg, opacity:r.activo?1:.65 }}>
               <div><label style={{ ...lbl, marginBottom:3 }}>Ruta o concepto</label><input style={inp} value={r.concepto} placeholder="ej. Recojo en almacén" onChange={e=>set(i,"concepto",e.target.value)}/></div>
               <div><label style={{ ...lbl, marginBottom:3 }}>Vehículo</label>
                 <select style={inp} value={r.tipo_vehiculo} onChange={e=>set(i,"tipo_vehiculo",e.target.value)}>
@@ -727,7 +727,7 @@ export function FormaCobroPedido({ empresa, tarifasDistrito=[], onSaved, toast }
   };
 
   return (
-    <div style={{ border:`1px solid ${B.border}`, borderRadius:12, padding:16, marginBottom:18, background:"#FBFCFE" }}>
+    <div style={{ border:`1px solid ${B.border}`, borderRadius:12, padding:16, marginBottom:18, background:"var(--bzf-FBFCFE, #FBFCFE)" }}>
       <div style={{ fontSize:13, fontWeight:700, color:B.navy, marginBottom:4 }}>Cómo se cobra cada pedido<Ayuda k="modo_pedido"/></div>
       <div style={{ fontSize:12, color:B.textMut, marginBottom:10 }}>Define la regla principal de este cliente. El tarifario por ámbito de abajo se usa cuando la regla no aplica (por ejemplo, un distrito sin tarifa).</div>
       <Tabs valor={modo} onChange={setModo} tabs={[{ id:"tarifario", l:"Según tarifario" }, { id:"fijo", l:"Precio fijo por pedido" }, { id:"distrito", l:"Por distrito" }]}/>
@@ -877,7 +877,7 @@ export function ModalTarifarioCliente({ empresa, tarifasDistrito=[], tarifariosC
             <button key={s.id} onClick={()=>setServicioTab(s.id)}
               style={{ flex:1, padding:"8px 10px", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer",
                 border: servicioTab===s.id ? `2px solid ${B.gold}` : `1px solid ${B.border}`,
-                background: servicioTab===s.id ? "#FFF7ED" : B.white,
+                background: servicioTab===s.id ? "var(--bzf-FFF7ED, #FFF7ED)" : B.white,
                 color: servicioTab===s.id ? B.goldDk : B.textSec }}>
               {s.label}
             </button>
@@ -885,7 +885,7 @@ export function ModalTarifarioCliente({ empresa, tarifasDistrito=[], tarifariosC
         </div>
         <button onClick={cargarTodoElServicioDesdeEstandar}
           style={{ width:"100%", marginBottom:16, padding:"9px 12px", borderRadius:8, fontSize:12,
-            fontWeight:700, cursor:"pointer", border:`1px dashed ${B.blue}`, background:"#EFF6FF", color:B.blue }}>
+            fontWeight:700, cursor:"pointer", border:`1px dashed ${B.blue}`, background:"var(--bzf-EFF6FF, #EFF6FF)", color:B.blue }}>
           Habilitar tarifario "{SERVICIOS.find(s=>s.id===servicioTab).label}" completo desde el estándar
         </button>
 
@@ -894,7 +894,7 @@ export function ModalTarifarioCliente({ empresa, tarifasDistrito=[], tarifariosC
           const completo = v.xs!=="" && v.s!=="" && v.m!=="";
           return (
             <div key={a.id} style={{ border:`1px solid ${B.border}`, borderRadius:10, padding:14, marginBottom:12,
-              background: completo && v.activo ? "#FFF8EF" : B.bg,
+              background: completo && v.activo ? "var(--bzf-FFF8EF, #FFF8EF)" : B.bg,
               opacity: completo && !v.activo ? 0.6 : 1 }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
                 <div style={{ fontSize:13, fontWeight:700, color:B.navy }}>
@@ -1017,7 +1017,7 @@ export function ModalTarifarioEstandar({ tarifarioEstandar, onClose, onSaved, to
             <button key={s.id} onClick={()=>setServicioTab(s.id)}
               style={{ flex:1, padding:"8px 10px", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer",
                 border: servicioTab===s.id ? `2px solid ${B.gold}` : `1px solid ${B.border}`,
-                background: servicioTab===s.id ? "#FFF7ED" : B.white,
+                background: servicioTab===s.id ? "var(--bzf-FFF7ED, #FFF7ED)" : B.white,
                 color: servicioTab===s.id ? B.goldDk : B.textSec }}>
               {s.label}
             </button>
@@ -1029,7 +1029,7 @@ export function ModalTarifarioEstandar({ tarifarioEstandar, onClose, onSaved, to
           const completo = v.xs!=="" && v.s!=="" && v.m!=="";
           return (
             <div key={a.id} style={{ border:`1px solid ${B.border}`, borderRadius:10, padding:14, marginBottom:12,
-              background: completo && v.activo ? "#FFF8EF" : B.bg,
+              background: completo && v.activo ? "var(--bzf-FFF8EF, #FFF8EF)" : B.bg,
               opacity: completo && !v.activo ? 0.6 : 1 }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
                 <div style={{ fontSize:13, fontWeight:700, color:B.navy }}>
@@ -1129,7 +1129,7 @@ export function ModalTarifarioVehiculoEstandar({ tarifarioVehiculoEstandar, onCl
             const completo = v.base !== "";
             return (
               <div key={tv} style={{ border:`1px solid ${B.border}`, borderRadius:10, padding:14,
-                background: completo && v.activo ? "#FFF8EF" : B.bg,
+                background: completo && v.activo ? "var(--bzf-FFF8EF, #FFF8EF)" : B.bg,
                 opacity: completo && !v.activo ? 0.6 : 1 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
                   <div style={{ fontSize:13, fontWeight:700, color:B.navy, textTransform:"capitalize" }}>
@@ -1228,7 +1228,7 @@ export function ModalTarifarioVehiculo({ empresa, tarifarioVehiculoCliente, tari
             const completo = v.base !== "";
             return (
               <div key={tv} style={{ border:`1px solid ${B.border}`, borderRadius:10, padding:14,
-                background: completo && v.activo ? "#FFF8EF" : B.bg,
+                background: completo && v.activo ? "var(--bzf-FFF8EF, #FFF8EF)" : B.bg,
                 opacity: completo && !v.activo ? 0.6 : 1 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
                   <div style={{ fontSize:13, fontWeight:700, color:B.navy, textTransform:"capitalize" }}>

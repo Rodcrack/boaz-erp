@@ -13,25 +13,72 @@ export const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 
 // ── PALETA BOAZ ──────────────────────────────────────────────
 export const B = {
-  navy:     "#0D1E3D",   // azul marino profundo
+  // Los colores neutros usan variables CSS: en modo claro valen lo mismo de siempre (el valor de respaldo)
+  // y en modo oscuro cambian solos (ver CSS_TEMA_OSCURO). navyFijo es el marino que NO cambia (menú, login).
+  navy:     "var(--bz-navy, #0D1E3D)",   // azul marino profundo (títulos y textos fuertes)
+  navyFijo: "#0D1E3D",
   navyMd:   "#152848",   // marino medio (sidebar)
   navyLt:   "#1E3A5F",   // marino claro (hover)
   navyBdr:  "#1E3560",   // bordes marino
   gold:     "#E8780A",   // ámbar dorado Boaz
   goldDk:   "#C4660A",   // ámbar oscuro
   goldLt:   "#FFB347",   // ámbar claro
-  white:    "#FFFFFF",
-  bg:       "#F0F4F8",   // fondo gris azulado claro
-  surface:  "#FFFFFF",
-  border:   "#D1DCE8",
-  textPri:  "#0D1E3D",
-  textSec:  "#4A6080",
-  textMut:  "#6F849E",
+  white:    "var(--bz-surface, #FFFFFF)",   // fondo de tarjetas
+  bg:       "var(--bz-bg, #F0F4F8)",        // fondo gris azulado claro
+  surface:  "var(--bz-surface, #FFFFFF)",
+  border:   "var(--bz-border, #D1DCE8)",
+  textPri:  "var(--bz-text, #0D1E3D)",
+  textSec:  "var(--bz-text2, #4A6080)",
+  textMut:  "var(--bz-text3, #6F849E)",
   green:    "#10B981",
   red:      "#EF4444",
   orange:   "#F97316",
   blue:     "#3B82F6",
 };
+
+// Transparencia sobre un color (sirve para hex y para variables CSS): alfa("#E8780A","22")
+export const alfa = (color, hh) => String(color||"").startsWith("var(") ? `color-mix(in srgb, ${color} ${Math.round(parseInt(hh,16)/2.55)}%, transparent)` : `${color}${hh}`;
+
+// ── TEMA CLARO / OSCURO ──────────────────────────────────────
+const VARS_OSCURO = {
+  "--bz-navy":"#E6EDF7", "--bz-surface":"#132238", "--bz-bg":"#0B1628", "--bz-border":"#263D5E",
+  "--bz-text":"#E6EDF7", "--bz-text2":"#A9B8CC", "--bz-text3":"#8193AB",
+  "--bzf-CBD5E1":"#334B6E", "--bzf-DCFCE7":"#0F3A2A", "--bzf-E3EAF2":"#22385A", "--bzf-E6EDF5":"#1A2B44", "--bzf-E8EEF7":"#1A2B44", "--bzf-ECFDF5":"#0D2B22", "--bzf-EFF6FF":"#10233F", "--bzf-F0F4F8":"#0B1628", "--bzf-F0FDF4":"#0D2B22", "--bzf-F1F5F9":"#1A2B44", "--bzf-F3EEFF":"#241A3D", "--bzf-F3F4F6":"#1A2B44", "--bzf-F5F3FF":"#241A3D", "--bzf-F6F9FC":"#0F1D31", "--bzf-FBFCFE":"#0F1D31", "--bzf-FEE2E2":"#4A1A1D", "--bzf-FEF2F2":"#3A1517", "--bzf-FEF3E2":"#33230F", "--bzf-FFF4E5":"#33230F", "--bzf-FFF7ED":"#33230F", "--bzf-FFF8EF":"#2E200E", "--bzf-FFFBEB":"#33270F", "--bzt-0369A1":"#7DD3FC", "--bzt-047857":"#6EE7B7", "--bzt-065F46":"#6EE7B7", "--bzt-166534":"#86EFAC", "--bzt-1D4ED8":"#93C5FD", "--bzt-1E40AF":"#93C5FD", "--bzt-374151":"#C7D2E0", "--bzt-475569":"#B7C4D6", "--bzt-4A6080":"#A9B8CC", "--bzt-7C3AED":"#C4B5FD", "--bzt-92400E":"#FCD34D", "--bzt-991B1B":"#FCA5A5", "--bzt-9A3412":"#FDBA74", "--bzt-B45309":"#FBBF77", "--bzt-B91C1C":"#FCA5A5", "--bzt-C2410C":"#FDBA74", "--bzt-D97706":"#FBBF24", "--bzl-A7F3D0":"#14532D", "--bzl-BBF7D0":"#14532D", "--bzl-BFDBFE":"#1E3A6E", "--bzl-D1DCE8":"#2A4064", "--bzl-E3EAF2":"#22385A", "--bzl-FDBA74":"#7C4A12", "--bzl-FDE68A":"#6B5214", "--bzl-FECACA":"#7F1D1D"
+};
+export const CSS_TEMA_OSCURO = `
+html[data-tema="oscuro"] { color-scheme:dark; ${Object.entries(VARS_OSCURO).map(([k,v])=>`${k}:${v};`).join(" ")} }
+html[data-tema="oscuro"] body { background:#0B1628; color:#E6EDF7; }
+html[data-tema="oscuro"] tbody tr:hover { background:#18304F !important; }
+html[data-tema="oscuro"] .bz-skel { background:linear-gradient(90deg,#1A2B44 25%,#22385A 37%,#1A2B44 63%); background-size:800px 100%; }
+html[data-tema="oscuro"] ::-webkit-scrollbar-thumb { background:#2A4064; }
+html[data-tema="oscuro"] .bz-btn-sec:hover { background:#1A2B44 !important; border-color:#38517A !important; }
+html[data-tema="oscuro"] .bz-btnico:hover { background:#1A2B44 !important; color:#E6EDF7 !important; }
+html[data-tema="oscuro"] .bz-th-orden:hover { color:#E6EDF7 !important; }
+html[data-tema="oscuro"] .bz-tabla td, html[data-tema="oscuro"] .bz-tabla th { border-bottom-color:#22385A; }
+html[data-tema="oscuro"] .bz-fila-sel td { background:#33230F !important; }
+html[data-tema="oscuro"] .bz-ayuda-txt { background:#E6EDF7; color:#0D1E3D; box-shadow:0 8px 24px #0008; }
+html[data-tema="oscuro"] .bz-ayuda-txt::after { border-top-color:#E6EDF7; }
+html[data-tema="oscuro"] .bz-ayuda.bz-ayuda-abajo .bz-ayuda-txt::after { border-top-color:transparent; border-bottom-color:#E6EDF7; }
+html[data-tema="oscuro"] .bz-card-hover:hover { box-shadow:0 8px 24px #0008 !important; }
+html[data-tema="oscuro"] input::placeholder, html[data-tema="oscuro"] textarea::placeholder { color:#6B7F99; }
+html[data-tema="oscuro"] .leaflet-container { filter:brightness(.82) contrast(1.05); }
+`;
+// Tema guardado por persona en este navegador: "claro" | "oscuro" | "sistema"
+const leerTema = () => { try { return localStorage.getItem("boaz_tema") || "claro"; } catch { return "claro"; } };
+const resolverTema = (t) => t==="sistema" ? ((typeof window!=="undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "oscuro" : "claro") : t;
+export const aplicarTema = (t) => { try { document.documentElement.dataset.tema = resolverTema(t); } catch {} };
+export function useTema() {
+  const [tema, setTemaBase] = useState(leerTema);
+  useEffect(() => {
+    aplicarTema(tema);
+    if (tema!=="sistema" || !window.matchMedia) return;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)"); const f = () => aplicarTema("sistema");
+    mq.addEventListener ? mq.addEventListener("change", f) : mq.addListener(f);
+    return () => { mq.removeEventListener ? mq.removeEventListener("change", f) : mq.removeListener(f); };
+  }, [tema]);
+  const setTema = (t) => { try { localStorage.setItem("boaz_tema", t); } catch {} setTemaBase(t); };
+  return [tema, setTema, resolverTema(tema)];
+}
 
 // ── UTILIDADES ────────────────────────────────────────────────
 export const fmt = {
@@ -54,9 +101,9 @@ export const ICONOS_HIST = {
 };
 
 export const BADGE_SERVICIO = {
-  same_day: { bg:"#F5F3FF", color:"#7C3AED", label:"Same Day" },
-  next_day: { bg:"#EFF6FF", color:"#0369A1", label:"Next Day" },
-  especial: { bg:"#FEF3E2", color:"#B45309", label:"Especial" },
+  same_day: { bg:"var(--bzf-F5F3FF, #F5F3FF)", color:"var(--bzt-7C3AED, #7C3AED)", label:"Same Day" },
+  next_day: { bg:"var(--bzf-EFF6FF, #EFF6FF)", color:"var(--bzt-0369A1, #0369A1)", label:"Next Day" },
+  especial: { bg:"var(--bzf-FEF3E2, #FEF3E2)", color:"var(--bzt-B45309, #B45309)", label:"Especial" },
 };
 
 // Agrupa las fotos de un mismo evento (mismo timestamp) para mostrarlas juntas.
@@ -78,17 +125,17 @@ export function agruparHistorial(historial) {
 }
 
 export const ESTADOS_PEDIDO = {
-  sin_asignar: { bg:"#EFF6FF", color:"#1D4ED8", label:"Sin asignar" },
-  asignado:    { bg:"#FFF7ED", color:"#C2410C", label:"Asignado" },
-  en_ruta:     { bg:"#FFFBEB", color:"#B45309", label:"En ruta" },
-  entregado:   { bg:"#ECFDF5", color:"#065F46", label:"Entregado" },
-  no_entregado:{ bg:"#FEF2F2", color:"#991B1B", label:"No entregado" },
+  sin_asignar: { bg:"var(--bzf-EFF6FF, #EFF6FF)", color:"var(--bzt-1D4ED8, #1D4ED8)", label:"Sin asignar" },
+  asignado:    { bg:"var(--bzf-FFF7ED, #FFF7ED)", color:"var(--bzt-C2410C, #C2410C)", label:"Asignado" },
+  en_ruta:     { bg:"var(--bzf-FFFBEB, #FFFBEB)", color:"var(--bzt-B45309, #B45309)", label:"En ruta" },
+  entregado:   { bg:"var(--bzf-ECFDF5, #ECFDF5)", color:"var(--bzt-065F46, #065F46)", label:"Entregado" },
+  no_entregado:{ bg:"var(--bzf-FEF2F2, #FEF2F2)", color:"var(--bzt-991B1B, #991B1B)", label:"No entregado" },
 };
 
 export const TIPOS_SERVICIO_PEDIDO = {
-  same_day: { label:"Same Day", bg:"#F5F3FF", color:"#7C3AED" },
-  next_day: { label:"Next Day", bg:"#EFF6FF", color:"#0369A1" },
-  especial: { label:"Especial", bg:"#FFF7ED", color:"#B45309" },
+  same_day: { label:"Same Day", bg:"var(--bzf-F5F3FF, #F5F3FF)", color:"var(--bzt-7C3AED, #7C3AED)" },
+  next_day: { label:"Next Day", bg:"var(--bzf-EFF6FF, #EFF6FF)", color:"var(--bzt-0369A1, #0369A1)" },
+  especial: { label:"Especial", bg:"var(--bzf-FFF7ED, #FFF7ED)", color:"var(--bzt-B45309, #B45309)" },
 };
 
 export const TARIFAS_SAMEDAY = {
@@ -186,11 +233,11 @@ export const ROLES_ACCESO = {
   finanzas: ["dashboard","ayuda","servicios","clientes","cotizaciones","catalogo","liquidacion-clientes","facturacion","cobranza","liquidaciones","liquidacion-transporte","planilla","gastos","reportes","rentabilidad"],
 };
 export const Chip = ({ estado, size="sm" }) => {
-  const s = ESTADOS_PEDIDO[estado] || { bg:"#F3F4F6", color:"#374151", label: estado };
+  const s = ESTADOS_PEDIDO[estado] || { bg:"var(--bzf-F3F4F6, #F3F4F6)", color:"var(--bzt-374151, #374151)", label: estado };
   return (
     <span style={{ background: s.bg, color: s.color, padding: size==="sm" ? "3px 10px" : "5px 14px",
       borderRadius: 20, fontSize: size==="sm" ? 11 : 12, fontWeight: 700, whiteSpace:"nowrap",
-      border: `1px solid ${s.color}22` }}>
+      border: `1px solid ${alfa(s.color,"22")}` }}>
       {s.label}
     </span>
   );
@@ -399,6 +446,8 @@ export const ICONOS = {
   columns:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/>',
   key:'<path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/>',
   copy:'<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+  moon:'<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
   printer:'<path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/>',
   help:'<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
   book:'<path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/>',
@@ -443,7 +492,7 @@ if (typeof document !== "undefined" && !document.getElementById("bz-css")) {
     document.head.appendChild(l);
     const st = document.createElement("style");
     st.id = "bz-css";
-    st.textContent = `
+    st.textContent = CSS_TEMA_OSCURO + `
       body, button, input, select, textarea { font-family:'Inter','Segoe UI',sans-serif; font-variant-numeric:tabular-nums; }
       input, select, textarea { box-sizing:border-box; max-width:100%; }
       @keyframes spin { to { transform:rotate(360deg); } }
@@ -504,7 +553,7 @@ export function EstadoVacio({ icono="inbox", titulo, texto, children, pasos, ir,
       <div style={{ fontSize:14, fontWeight:700, color:B.textPri }}>{titulo}</div>
       {texto && <div style={{ fontSize:12, color:B.textSec, marginTop:4, maxWidth:520, margin:"4px auto 0" }}>{texto}</div>}
       {pasos && pasos.length>0 && (
-        <ol style={{ textAlign:"left", display:"inline-block", margin:"16px auto 0", padding:"12px 16px 12px 34px", background:"#F6F9FC", borderRadius:10, fontSize:12.5, color:B.textPri, lineHeight:1.6, maxWidth:520 }}>
+        <ol style={{ textAlign:"left", display:"inline-block", margin:"16px auto 0", padding:"12px 16px 12px 34px", background:"var(--bzf-F6F9FC, #F6F9FC)", borderRadius:10, fontSize:12.5, color:B.textPri, lineHeight:1.6, maxWidth:520 }}>
           {pasos.map((t,i)=><li key={i}>{t}</li>)}
         </ol>
       )}
@@ -547,7 +596,7 @@ export function Sparkline({ datos, color=B.navy, w=90, h=28 }) {
   const d = pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
   return (
     <svg width={w} height={h} style={{ display:"block" }}>
-      <path d={d+` L${w-2} ${h} L2 ${h} Z`} fill={color+"18"}/>
+      <path d={d+` L${w-2} ${h} L2 ${h} Z`} fill={alfa(color,"18")}/>
       <path d={d} fill="none" stroke={color} strokeWidth={1.8} strokeLinejoin="round" strokeLinecap="round"/>
       <circle cx={pts[pts.length-1][0]} cy={pts[pts.length-1][1]} r={2.6} fill={color}/>
     </svg>
@@ -560,9 +609,9 @@ export function Kpi({ icon, label, valor, sub, color=B.navy, cv, delta, deltaTxt
   return (
     <div className="bz-card-hover" style={{ ...CARD, padding:"16px 18px", minWidth:0 }}>
       <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
-        {icon && <div style={{ width:28, height:28, borderRadius:8, background:`${color}14`, color, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><Ico n={icon} size={16}/></div>}
+        {icon && <div style={{ width:28, height:28, borderRadius:8, background:alfa(color,"14"), color, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><Ico n={icon} size={16}/></div>}
         <div style={{ fontSize:12, fontWeight:600, color:B.textSec, flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={label}>{label}{ayuda && <Ayuda k={ayuda} size={13}/>}</div>
-        {delta!=null && <span style={{ fontSize:11, fontWeight:700, padding:"2px 7px", borderRadius:8, whiteSpace:"nowrap", background: bueno?"#ECFDF5":"#FEF2F2", color: bueno?"#047857":"#B91C1C" }}>{delta>=0?"▲":"▼"} {Math.abs(delta)}%{deltaTxt}</span>}
+        {delta!=null && <span style={{ fontSize:11, fontWeight:700, padding:"2px 7px", borderRadius:8, whiteSpace:"nowrap", background: bueno?"var(--bzf-ECFDF5, #ECFDF5)":"var(--bzf-FEF2F2, #FEF2F2)", color: bueno?"var(--bzt-047857, #047857)":"var(--bzt-B91C1C, #B91C1C)" }}>{delta>=0?"▲":"▼"} {Math.abs(delta)}%{deltaTxt}</span>}
       </div>
       <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", gap:8 }}>
         <div style={{ fontSize:24, fontWeight:800, color:cv||B.textPri, lineHeight:1.1, whiteSpace:"nowrap" }}>{valor}</div>
@@ -577,11 +626,11 @@ export const KpiDS = Kpi;
 // Tarjeta compacta para módulos con su propio atajo Kpi({t,v,c,s}): mismo diseño, valor en verde/rojo solo si significa algo
 export const kpiMini = ({ t, v, c, s, i }) => (
   <div style={{ flex:"1 1 170px", minWidth:0, display:"grid" }}>
-    <KpiDS icon={i} label={t} valor={v} sub={s} color={c||B.navy} cv={c===B.green?"#047857":c===B.red?"#B91C1C":c===B.orange?"#B45309":undefined}/>
+    <KpiDS icon={i} label={t} valor={v} sub={s} color={c||B.navy} cv={c===B.green?"var(--bzt-047857, #047857)":c===B.red?"var(--bzt-B91C1C, #B91C1C)":c===B.orange?"var(--bzt-B45309, #B45309)":undefined}/>
   </div>);
 export const TAB_SEG = (on) => ({ display:"flex", alignItems:"center", gap:7, padding:"6px 14px", borderRadius:8, border:"none", cursor:"pointer", whiteSpace:"nowrap",
   fontSize:13, fontWeight:on?700:500, background:on?B.white:"transparent", color:on?B.navy:B.textSec, boxShadow:on?"0 1px 2px #0D1E3D22":"none" });
-export const TAB_CONT = { display:"inline-flex", gap:2, padding:3, background:"#E3EAF2", borderRadius:10, maxWidth:"100%", overflowX:"auto" };
+export const TAB_CONT = { display:"inline-flex", gap:2, padding:3, background:"var(--bzf-E3EAF2, #E3EAF2)", borderRadius:10, maxWidth:"100%", overflowX:"auto" };
 
 // Pestañas: tipo "linea" (secciones de una pantalla) o "segmento" (filtros de una lista)
 export function Tabs({ tabs, valor, onChange, tipo="segmento", style }) {
@@ -592,12 +641,12 @@ export function Tabs({ tabs, valor, onChange, tipo="segmento", style }) {
           style={{ display:"flex", alignItems:"center", gap:7, padding:"10px 14px", background:"none", border:"none", cursor:"pointer", whiteSpace:"nowrap",
             fontSize:13, fontWeight:on?700:500, color:on?B.navy:B.textSec, borderBottom:`2px solid ${on?B.gold:"transparent"}`, marginBottom:-1 }}>
           {t.i && <Ico n={t.i} size={16} color={on?B.gold:B.textMut}/>}{t.l}
-          {t.n!=null && <span style={{ fontSize:11, fontWeight:700, padding:"1px 7px", borderRadius:10, background:on?`${B.gold}1F`:"#E6EDF5", color:on?B.goldDk:B.textSec }}>{t.n}</span>}
+          {t.n!=null && <span style={{ fontSize:11, fontWeight:700, padding:"1px 7px", borderRadius:10, background:on?`${B.gold}1F`:"var(--bzf-E6EDF5, #E6EDF5)", color:on?B.goldDk:B.textSec }}>{t.n}</span>}
         </button>); })}
     </div>
   );
   return (
-    <div style={{ display:"inline-flex", gap:2, padding:3, background:"#E3EAF2", borderRadius:10, maxWidth:"100%", overflowX:"auto", ...style }}>
+    <div style={{ display:"inline-flex", gap:2, padding:3, background:"var(--bzf-E3EAF2, #E3EAF2)", borderRadius:10, maxWidth:"100%", overflowX:"auto", ...style }}>
       {tabs.map(t => { const on = valor===t.id; return (
         <button key={t.id} onClick={()=>onChange(t.id)}
           style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 12px", borderRadius:8, border:"none", cursor:"pointer", whiteSpace:"nowrap",
@@ -610,7 +659,8 @@ export function Tabs({ tabs, valor, onChange, tipo="segmento", style }) {
 }
 
 // Etiqueta de estado
-export const TONOS = { ok:["#ECFDF5","#047857"], warn:["#FFF7ED","#B45309"], error:["#FEF2F2","#B91C1C"], info:["#EFF6FF","#1D4ED8"], neutro:["#F1F5F9","#475569"] };
+const tono = (f,t) => [`var(--bzf-${f}, #${f})`, `var(--bzt-${t}, #${t})`];
+export const TONOS = { ok:tono("ECFDF5","047857"), warn:tono("FFF7ED","B45309"), error:tono("FEF2F2","B91C1C"), info:tono("EFF6FF","1D4ED8"), neutro:tono("F1F5F9","475569") };
 export function Etiqueta({ tono="neutro", children }) {
   const [bg,c] = TONOS[tono] || TONOS.neutro;
   return <span style={{ display:"inline-flex", alignItems:"center", gap:6, background:bg, color:c, padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:700, whiteSpace:"nowrap" }}>
@@ -640,7 +690,7 @@ export function Th({ children, col, orden, onOrden, align="left", style, ayuda }
   const on = col && orden && orden.col===col;
   return (
     <th onClick={()=>col && onOrden && onOrden(col)} className={col?"bz-th-orden":undefined}
-      style={{ padding:"10px 14px", textAlign:align, fontSize:11, fontWeight:700, color:on?B.navy:B.textSec, background:"#F6F9FC",
+      style={{ padding:"10px 14px", textAlign:align, fontSize:11, fontWeight:700, color:on?B.navy:B.textSec, background:"var(--bzf-F6F9FC, #F6F9FC)",
         letterSpacing:"0.3px", whiteSpace:"nowrap", userSelect:"none", cursor:col?"pointer":"default", ...style }}>
       <span style={{ display:"inline-flex", alignItems:"center", gap:4 }}>
         {children}
@@ -659,7 +709,7 @@ export function usePaginacion(filas, tamInicial=25, nombre="registros") {
   const visibles = filas.slice((p-1)*tam, p*tam);
   const btn = (dis) => ({ width:30, height:30, borderRadius:8, border:`1px solid ${B.border}`, background:B.white, color:dis?B.border:B.textPri, cursor:dis?"default":"pointer", display:"inline-flex", alignItems:"center", justifyContent:"center" });
   const pie = (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap", padding:"10px 14px", borderTop:`1px solid ${B.border}`, background:"#FBFCFE", fontSize:12, color:B.textSec }}>
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap", padding:"10px 14px", borderTop:`1px solid ${B.border}`, background:"var(--bzf-FBFCFE, #FBFCFE)", fontSize:12, color:B.textSec }}>
       <span>{total===0 ? `Sin ${nombre}` : <>Mostrando <b style={{ color:B.textPri }}>{(p-1)*tam+1}–{Math.min(p*tam,total)}</b> de <b style={{ color:B.textPri }}>{total.toLocaleString("en-US")}</b> {nombre}</>}</span>
       <div style={{ display:"flex", alignItems:"center", gap:8 }}>
         <span>Filas</span>
@@ -867,7 +917,7 @@ export function ModalCambiarClave({ motivo="voluntario", onListo, onCancelar, to
         <input type={ver?"text":"password"} autoComplete="new-password" style={campo} value={c2} onChange={e=>setC2(e.target.value)} onKeyDown={e=>e.key==="Enter"&&guardar()}/>
         <label style={{ display:"flex", alignItems:"center", gap:8, fontSize:12, color:B.textSec, marginBottom:12, cursor:"pointer" }}><input type="checkbox" checked={ver} onChange={e=>setVer(e.target.checked)}/> Mostrar contraseñas</label>
         <div style={{ fontSize:11.5, color:B.textMut, marginBottom:12 }}>Mínimo 8 caracteres, con letras y números.</div>
-        {err && <div role="alert" style={{ background:"#FEF2F2", border:"1px solid #FECACA", color:"#B91C1C", borderRadius:8, padding:"9px 12px", fontSize:12.5, marginBottom:12 }}>{err}</div>}
+        {err && <div role="alert" style={{ background:"var(--bzf-FEF2F2, #FEF2F2)", border:"1px solid var(--bzl-FECACA, #FECACA)", color:"var(--bzt-B91C1C, #B91C1C)", borderRadius:8, padding:"9px 12px", fontSize:12.5, marginBottom:12 }}>{err}</div>}
         <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
           {!obligatorio && <BtnSec onClick={onCancelar}>Cancelar</BtnSec>}
           <BtnPri onClick={guardar} disabled={guardando}>{guardando?"Guardando…":"Guardar contraseña"}</BtnPri>

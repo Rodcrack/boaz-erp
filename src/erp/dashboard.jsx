@@ -1,6 +1,6 @@
 // BOAZ ERP — módulo "dashboard" (parte de BoazERP; ver src/BoazERP.jsx)
 import { useState, useEffect, useCallback, useRef, useMemo, Fragment } from "react";
-import { B, BADGE_SERVICIO, CARD, Cargando, Chip, ESTADOS_PEDIDO, EstadoVacio, Ico, Kpi, SeccionTitulo, Tabs, Th, diaLocal, escHTML, fmt, sb, traerTodo } from "./base.jsx";
+import { alfa, B, BADGE_SERVICIO, CARD, Cargando, Chip, ESTADOS_PEDIDO, EstadoVacio, Ico, Kpi, SeccionTitulo, Tabs, Th, diaLocal, escHTML, fmt, sb, traerTodo } from "./base.jsx";
 import { cargarServicios, dia10, montoAsignacionPeriodo } from "./operacion.jsx";
 import { DonutChart, SerieDiaria } from "./reportes.jsx";
 
@@ -248,7 +248,7 @@ export function DashboardFinanzas() {
               </div>))}
             <div style={{ display:"flex", justifyContent:"space-between", borderTop:`1px solid ${B.border}`, marginTop:10, paddingTop:10, fontSize:13 }}>
               <span style={{ color:B.textSec }}>Ventas sin IGV {fmt.sol(ventaMes[i])} − egresos {fmt.sol(tot)}</span>
-              <b style={{ color: margenMes[i]>=0 ? "#047857" : "#B91C1C" }}>Margen {fmt.sol(margenMes[i])}</b>
+              <b style={{ color: margenMes[i]>=0 ? "var(--bzt-047857, #047857)" : "var(--bzt-B91C1C, #B91C1C)" }}>Margen {fmt.sol(margenMes[i])}</b>
             </div>
           </>);
         })()}
@@ -259,7 +259,7 @@ export function DashboardFinanzas() {
         {topCli.map(([n,v])=>(
           <div key={n} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
             <div style={{ width:150, fontSize:12, color:B.textPri, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{n}</div>
-            <div style={{ flex:1, height:10, background:B.bg, borderRadius:6, overflow:"hidden" }}><div style={{ height:"100%", width:`${v/maxCli*100}%`, background:`linear-gradient(90deg,${B.navy},${B.navyLt||B.navy})` }}/></div>
+            <div style={{ flex:1, height:10, background:B.bg, borderRadius:6, overflow:"hidden" }}><div style={{ height:"100%", width:`${v/maxCli*100}%`, background:`linear-gradient(90deg,${B.navyFijo},${B.navyLt||B.navy})` }}/></div>
             <div style={{ width:90, textAlign:"right", fontSize:12, fontWeight:700, color:B.navy }}>{fmt.sol(v)}</div>
           </div>
         ))}
@@ -336,7 +336,7 @@ export function MapaFlota({ pedidos, repartidores }) {
       pts.push([p.dest_lat,p.dest_lng]);
     });
     riders.filter(r=>r.pos).forEach(r => {
-      const ic = L.divIcon({ className:"", iconSize:[34,34], iconAnchor:[17,17], html:`<div style="width:34px;height:34px;border-radius:50%;background:${B.navy};border:3px solid ${B.gold};color:${B.gold};display:flex;align-items:center;justify-content:center;font:700 12px Inter,sans-serif;box-shadow:0 2px 8px #0006">${escHTML((r.nombres||"?")[0])}${escHTML((r.apellidos||"")[0]||"")}</div>` });
+      const ic = L.divIcon({ className:"", iconSize:[34,34], iconAnchor:[17,17], html:`<div style="width:34px;height:34px;border-radius:50%;background:${B.navyFijo};border:3px solid ${B.gold};color:${B.gold};display:flex;align-items:center;justify-content:center;font:700 12px Inter,sans-serif;box-shadow:0 2px 8px #0006">${escHTML((r.nombres||"?")[0])}${escHTML((r.apellidos||"")[0]||"")}</div>` });
       L.marker([r.pos.lat,r.pos.lng], { icon:ic, zIndexOffset:1000 }).addTo(capa.current)
         .bindPopup(`<b>${escHTML(r.nombres)} ${escHTML(r.apellidos)}</b><br>Última señal ${haceCuanto(r.pos.t)}<br>${r.enRuta} en ruta · ${r.asig} asignados`);
       pts.push([r.pos.lat,r.pos.lng]);
@@ -359,8 +359,8 @@ export function MapaFlota({ pedidos, repartidores }) {
         <div style={{ fontSize:13, fontWeight:700, color:B.textPri, marginBottom:4 }}>Repartidores activos</div>
         <div style={{ fontSize:10, color:B.textMut, marginBottom:10, lineHeight:1.4 }}>La posición se actualiza cuando el repartidor inicia ruta, cambia el estado de un pedido o entrega (últimas 24 h).</div>
         {riders.map(r => (
-          <div key={r.id} onClick={()=>irA(r)} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 6px", borderBottom:`1px solid ${B.border}`, cursor:r.pos?"pointer":"default", background:foco===r.id?"#FFF7ED":"transparent", borderRadius:6 }}>
-            <div style={{ width:30, height:30, borderRadius:"50%", background:r.pos?B.navy:"#CBD5E1", color:r.pos?B.gold:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, flexShrink:0 }}>{(r.nombres||"?")[0]}{(r.apellidos||"")[0]}</div>
+          <div key={r.id} onClick={()=>irA(r)} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 6px", borderBottom:`1px solid ${B.border}`, cursor:r.pos?"pointer":"default", background:foco===r.id?"var(--bzf-FFF7ED, #FFF7ED)":"transparent", borderRadius:6 }}>
+            <div style={{ width:30, height:30, borderRadius:"50%", background:r.pos?B.navyFijo:"var(--bzf-CBD5E1, #CBD5E1)", color:r.pos?B.gold:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, flexShrink:0 }}>{(r.nombres||"?")[0]}{(r.apellidos||"")[0]}</div>
             <div style={{ flex:1, minWidth:0 }}>
               <div style={{ fontSize:12, fontWeight:600, color:B.textPri, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.nombres} {r.apellidos}</div>
               <div style={{ fontSize:10, color:B.textMut }}>{r.pos ? `Señal ${haceCuanto(r.pos.t)}` : "Sin señal en 24 h"} · {r.enRuta} en ruta</div>
@@ -536,7 +536,7 @@ export function DashboardOperacion({ pedidos, repartidores, liquidaciones, cotiz
             <div style={{ display:"flex", flexWrap:"wrap", gap:10 }}>
               {items.map((it,i)=>(
                 <button key={i} onClick={()=>onIr&&onIr(it.ir)}
-                  style={{ display:"flex", alignItems:"center", gap:8, background:`${it.c}10`, border:`1px solid ${it.c}33`, color:B.textPri,
+                  style={{ display:"flex", alignItems:"center", gap:8, background:`${alfa(it.c,"10")}`, border:`1px solid ${alfa(it.c,"33")}`, color:B.textPri,
                     borderRadius:10, padding:"8px 12px", fontSize:12, fontWeight:600, cursor:"pointer" }}>
                   <Ico n={it.ico} size={15} color={it.c}/>{it.t}<Ico n="arrow" size={13} color={B.textMut}/>
                 </button>
@@ -646,7 +646,7 @@ export function DashboardOperacion({ pedidos, repartidores, liquidaciones, cotiz
             <div key={r.id} style={{ padding:"8px 0", borderBottom:`1px solid ${B.border}` }}>
               <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
                 <div style={{ width:32, height:32, borderRadius:"50%",
-                  background:`linear-gradient(135deg,${B.navy},${B.navyLt||"#1E3A6E"})`,
+                  background:`linear-gradient(135deg,${B.navyFijo},${B.navyLt||"#1E3A6E"})`,
                   display:"flex", alignItems:"center", justifyContent:"center",
                   fontSize:12, fontWeight:700, color:B.gold, flexShrink:0 }}>
                   {r.nombres?.[0]}{r.apellidos?.[0]}

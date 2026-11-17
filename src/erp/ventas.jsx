@@ -1,6 +1,6 @@
 // BOAZ ERP — módulo "ventas" (parte de BoazERP; ver src/BoazERP.jsx)
 import { useState, useEffect, useCallback, useRef, useMemo, Fragment } from "react";
-import { Ayuda, B, BtnIco, BtnPri, BtnSec, Buscador, CARD, Cargando, Confirm, EstadoVacio, Etiqueta, Ico, Kpi, KpiDS, TAB_CONT, TAB_SEG, TD, TDN, TDS, Tabs, Th, XLSX, asegurarXLSX, diaLocal, escHTML, fmt, inp, lbl, sb, traerTodo, usePaginacion } from "./base.jsx";
+import { alfa, Ayuda, B, BtnIco, BtnPri, BtnSec, Buscador, CARD, Cargando, Confirm, EstadoVacio, Etiqueta, Ico, Kpi, KpiDS, TAB_CONT, TAB_SEG, TD, TDN, TDS, Tabs, Th, XLSX, asegurarXLSX, diaLocal, escHTML, fmt, inp, lbl, sb, traerTodo, usePaginacion } from "./base.jsx";
 import { clienteCobraPorPedido } from "./dashboard.jsx";
 import { TIPOS_SERV, cargarServicios, montoAsignacionPendiente } from "./operacion.jsx";
 import { solN } from "./costos.jsx";
@@ -112,7 +112,7 @@ export function Liquidaciones({ repartidores, pedidos, toast, onRefresh }) {
         overflow:"hidden", boxShadow:"0 1px 2px #0D1E3D0D" }}>
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
           <thead>
-            <tr style={{ background:"#F6F9FC" }}>
+            <tr style={{ background:"var(--bzf-F6F9FC, #F6F9FC)" }}>
               {["Repartidor","Fecha","Pedidos","Total","Estado","Acciones"].map(h=>(
                 <th key={h} style={{ padding:"10px 16px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
               ))}
@@ -130,7 +130,7 @@ export function Liquidaciones({ repartidores, pedidos, toast, onRefresh }) {
                 <td style={{ padding:"12px 16px", fontSize:13, fontWeight:800, color:B.navy }}>{fmt.sol(l.monto_ganado_s)}</td>
                 <td style={{ padding:"12px 16px" }}>
                   <span style={{ fontSize:11, padding:"3px 10px", borderRadius:20, fontWeight:700,
-                    background: l.estado==="pagado"?"#ECFDF5":"#FFFBEB",
+                    background: l.estado==="pagado"?"var(--bzf-ECFDF5, #ECFDF5)":"var(--bzf-FFFBEB, #FFFBEB)",
                     color: l.estado==="pagado"?B.green:B.goldDk,
                     border:`1px solid ${l.estado==="pagado"?B.green+"44":B.gold+"44"}` }}>
                     {l.estado==="pagado"?"✓ Pagado":"Pendiente"}
@@ -296,7 +296,7 @@ export function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }
                 <td style={{ ...TDS, whiteSpace:"nowrap" }}>{fmt.fecha(fa.fecha_emision)}</td>
                 <td style={{ ...TDN, color:B.textSec }}>{fmt.sol(fa.igv_s)}</td>
                 <td style={{ ...TDN, fontWeight:600 }}>{fmt.sol(fa.total_s)}</td>
-                <td style={{ ...TDN, color: fa.monto_detraccion>0?"#B91C1C":B.textMut }}>
+                <td style={{ ...TDN, color: fa.monto_detraccion>0?"var(--bzt-B91C1C, #B91C1C)":B.textMut }}>
                   {fa.monto_detraccion>0 ? <>− {fmt.sol(fa.monto_detraccion)} <span style={{ fontSize:11, color:B.textMut }}>({fa.porcentaje_detraccion}%)</span></> : "—"}
                 </td>
                 <td style={{ ...TDN, fontWeight:800, color:B.navy }}>
@@ -311,7 +311,7 @@ export function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }
                   <div style={{ display:"flex", alignItems:"center", justifyContent:"flex-end", gap:4, whiteSpace:"nowrap" }}>
                   {fa.estado_pago!=="pagado" && !esAnulada(fa) && (
                     <button className="bz-btn-sec" onClick={()=>setModalPago(fa)}
-                      style={{ fontSize:12, fontWeight:600, color:"#047857", background:B.white, border:`1px solid ${B.border}`, borderRadius:8, padding:"5px 10px", cursor:"pointer" }}>Registrar pago</button>
+                      style={{ fontSize:12, fontWeight:600, color:"var(--bzt-047857, #047857)", background:B.white, border:`1px solid ${B.border}`, borderRadius:8, padding:"5px 10px", cursor:"pointer" }}>Registrar pago</button>
                   )}
                   {!esAnulada(fa) && <><BtnIco n="edit" title="Editar factura" onClick={()=>{setEditandoFactura(fa); setF({...fa, aplica_detraccion:(fa.porcentaje_detraccion||0)>0, porcentaje_detraccion: fa.porcentaje_detraccion?String(fa.porcentaje_detraccion):""}); setModal(true);}}/>
                   <BtnIco n="xcircle" title="Anular factura" onClick={()=>setAnular(fa)}/></>}
@@ -426,8 +426,8 @@ export function Facturacion({ empresas, pedidos, tiposServicio, usuario, toast }
 // MÓDULO 7: REPORTES
 // ══════════════════════════════════════════════════════════════
 export const TIPOS_SERVICIO = {
-  same_day: { label:"Same Day", color:"#7C3AED", bg:"#F5F3FF" },
-  next_day: { label:"Next Day", color:"#0369A1", bg:"#EFF6FF" },
+  same_day: { label:"Same Day", color:"var(--bzt-7C3AED, #7C3AED)", bg:"var(--bzf-F5F3FF, #F5F3FF)" },
+  next_day: { label:"Next Day", color:"var(--bzt-0369A1, #0369A1)", bg:"var(--bzf-EFF6FF, #EFF6FF)" },
 };
 
 // ── Carga dinámica de ExcelJS (para la Liquidación de Entregas con estilo) ──
@@ -1068,8 +1068,8 @@ export function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesU
             <div style={{ fontSize:13, fontWeight:700, color:B.textPri, display:"flex", alignItems:"center", gap:8 }}><Ico n={ico} size={16} color={B.gold}/> {titulo} ({n})</div>
             <div style={{ fontSize:13, color:B.textSec }}>Subtotal <b style={{ color:B.textPri }}>{fmt.sol(sub)}</b></div>
           </div>);
-        const thS = { padding:"9px 14px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap", background:"#F6F9FC", position:"sticky", top:0 };
-        const tdS = { padding:"9px 14px", fontSize:13, color:B.textPri, borderTop:`1px solid #E3EAF2` };
+        const thS = { padding:"9px 14px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap", background:"var(--bzf-F6F9FC, #F6F9FC)", position:"sticky", top:0 };
+        const tdS = { padding:"9px 14px", fontSize:13, color:B.textPri, borderTop:`1px solid var(--bzl-E3EAF2, #E3EAF2)` };
         const tdR = { ...tdS, textAlign:"right", whiteSpace:"nowrap" };
         return (
           <>
@@ -1081,20 +1081,20 @@ export function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesU
             </div>
 
             {noCobrables>0 && (
-              <div style={{ background:"#EFF6FF", border:"1px solid #BFDBFE", borderRadius:10, padding:"10px 14px", marginBottom:16, fontSize:12.5, color:"#1E40AF" }}>
+              <div style={{ background:"var(--bzf-EFF6FF, #EFF6FF)", border:"1px solid var(--bzl-BFDBFE, #BFDBFE)", borderRadius:10, padding:"10px 14px", marginBottom:16, fontSize:12.5, color:"var(--bzt-1E40AF, #1E40AF)" }}>
                 {noCobrables} pedido{noCobrables===1?"":"s"} del período no se suma{noCobrables===1?"":"n"} porque su cliente no tiene habilitado el cobro <strong>por pedido</strong> (se le cobra por unidad o por viaje). Si también debe cobrarse por pedido, habilítalo en Clientes → «Cómo se cobra».
               </div>
             )}
 
             {(pedYaFact>0 || servYaFact>0 || diasUnidYaFact>0) && (
-              <div style={{ background:"#F0FDF4", border:"1px solid #BBF7D0", borderRadius:10, padding:"10px 14px", marginBottom:16, fontSize:12.5, color:"#166534", display:"flex", gap:8, alignItems:"flex-start" }}>
+              <div style={{ background:"var(--bzf-F0FDF4, #F0FDF4)", border:"1px solid var(--bzl-BBF7D0, #BBF7D0)", borderRadius:10, padding:"10px 14px", marginBottom:16, fontSize:12.5, color:"var(--bzt-166534, #166534)", display:"flex", gap:8, alignItems:"flex-start" }}>
                 <Ico n="check" size={16} style={{ marginTop:1 }}/>
                 <div>Ya facturado en este período y <b>no se vuelve a sumar</b>: {[pedYaFact>0 && `${pedYaFact.toLocaleString("en-US")} pedido${pedYaFact===1?"":"s"}`, diasUnidYaFact>0 && `${diasUnidYaFact} día${diasUnidYaFact===1?"":"s"} de unidad`, servYaFact>0 && `${servYaFact} servicio${servYaFact===1?"":"s"}`].filter(Boolean).join(" · ")}. Si una factura estuvo mal, anúlala en Facturación y todo vuelve a aparecer aquí.</div>
               </div>
             )}
 
             {enlaceOk===false && (
-              <div style={{ background:"#FFF7ED", border:"1px solid #FDBA74", borderRadius:10, padding:"10px 14px", marginBottom:16, fontSize:12.5, color:"#9A3412" }}>
+              <div style={{ background:"var(--bzf-FFF7ED, #FFF7ED)", border:"1px solid var(--bzl-FDBA74, #FDBA74)", borderRadius:10, padding:"10px 14px", marginBottom:16, fontSize:12.5, color:"var(--bzt-9A3412, #9A3412)" }}>
                 Para emitir la factura desde aquí y que lo facturado no se repita, falta ejecutar <b>facturacion_enlace_boaz.sql</b> en Supabase. Mientras tanto, la pre-facturación funciona como antes.
               </div>
             )}
@@ -1143,7 +1143,7 @@ export function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesU
                         <td style={tdS}>{p.dest_nombre}</td>
                         <td style={{ ...tdS, color:B.textSec }}>{p.dest_distrito||"—"}</td>
                         <td style={{ ...tdS, color:B.textSec, whiteSpace:"nowrap" }}>{fmt.fecha(p.created_at)}</td>
-                        <td style={{ ...tdR, fontWeight:600, color:(parseFloat(p.tarifa_s)||0)>0?B.textPri:"#B45309" }}>{(parseFloat(p.tarifa_s)||0)>0 ? fmt.sol(p.tarifa_s) : "Sin tarifa"}</td>
+                        <td style={{ ...tdR, fontWeight:600, color:(parseFloat(p.tarifa_s)||0)>0?B.textPri:"var(--bzt-B45309, #B45309)" }}>{(parseFloat(p.tarifa_s)||0)>0 ? fmt.sol(p.tarifa_s) : "Sin tarifa"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1167,7 +1167,7 @@ export function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesU
                         {todas && <td style={{ ...tdS, color:B.textSec }}>{nombreEmpresa(f.asignacion.empresa_id)}</td>}
                         <td style={{ ...tdS, fontWeight:700, color:B.navy }}>{f.unidad?.placa||"—"}</td>
                         <td style={{ ...tdS, textTransform:"capitalize" }}>{f.unidad?.tipo_vehiculo||"—"}</td>
-                        <td style={tdR} title={f.estimado ? "Estimado por fechas: esta asignación no tiene calendario de servicio" : "Días marcados en el calendario de servicio"}>{f.dias}{f.estimado && <span style={{ fontSize:11, color:"#B45309", fontWeight:600 }}> est.</span>}</td>
+                        <td style={tdR} title={f.estimado ? "Estimado por fechas: esta asignación no tiene calendario de servicio" : "Días marcados en el calendario de servicio"}>{f.dias}{f.estimado && <span style={{ fontSize:11, color:"var(--bzt-B45309, #B45309)", fontWeight:600 }}> est.</span>}</td>
                         <td style={{ ...tdR, color:B.textSec }}>{fmt.sol(f.asignacion.tarifa_dia)}</td>
                         <td style={{ ...tdR, fontWeight:600 }}>{fmt.sol(f.monto)}</td>
                       </tr>
@@ -1201,7 +1201,7 @@ export function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesU
             )}
 
             {hayAlgo && (
-              <div style={{ ...CARD, padding:"14px 18px", background:"#FFF8EF", borderColor:`${B.gold}66`, display:"flex", justifyContent:"flex-end", gap:28, flexWrap:"wrap", alignItems:"baseline", fontSize:13, color:B.textSec }}>
+              <div style={{ ...CARD, padding:"14px 18px", background:"var(--bzf-FFF8EF, #FFF8EF)", borderColor:`${B.gold}66`, display:"flex", justifyContent:"flex-end", gap:28, flexWrap:"wrap", alignItems:"baseline", fontSize:13, color:B.textSec }}>
                 <span>Subtotal: <b style={{ color:B.textPri }}>{fmt.sol(subtotalGen)}</b></span>
                 <span>IGV 18%: <b style={{ color:B.textPri }}>{fmt.sol(igvGen)}</b></span>
                 <span style={{ fontSize:15, color:B.navy }}>Total a facturar: <b style={{ fontSize:18, color:B.goldDk }}>{fmt.sol(totalGen)}</b></span>
@@ -1312,12 +1312,12 @@ export function ModalEmitirFactura({ empresa, desde, hasta, pedidos, subtotalPed
         </div>
         <div style={{ fontSize:12.5, color:B.textSec, marginBottom:14, lineHeight:1.5 }}>Del {fmt.fecha(desde)} al {fmt.fecha(hasta)}{empresa.ruc ? ` · RUC ${empresa.ruc}` : ""}. Se registra la factura en el ERP y todo lo incluido queda marcado para no volver a cobrarlo. <b>Emite el comprobante en SUNAT con estos mismos datos.</b></div>
 
-        <div style={{ background:"#F6F9FC", borderRadius:10, padding:"8px 14px", marginBottom:14 }}>
+        <div style={{ background:"var(--bzf-F6F9FC, #F6F9FC)", borderRadius:10, padding:"8px 14px", marginBottom:14 }}>
           {pedidos.length>0 && fila("package", `${pedidos.length.toLocaleString("en-US")} pedido${pedidos.length===1?"":"s"}`, subtotalPed)}
           {filasTransporte.length>0 && fila("truck", `${nDiasUnid} día${nDiasUnid===1?"":"s"} de ${filasTransporte.length} unidad${filasTransporte.length===1?"":"es"}`, subtotalUnid)}
           {servicios.length>0 && fila("map", `${servicios.length} viaje${servicios.length===1?"":"s"}, recojo${servicios.length===1?"":"s"} o servicio${servicios.length===1?"":"s"}`, subtotalServ)}
         </div>
-        {sinTarifa>0 && <div style={{ background:"#FFF7ED", border:"1px solid #FDBA74", borderRadius:10, padding:"9px 12px", fontSize:12.5, color:"#9A3412", marginBottom:14 }}>{sinTarifa} pedido{sinTarifa===1?"":"s"} no tiene{sinTarifa===1?"":"n"} tarifa y entraría{sinTarifa===1?"":"n"} en S/ 0. Si deben cobrarse, cierra esta ventana y corrige su tarifa primero.</div>}
+        {sinTarifa>0 && <div style={{ background:"var(--bzf-FFF7ED, #FFF7ED)", border:"1px solid var(--bzl-FDBA74, #FDBA74)", borderRadius:10, padding:"9px 12px", fontSize:12.5, color:"var(--bzt-9A3412, #9A3412)", marginBottom:14 }}>{sinTarifa} pedido{sinTarifa===1?"":"s"} no tiene{sinTarifa===1?"":"n"} tarifa y entraría{sinTarifa===1?"":"n"} en S/ 0. Si deben cobrarse, cierra esta ventana y corrige su tarifa primero.</div>}
 
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
           <div><label style={lbl}>Serie</label><input style={inp} value={f.serie} onChange={e=>cambiarSerie(e.target.value.toUpperCase())}/></div>
@@ -1332,15 +1332,15 @@ export function ModalEmitirFactura({ empresa, desde, hasta, pedidos, subtotalPed
           {!f.det && total>700 && <span style={{ fontSize:11.5, color:B.textMut }}>El total supera S/ 700: revisa si a este cliente le corresponde.</span>}
         </div>
 
-        <div style={{ display:"grid", gridTemplateColumns:`repeat(${f.det?5:3},1fr)`, gap:10, marginTop:12, padding:14, background:"#FFF8EF", border:`1px solid ${B.gold}55`, borderRadius:10 }}>
+        <div style={{ display:"grid", gridTemplateColumns:`repeat(${f.det?5:3},1fr)`, gap:10, marginTop:12, padding:14, background:"var(--bzf-FFF8EF, #FFF8EF)", border:`1px solid ${B.gold}55`, borderRadius:10 }}>
           <div><div style={{ fontSize:10, color:B.textMut }}>VALOR VENTA</div><div style={{ fontSize:15, fontWeight:700, color:B.navy }}>{fmt.sol(subtotal)}</div></div>
           <div><div style={{ fontSize:10, color:B.textMut }}>IGV 18%</div><div style={{ fontSize:15, fontWeight:700, color:B.navy }}>{fmt.sol(igv)}</div></div>
           <div><div style={{ fontSize:10, color:B.textMut }}>TOTAL</div><div style={{ fontSize:17, fontWeight:800, color:B.goldDk }}>{fmt.sol(total)}</div></div>
-          {f.det && <><div><div style={{ fontSize:10, color:B.textMut }}>DETRACCIÓN</div><div style={{ fontSize:15, fontWeight:700, color:"#B91C1C" }}>− {fmt.sol(montoDet)}</div></div>
-          <div><div style={{ fontSize:10, color:B.textMut }}>NETO A COBRAR</div><div style={{ fontSize:17, fontWeight:800, color:"#047857" }}>{fmt.sol(total-montoDet)}</div></div></>}
+          {f.det && <><div><div style={{ fontSize:10, color:B.textMut }}>DETRACCIÓN</div><div style={{ fontSize:15, fontWeight:700, color:"var(--bzt-B91C1C, #B91C1C)" }}>− {fmt.sol(montoDet)}</div></div>
+          <div><div style={{ fontSize:10, color:B.textMut }}>NETO A COBRAR</div><div style={{ fontSize:17, fontWeight:800, color:"var(--bzt-047857, #047857)" }}>{fmt.sol(total-montoDet)}</div></div></>}
         </div>
 
-        {err && <div role="alert" style={{ background:"#FEF2F2", border:"1px solid #FECACA", color:"#B91C1C", borderRadius:8, padding:"9px 12px", fontSize:12.5, marginTop:12 }}>{err}</div>}
+        {err && <div role="alert" style={{ background:"var(--bzf-FEF2F2, #FEF2F2)", border:"1px solid var(--bzl-FECACA, #FECACA)", color:"var(--bzt-B91C1C, #B91C1C)", borderRadius:8, padding:"9px 12px", fontSize:12.5, marginTop:12 }}>{err}</div>}
         <div style={{ display:"flex", gap:10, marginTop:18, justifyContent:"flex-end", alignItems:"center", flexWrap:"wrap" }}>
           {paso && <span style={{ fontSize:12.5, color:B.textSec, marginRight:"auto" }}>{paso}</span>}
           <BtnSec onClick={onClose} disabled={ocupado}>Cancelar</BtnSec>
@@ -1408,10 +1408,10 @@ export function calcularNetoPlanilla(sueldoBruto, sistemaPension, porcentajeAfp)
 // COTIZACIONES — solicitudes que llegan del formulario "Cotizar ahora" de boaz.com.pe
 // ══════════════════════════════════════════════════════════════
 export const ESTADOS_COTIZ = {
-  nueva:      { label:"Nueva",      color:"#2563EB", bg:"#EFF6FF" },
-  contactada: { label:"Contactada", color:"#D97706", bg:"#FFFBEB" },
-  ganada:     { label:"Ganada",     color:"#059669", bg:"#ECFDF5" },
-  perdida:    { label:"Perdida",    color:"#DC2626", bg:"#FEF2F2" },
+  nueva:      { label:"Nueva",      color:"#2563EB", bg:"var(--bzf-EFF6FF, #EFF6FF)" },
+  contactada: { label:"Contactada", color:"var(--bzt-D97706, #D97706)", bg:"var(--bzf-FFFBEB, #FFFBEB)" },
+  ganada:     { label:"Ganada",     color:"#059669", bg:"var(--bzf-ECFDF5, #ECFDF5)" },
+  perdida:    { label:"Perdida",    color:"#DC2626", bg:"var(--bzf-FEF2F2, #FEF2F2)" },
 };
 export function linkWhatsApp(num, texto) {
   let d = (num||"").replace(/\D/g,"");
@@ -1509,7 +1509,7 @@ export function Cotizaciones({ toast, onCambio }) {
                         WhatsApp {c.whatsapp}
                       </a>
                       <a href={`mailto:${c.email}?subject=${encodeURIComponent("Cotización Boaz")}`}
-                        style={{ background:B.navy, color:"#fff", padding:"8px 14px", borderRadius:8, fontSize:12, fontWeight:700, textDecoration:"none" }}>
+                        style={{ background:B.navyFijo, color:"#fff", padding:"8px 14px", borderRadius:8, fontSize:12, fontWeight:700, textDecoration:"none" }}>
                         {c.email}
                       </a>
                       <select value={c.estado} onChange={e=>cambiarEstado(c, e.target.value)} style={{ ...inp, width:"auto" }}>
@@ -1537,10 +1537,10 @@ export function Cotizaciones({ toast, onCambio }) {
 
 // ── COBRANZA: cuentas por cobrar, detracciones y contraentrega (COD) ──
 export const BUCKETS_CXC = [
-  { id:"b0", label:"0–30 días",      min:0,  max:30,    color:"#047857" },
-  { id:"b1", label:"31–60 días",     min:31, max:60,    color:"#B45309" },
-  { id:"b2", label:"61–90 días",     min:61, max:90,    color:"#C2410C" },
-  { id:"b3", label:"Más de 90 días", min:91, max:99999, color:"#B91C1C" },
+  { id:"b0", label:"0–30 días",      min:0,  max:30,    color:"var(--bzt-047857, #047857)" },
+  { id:"b1", label:"31–60 días",     min:31, max:60,    color:"var(--bzt-B45309, #B45309)" },
+  { id:"b2", label:"61–90 días",     min:61, max:90,    color:"var(--bzt-C2410C, #C2410C)" },
+  { id:"b3", label:"Más de 90 días", min:91, max:99999, color:"var(--bzt-B91C1C, #B91C1C)" },
 ];
 export const diasDesdeFecha = (f) => f ? Math.floor((new Date(diaLocal()+"T00:00:00") - new Date(String(f).slice(0,10)+"T00:00:00"))/86400000) : 0;
 
@@ -1651,12 +1651,12 @@ export function Cobranza({ pedidos, empresas, repartidores, onRefresh, toast }) 
     XLSX.writeFile(wb, `cobranza_boaz_${diaLocal()}.xlsx`);
   };
 
-  const th = { textAlign:"left", padding:"10px 14px", fontSize:11, fontWeight:700, color:B.textSec, background:"#F6F9FC", letterSpacing:".3px", borderBottom:"1px solid #E3EAF2", whiteSpace:"nowrap" };
-  const td = { padding:"12px 14px", fontSize:13, borderBottom:"1px solid #E3EAF2", color:B.textPri, verticalAlign:"middle" };
+  const th = { textAlign:"left", padding:"10px 14px", fontSize:11, fontWeight:700, color:B.textSec, background:"var(--bzf-F6F9FC, #F6F9FC)", letterSpacing:".3px", borderBottom:"1px solid var(--bzl-E3EAF2, #E3EAF2)", whiteSpace:"nowrap" };
+  const td = { padding:"12px 14px", fontSize:13, borderBottom:"1px solid var(--bzl-E3EAF2, #E3EAF2)", color:B.textPri, verticalAlign:"middle" };
   const card = CARD;
   const TabBtn = ({ id, children, n }) => (
     <button onClick={()=>setTab(id)} style={TAB_SEG(tab===id)}>
-      {children}{n ? <span style={{ background:"#FEE2E2", color:"#B91C1C", fontSize:11, fontWeight:700, padding:"1px 7px", borderRadius:10 }}>{n}</span> : null}
+      {children}{n ? <span style={{ background:"var(--bzf-FEE2E2, #FEE2E2)", color:"var(--bzt-B91C1C, #B91C1C)", fontSize:11, fontWeight:700, padding:"1px 7px", borderRadius:10 }}>{n}</span> : null}
     </button>
   );
 
@@ -1712,12 +1712,12 @@ export function Cobranza({ pedidos, empresas, repartidores, onRefresh, toast }) 
                       <td style={{...td,fontWeight:600}}>{f.empresas?.nombre||"—"}</td>
                       <td style={td}>{f.serie}-{f.numero}</td>
                       <td style={td}>{fmt.fecha(f.fecha_emision)}</td>
-                      <td style={{...td,textAlign:"right"}}><span style={{ background:`${b.color}18`, color:b.color, fontWeight:800, fontSize:12, padding:"2px 9px", borderRadius:20 }}>{f.dias}</span></td>
+                      <td style={{...td,textAlign:"right"}}><span style={{ background:`${alfa(b.color,"18")}`, color:b.color, fontWeight:800, fontSize:12, padding:"2px 9px", borderRadius:20 }}>{f.dias}</span></td>
                       <td style={{...td,textAlign:"right",fontWeight:700}}>{solN(numV(f.total_s))}</td>
                       <td style={{...td,textAlign:"right"}}>{solN(numV(f.total_s)-numV(f.monto_detraccion))}</td>
                       <td style={{...td,whiteSpace:"nowrap",textAlign:"right"}}>
                         <button onClick={()=>recordatorio(f)} title="Enviar recordatorio por WhatsApp" className="bz-btn-sec" style={{ background:B.white, border:`1px solid ${B.border}`, color:B.textPri, borderRadius:8, padding:"5px 10px", fontSize:12, fontWeight:600, cursor:"pointer", marginRight:6, display:"inline-flex", alignItems:"center", gap:5, verticalAlign:"middle" }}><Ico n="phone" size={13} color="#047857"/> Recordar</button>
-                        <button className="bz-btn-sec" onClick={()=>setModalPago(f)} style={{ background:B.white, border:`1px solid ${B.border}`, color:"#047857", borderRadius:8, padding:"5px 10px", fontSize:12, fontWeight:600, cursor:"pointer" }}>Registrar pago</button>
+                        <button className="bz-btn-sec" onClick={()=>setModalPago(f)} style={{ background:B.white, border:`1px solid ${B.border}`, color:"var(--bzt-047857, #047857)", borderRadius:8, padding:"5px 10px", fontSize:12, fontWeight:600, cursor:"pointer" }}>Registrar pago</button>
                       </td>
                     </tr>);
                 })}</tbody>
@@ -1762,7 +1762,7 @@ export function Cobranza({ pedidos, empresas, repartidores, onRefresh, toast }) 
         </div>
 
         {idsSel.length>0 && (
-          <div style={{ position:"sticky", top:0, zIndex:5, background:B.navy, color:"#fff", borderRadius:10, padding:"10px 16px", marginBottom:12, display:"flex", alignItems:"center", gap:14 }}>
+          <div style={{ position:"sticky", top:0, zIndex:5, background:B.navyFijo, color:"#fff", borderRadius:10, padding:"10px 16px", marginBottom:12, display:"flex", alignItems:"center", gap:14 }}>
             <span style={{ fontSize:13 }}>{idsSel.length} seleccionado{idsSel.length===1?"":"s"} · <b>{solN(totalSel)}</b></span>
             <BtnPri onClick={()=>rendir(idsSel)} style={{ marginLeft:"auto", padding:"6px 14px" }}>Marcar como rendido</BtnPri>
             <button onClick={()=>setSelCod({})} style={{ background:"none", border:"none", color:"#8FA3BA", cursor:"pointer", fontSize:12 }}>Cancelar</button>
@@ -1774,7 +1774,7 @@ export function Cobranza({ pedidos, empresas, repartidores, onRefresh, toast }) 
               <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", background:B.bg, borderBottom:`1px solid ${B.border}`, flexWrap:"wrap" }}>
                 <div style={{ fontWeight:800, color:B.navy, fontSize:14 }}>{g.nombre}</div>
                 <span style={{ fontSize:12, color:B.textSec }}>{g.ps.length} cobro{g.ps.length===1?"":"s"}</span>
-                {g.dias>=3 && <span style={{ background:"#FEF2F2", color:B.red, fontSize:11, fontWeight:700, padding:"2px 9px", borderRadius:20 }}>hasta {g.dias} días sin rendir</span>}
+                {g.dias>=3 && <span style={{ background:"var(--bzf-FEF2F2, #FEF2F2)", color:B.red, fontSize:11, fontWeight:700, padding:"2px 9px", borderRadius:20 }}>hasta {g.dias} días sin rendir</span>}
                 <span style={{ marginLeft:"auto", fontWeight:800, color:B.red }}>{solN(g.total)}</span>
                 <button onClick={()=>rendir(g.ps.map(p=>p.id))} style={{ background:B.gold, border:"none", color:B.navy, borderRadius:8, padding:"5px 12px", fontSize:12, fontWeight:700, cursor:"pointer" }}>Rendir todo</button>
               </div>

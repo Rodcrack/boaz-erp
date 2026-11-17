@@ -1,6 +1,6 @@
 // BOAZ ERP — módulo "inventario" (parte de BoazERP; ver src/BoazERP.jsx)
 import { useState, useEffect, useCallback, useRef, useMemo, Fragment } from "react";
-import { B, BtnPri, BtnSec, Cargando, EstadoVacio, Ico, Kpi, TAB_CONT, TAB_SEG, XLSX, asegurarXLSX, fmt, inp, lbl, sb } from "./base.jsx";
+import { alfa, B, BtnPri, BtnSec, Cargando, EstadoVacio, Ico, Kpi, TAB_CONT, TAB_SEG, XLSX, asegurarXLSX, fmt, inp, lbl, sb } from "./base.jsx";
 import { normalizarTextoAdmin } from "./pedidos.jsx";
 
 // ══════════════════════════════════════════════════════════════
@@ -134,8 +134,8 @@ export function Inventario({ empresas, toast }) {
       {tab==="productos" && (
         <>
           {stockBajo.length>0 && (
-            <div style={{ background:"#FEF2F2", border:`1px solid ${B.red}`, borderRadius:10,
-              padding:"10px 14px", marginBottom:14, fontSize:12, color:"#991B1B" }}>
+            <div style={{ background:"var(--bzf-FEF2F2, #FEF2F2)", border:`1px solid ${B.red}`, borderRadius:10,
+              padding:"10px 14px", marginBottom:14, fontSize:12, color:"var(--bzt-991B1B, #991B1B)" }}>
               {stockBajo.length} variante{stockBajo.length===1?"":"s"} con stock bajo o agotado: {stockBajo.slice(0,5).map(v=>v.sku).join(", ")}{stockBajo.length>5?"...":""}
             </div>
           )}
@@ -145,7 +145,7 @@ export function Inventario({ empresas, toast }) {
           </div>
           <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden" }}>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
-              <thead><tr style={{ background:"#F6F9FC" }}>
+              <thead><tr style={{ background:"var(--bzf-F6F9FC, #F6F9FC)" }}>
                 {["Producto","SKU","Variante","Ubicación","Stock","Stock mín.","Estado","Acciones"].map(h=>(
                   <th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
                 ))}
@@ -163,9 +163,9 @@ export function Inventario({ empresas, toast }) {
                       <td style={{ padding:"9px 12px", fontSize:11, color:B.textMut }}>{v.stock_minimo}</td>
                       <td style={{ padding:"9px 12px" }}>
                         {bajo ? (
-                          <span style={{ fontSize:10, padding:"3px 8px", borderRadius:10, fontWeight:700, background:"#FEF2F2", color:B.red }}>Bajo</span>
+                          <span style={{ fontSize:10, padding:"3px 8px", borderRadius:10, fontWeight:700, background:"var(--bzf-FEF2F2, #FEF2F2)", color:B.red }}>Bajo</span>
                         ) : (
-                          <span style={{ fontSize:10, padding:"3px 8px", borderRadius:10, fontWeight:700, background:"#ECFDF5", color:B.green }}>OK</span>
+                          <span style={{ fontSize:10, padding:"3px 8px", borderRadius:10, fontWeight:700, background:"var(--bzf-ECFDF5, #ECFDF5)", color:B.green }}>OK</span>
                         )}
                       </td>
                       <td style={{ padding:"9px 12px" }}>
@@ -190,7 +190,7 @@ export function Inventario({ empresas, toast }) {
           </div>
           <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden" }}>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
-              <thead><tr style={{ background:"#F6F9FC" }}>
+              <thead><tr style={{ background:"var(--bzf-F6F9FC, #F6F9FC)" }}>
                 {["Fecha","SKU","Tipo","Cantidad","Stock resultante","Motivo","Referencia","Usuario"].map(h=>(
                   <th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
                 ))}
@@ -205,7 +205,7 @@ export function Inventario({ empresas, toast }) {
                       <td style={{ padding:"9px 12px", fontSize:11, color:B.textMut }}>{fmt.fechaHora?fmt.fechaHora(m.created_at):fmt.fecha(m.created_at)}</td>
                       <td style={{ padding:"9px 12px", fontSize:11, color:B.textSec, fontFamily:"monospace" }}>{v?.sku||"—"}</td>
                       <td style={{ padding:"9px 12px" }}>
-                        <span style={{ fontSize:10, padding:"3px 8px", borderRadius:10, fontWeight:700, background:`${colorTipo}18`, color:colorTipo }}>{labelTipo}</span>
+                        <span style={{ fontSize:10, padding:"3px 8px", borderRadius:10, fontWeight:700, background:`${alfa(colorTipo,"18")}`, color:colorTipo }}>{labelTipo}</span>
                       </td>
                       <td style={{ padding:"9px 12px", fontSize:12, fontWeight:700, color:B.textPri }}>{m.cantidad}</td>
                       <td style={{ padding:"9px 12px", fontSize:12, color:B.textSec }}>{m.stock_resultante}</td>
@@ -229,7 +229,7 @@ export function Inventario({ empresas, toast }) {
           </div>
           <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden" }}>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
-              <thead><tr style={{ background:"#F6F9FC" }}>
+              <thead><tr style={{ background:"var(--bzf-F6F9FC, #F6F9FC)" }}>
                 {["N° Orden","Canal","Cliente","Fecha","Estado","Acciones"].map(h=>(
                   <th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
                 ))}
@@ -237,12 +237,12 @@ export function Inventario({ empresas, toast }) {
               <tbody>
                 {ordenes.map((o,i)=>{
                   const ESTADOS_ORDEN = {
-                    pendiente:{label:"Pendiente",bg:"#EFF6FF",color:"#1D4ED8"},
-                    picking:{label:"Picking",bg:"#FFFBEB",color:"#B45309"},
-                    packing:{label:"Packing",bg:"#F5F3FF",color:"#6D28D9"},
-                    listo_despacho:{label:"Listo p/despacho",bg:"#FFF8EF",color:B.goldDk},
-                    despachado:{label:"Despachado",bg:"#ECFDF5",color:B.green},
-                    cancelado:{label:"Cancelado",bg:"#F3F4F6",color:B.textMut},
+                    pendiente:{label:"Pendiente",bg:"var(--bzf-EFF6FF, #EFF6FF)",color:"var(--bzt-1D4ED8, #1D4ED8)"},
+                    picking:{label:"Picking",bg:"var(--bzf-FFFBEB, #FFFBEB)",color:"var(--bzt-B45309, #B45309)"},
+                    packing:{label:"Packing",bg:"var(--bzf-F5F3FF, #F5F3FF)",color:"#6D28D9"},
+                    listo_despacho:{label:"Listo p/despacho",bg:"var(--bzf-FFF8EF, #FFF8EF)",color:B.goldDk},
+                    despachado:{label:"Despachado",bg:"var(--bzf-ECFDF5, #ECFDF5)",color:B.green},
+                    cancelado:{label:"Cancelado",bg:"var(--bzf-F3F4F6, #F3F4F6)",color:B.textMut},
                   };
                   const est = ESTADOS_ORDEN[o.estado]||ESTADOS_ORDEN.pendiente;
                   return (
@@ -421,14 +421,14 @@ export function ModalCargaMasivaProductos({ productosExistentes, onClose, onSave
       <div style={{ position:"fixed", inset:0, background:"#0008", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
         <div style={{ background:B.white, borderRadius:16, padding:28, width:600, maxHeight:"85vh", overflowY:"auto", boxShadow:"0 20px 60px #0003" }}>
           <div style={{ fontSize:15, fontWeight:800, color:B.navy, marginBottom:16 }}>Resultado de la carga</div>
-          <div style={{ background:"#ECFDF5", border:`1px solid ${B.green}`, borderRadius:10, padding:14, marginBottom:12, fontSize:13, color:"#065F46" }}>
+          <div style={{ background:"var(--bzf-ECFDF5, #ECFDF5)", border:`1px solid ${B.green}`, borderRadius:10, padding:14, marginBottom:12, fontSize:13, color:"var(--bzt-065F46, #065F46)" }}>
             {exitosos} de {resultado.length} variantes cargadas correctamente
           </div>
           {fallidos.length>0 && (
-            <div style={{ background:"#FEF2F2", border:`1px solid ${B.red}`, borderRadius:10, padding:14, marginBottom:16 }}>
-              <div style={{ fontSize:12, fontWeight:700, color:"#991B1B", marginBottom:8 }}>{fallidos.length} con error:</div>
+            <div style={{ background:"var(--bzf-FEF2F2, #FEF2F2)", border:`1px solid ${B.red}`, borderRadius:10, padding:14, marginBottom:16 }}>
+              <div style={{ fontSize:12, fontWeight:700, color:"var(--bzt-991B1B, #991B1B)", marginBottom:8 }}>{fallidos.length} con error:</div>
               {fallidos.map((f,i)=>(
-                <div key={i} style={{ fontSize:11, color:"#991B1B", marginBottom:4 }}>
+                <div key={i} style={{ fontSize:11, color:"var(--bzt-991B1B, #991B1B)", marginBottom:4 }}>
                   {f.sku||"(sin SKU)"} — {f.error || (f.errores||[]).join(", ")}
                 </div>
               ))}
@@ -456,7 +456,7 @@ export function ModalCargaMasivaProductos({ productosExistentes, onClose, onSave
 
         <button onClick={generarPlantillaProductos}
           style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 16px", borderRadius:10,
-            border:`1px dashed ${B.gold}`, background:"#FFF8EF", color:B.goldDk, fontSize:13, fontWeight:700,
+            border:`1px dashed ${B.gold}`, background:"var(--bzf-FFF8EF, #FFF8EF)", color:B.goldDk, fontSize:13, fontWeight:700,
             cursor:"pointer", marginBottom:16 }}>
           Descargar plantilla Excel
         </button>
@@ -476,9 +476,9 @@ export function ModalCargaMasivaProductos({ productosExistentes, onClose, onSave
               {conError.length>0 && <div style={{ fontSize:12, color:B.red, fontWeight:700 }}>{conError.length} con error</div>}
             </div>
             {conError.length>0 && (
-              <div style={{ background:"#FEF2F2", borderRadius:8, padding:10, marginBottom:16, maxHeight:120, overflowY:"auto" }}>
+              <div style={{ background:"var(--bzf-FEF2F2, #FEF2F2)", borderRadius:8, padding:10, marginBottom:16, maxHeight:120, overflowY:"auto" }}>
                 {conError.map((f,i)=>(
-                  <div key={i} style={{ fontSize:11, color:"#991B1B" }}>Fila {i+1} ({f.sku||f.nombre_producto||"—"}): {f.errores.join(", ")}</div>
+                  <div key={i} style={{ fontSize:11, color:"var(--bzt-991B1B, #991B1B)" }}>Fila {i+1} ({f.sku||f.nombre_producto||"—"}): {f.errores.join(", ")}</div>
                 ))}
               </div>
             )}
@@ -880,7 +880,7 @@ export function ModalOrdenDetalle({ orden, items, variantes, onClose, onCambio, 
                 const listo = (pickeados[it.id]||0) >= it.cantidad_pedida;
                 return (
                   <div key={it.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
-                    padding:"10px 12px", background: listo?"#ECFDF5":B.bg, borderRadius:8, border:`1px solid ${listo?B.green:B.border}` }}>
+                    padding:"10px 12px", background: listo?"var(--bzf-ECFDF5, #ECFDF5)":B.bg, borderRadius:8, border:`1px solid ${listo?B.green:B.border}` }}>
                     <div>
                       <div style={{ fontSize:12, fontWeight:700, color:B.navy }}>{v?.producto?.nombre}</div>
                       <div style={{ fontSize:11, color:B.textMut }}>{v?.sku} · {[v?.talla,v?.color].filter(Boolean).join("/")} · Ubicación: {v?.ubicacion||"—"}</div>
@@ -906,7 +906,7 @@ export function ModalOrdenDetalle({ orden, items, variantes, onClose, onCambio, 
         {orden.estado==="picking" && (
           <>
             <div style={{ fontSize:13, fontWeight:700, color:B.navy, marginBottom:10 }}>Empaque</div>
-            <div style={{ background:"#ECFDF5", border:`1px solid ${B.green}`, borderRadius:10, padding:14, marginBottom:16, fontSize:12, color:"#065F46" }}>
+            <div style={{ background:"var(--bzf-ECFDF5, #ECFDF5)", border:`1px solid ${B.green}`, borderRadius:10, padding:14, marginBottom:16, fontSize:12, color:"var(--bzt-065F46, #065F46)" }}>
               ✓ Picking completado. Empaca los {items.length} producto{items.length===1?"":"s"} y confirma cuando esté listo.
             </div>
             <BtnPri onClick={confirmarPacking} disabled={procesando} style={{ width:"100%" }}>
@@ -937,10 +937,10 @@ export function ModalOrdenDetalle({ orden, items, variantes, onClose, onCambio, 
         )}
 
         {orden.estado==="despachado" && (
-          <div style={{ background:"#ECFDF5", border:`1px solid ${B.green}`, borderRadius:10, padding:16, textAlign:"center" }}>
-            <div style={{ display:"flex", justifyContent:"center", marginBottom:6, color:"#047857" }}><Ico n="check" size={26}/></div>
-            <div style={{ fontSize:13, fontWeight:700, color:"#065F46" }}>Orden despachada</div>
-            <div style={{ fontSize:11, color:"#065F46", marginTop:4 }}>{orden.transportista} · {orden.tracking_transportista||"sin tracking"}</div>
+          <div style={{ background:"var(--bzf-ECFDF5, #ECFDF5)", border:`1px solid ${B.green}`, borderRadius:10, padding:16, textAlign:"center" }}>
+            <div style={{ display:"flex", justifyContent:"center", marginBottom:6, color:"var(--bzt-047857, #047857)" }}><Ico n="check" size={26}/></div>
+            <div style={{ fontSize:13, fontWeight:700, color:"var(--bzt-065F46, #065F46)" }}>Orden despachada</div>
+            <div style={{ fontSize:11, color:"var(--bzt-065F46, #065F46)", marginTop:4 }}>{orden.transportista} · {orden.tracking_transportista||"sin tracking"}</div>
           </div>
         )}
 

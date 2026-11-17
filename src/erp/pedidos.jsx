@@ -1,6 +1,6 @@
 // BOAZ ERP — módulo "pedidos" (parte de BoazERP; ver src/BoazERP.jsx)
 import { useState, useEffect, useCallback, useRef, useMemo, Fragment } from "react";
-import { Ayuda, B, BADGE_SERVICIO, BtnIco, BtnPri, BtnSec, Buscador, CARD, Chip, Confirm, ESTADOS_PEDIDO, EstadoVacio, ICONOS_HIST, Ico, TD, TDN, TDS, Tabs, Th, XLSX, agruparHistorial, asegurarXLSX, calcularTarifaPedido, diaLocal, esperar, fmt, geocodificarDireccion, getTarifaSameDay, inp, lbl, sb, usePaginacion } from "./base.jsx";
+import { alfa, Ayuda, B, BADGE_SERVICIO, BtnIco, BtnPri, BtnSec, Buscador, CARD, Chip, Confirm, ESTADOS_PEDIDO, EstadoVacio, ICONOS_HIST, Ico, TD, TDN, TDS, Tabs, Th, XLSX, agruparHistorial, asegurarXLSX, calcularTarifaPedido, diaLocal, esperar, fmt, geocodificarDireccion, getTarifaSameDay, inp, lbl, sb, usePaginacion } from "./base.jsx";
 import { bandaDePeso } from "./ventas.jsx";
 
 // ══════════════════════════════════════════════════════════════
@@ -224,7 +224,7 @@ export function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, ta
           <div><label style={lbl}>Registrado desde</label><input type="date" style={{ ...inp, background:B.white, width:160 }} value={fDesde} onChange={e=>setFDesde(e.target.value)}/></div>
           <div><label style={lbl}>Hasta</label><input type="date" style={{ ...inp, background:B.white, width:160 }} value={fHasta} onChange={e=>setFHasta(e.target.value)}/></div>
           <label style={{ display:"flex", alignItems:"center", gap:7, fontSize:13, color:B.textPri, cursor:"pointer", paddingBottom:9 }}>
-            <input type="checkbox" checked={fSinTar} onChange={e=>setFSinTar(e.target.checked)} style={{ width:16, height:16 }}/> Solo sin tarifa{sinTarifa>0 && <span style={{ color:"#B45309", fontWeight:700 }}>({sinTarifa})</span>}
+            <input type="checkbox" checked={fSinTar} onChange={e=>setFSinTar(e.target.checked)} style={{ width:16, height:16 }}/> Solo sin tarifa{sinTarifa>0 && <span style={{ color:"var(--bzt-B45309, #B45309)", fontWeight:700 }}>({sinTarifa})</span>}
           </label>
           {nFiltros>0 && <BtnSec onClick={limpiarFiltros}>Limpiar</BtnSec>}
         </div>
@@ -234,7 +234,7 @@ export function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, ta
 
       {/* Acciones masivas */}
       {selFilas.length>0 && movil && (
-        <div style={{ position:"fixed", left:8, right:8, bottom:8, zIndex:60, background:B.navy, color:"#fff", borderRadius:14, padding:"10px 12px", boxShadow:"0 10px 30px #0D1E3D66" }}>
+        <div style={{ position:"fixed", left:8, right:8, bottom:8, zIndex:60, background:B.navyFijo, color:"#fff", borderRadius:14, padding:"10px 12px", boxShadow:"0 10px 30px #0D1E3D66" }}>
           <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
             <span style={{ fontSize:14, fontWeight:700 }}>{selFilas.length} seleccionado{selFilas.length===1?"":"s"}</span>
             {selFilas.length<filtrados.length && <button onClick={()=>setSel(new Set(filtrados.map(p=>p.id)))} style={{ background:"none", border:"none", color:B.goldLt, fontSize:13, fontWeight:600, cursor:"pointer", padding:0 }}>Todos ({filtrados.length})</button>}
@@ -254,7 +254,7 @@ export function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, ta
         </div>
       )}
       {selFilas.length>0 && !movil && (
-        <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", background:B.navy, color:"#fff", borderRadius:12, padding:"10px 14px", marginBottom:12,
+        <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", background:B.navyFijo, color:"#fff", borderRadius:12, padding:"10px 14px", marginBottom:12,
           ...(movil ? { position:"fixed", left:10, right:10, bottom:10, zIndex:60, marginBottom:0, boxShadow:"0 10px 30px #0D1E3D66" } : {}) }}>
           <span style={{ fontSize:13, fontWeight:700 }}>{selFilas.length} seleccionado{selFilas.length===1?"":"s"}</span>
           {selFilas.length<filtrados.length && <button onClick={()=>setSel(new Set(filtrados.map(p=>p.id)))} style={{ background:"none", border:"none", color:B.goldLt, fontSize:12, fontWeight:600, cursor:"pointer", textDecoration:"underline" }}>Seleccionar los {filtrados.length} de esta vista</button>}
@@ -295,12 +295,12 @@ export function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, ta
             <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
               {pg.visibles.map(p => {
                 const rep = repartidores.find(r=>r.id===p.repartidor_id);
-                const est = ESTADOS_PEDIDO[p.estado] || { bg:"#F1F5F9", color:"#475569", label:p.estado };
+                const est = ESTADOS_PEDIDO[p.estado] || { bg:"var(--bzf-F1F5F9, #F1F5F9)", color:"var(--bzt-475569, #475569)", label:p.estado };
                 const marcado = sel.has(p.id);
                 const sinTar = !((parseFloat(p.tarifa_s)||0) > 0);
                 return (
                   <div key={p.id} onClick={()=>setModalDetalle(p)}
-                    style={{ ...CARD, padding:"12px 14px", cursor:"pointer", borderLeft:`4px solid ${est.color}`, background: marcado ? "#FFF7ED" : B.white }}>
+                    style={{ ...CARD, padding:"12px 14px", cursor:"pointer", borderLeft:`4px solid ${est.color}`, background: marcado ? "var(--bzf-FFF7ED, #FFF7ED)" : B.white }}>
                     <div style={{ display:"flex", alignItems:"center", gap:10 }}>
                       <span onClick={e=>e.stopPropagation()} style={{ display:"flex" }}>
                         <input type="checkbox" checked={marcado} onChange={()=>toggleSel(p.id)} style={{ width:18, height:18 }} aria-label={`Seleccionar ${p.omd}`}/>
@@ -320,9 +320,9 @@ export function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, ta
                       </div>}
                       <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:8 }}>
                         {p.tipo_servicio && BADGE_SERVICIO[p.tipo_servicio] && <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:6, background:BADGE_SERVICIO[p.tipo_servicio].bg, color:BADGE_SERVICIO[p.tipo_servicio].color }}>{BADGE_SERVICIO[p.tipo_servicio].label}</span>}
-                        {p.peso_kg ? <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:6, background:"#F0F4F8", color:B.navy }}>{bandaDePeso(p.peso_kg)} · {p.peso_kg} kg</span> : null}
-                        {p.cobro_destino && <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:6, background:"#FFF7ED", color:"#B45309" }}>COD {fmt.sol(p.monto_cobrar)}</span>}
-                        {sinTar && <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:6, background:"#FEF2F2", color:"#B91C1C" }}>Sin tarifa</span>}
+                        {p.peso_kg ? <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:6, background:"var(--bzf-F0F4F8, #F0F4F8)", color:B.navy }}>{bandaDePeso(p.peso_kg)} · {p.peso_kg} kg</span> : null}
+                        {p.cobro_destino && <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:6, background:"var(--bzf-FFF7ED, #FFF7ED)", color:"var(--bzt-B45309, #B45309)" }}>COD {fmt.sol(p.monto_cobrar)}</span>}
+                        {sinTar && <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:6, background:"var(--bzf-FEF2F2, #FEF2F2)", color:"var(--bzt-B91C1C, #B91C1C)" }}>Sin tarifa</span>}
                       </div>
                     </div>
                     <div onClick={e=>e.stopPropagation()} style={{ display:"flex", alignItems:"center", gap:8, marginTop:10, paddingTop:10, paddingLeft:28, borderTop:`1px solid ${B.border}` }}>
@@ -333,13 +333,13 @@ export function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, ta
                         {repartidores.filter(r=>r.activo || r.id===p.repartidor_id).map(r=><option key={r.id} value={r.id}>{r.nombres} {r.apellidos}</option>)}
                       </select>
                       <select value={p.estado} onChange={e=>cambiarEstado(p.id,e.target.value)} aria-label={`Estado de ${p.omd}`}
-                        style={{ ...inp, width:"auto", padding:"7px 8px", fontSize:12.5, fontWeight:700, background:est.bg, color:est.color, border:`1px solid ${est.color}33` }}>
+                        style={{ ...inp, width:"auto", padding:"7px 8px", fontSize:12.5, fontWeight:700, background:est.bg, color:est.color, border:`1px solid ${alfa(est.color,"33")}` }}>
                         {Object.entries(ESTADOS_PEDIDO).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
                       </select>
                     </div>
                     <div style={{ display:"flex", justifyContent:"space-between", marginTop:8, paddingLeft:28, fontSize:12, color:B.textMut }}>
                       <span>{fmt.fecha(p.created_at)}</span>
-                      <span style={{ fontWeight:700, color: sinTar ? "#B91C1C" : B.textSec }}>{sinTar ? "—" : fmt.sol(p.tarifa_s)}</span>
+                      <span style={{ fontWeight:700, color: sinTar ? "var(--bzt-B91C1C, #B91C1C)" : B.textSec }}>{sinTar ? "—" : fmt.sol(p.tarifa_s)}</span>
                     </div>
                   </div>
                 );
@@ -370,7 +370,7 @@ export function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, ta
           <tbody>
             {pg.visibles.map((p) => {
               const rep = repartidores.find(r=>r.id===p.repartidor_id);
-              const est = ESTADOS_PEDIDO[p.estado] || { bg:"#F1F5F9", color:"#475569" };
+              const est = ESTADOS_PEDIDO[p.estado] || { bg:"var(--bzf-F1F5F9, #F1F5F9)", color:"var(--bzt-475569, #475569)" };
               return (
                 <tr key={p.id} style={{ cursor:"pointer" }} className={sel.has(p.id)?"bz-fila-sel":undefined}
                   onClick={()=>setModalDetalle(p)}>
@@ -389,7 +389,7 @@ export function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, ta
                   <td style={{ ...TDN, color:B.textSec }}>{p.peso_kg?p.peso_kg+" kg":"—"}</td>
                   <td style={TD}>
                     <span style={{ fontSize:11, fontWeight:700, padding:"3px 8px", borderRadius:6,
-                      background:"#F0F4F8", color:B.navy }}>
+                      background:"var(--bzf-F0F4F8, #F0F4F8)", color:B.navy }}>
                       {bandaDePeso(p.peso_kg)}
                     </span>
                   </td>
@@ -431,7 +431,7 @@ export function Pedidos({ pedidos, repartidores, empresas, tarifariosCliente, ta
                   <td style={TD} onClick={e=>e.stopPropagation()}>
                     <select value={p.estado} onChange={e=>cambiarEstado(p.id,e.target.value)} aria-label="Estado del pedido"
                       style={{ ...inp, padding:"4px 8px", fontSize:11, fontWeight:700, width:"auto",
-                        cursor:"pointer", borderRadius:20, background:est.bg, color:est.color, border:`1px solid ${est.color}33` }}>
+                        cursor:"pointer", borderRadius:20, background:est.bg, color:est.color, border:`1px solid ${alfa(est.color,"33")}` }}>
                       {Object.entries(ESTADOS_PEDIDO).map(([k,v])=>(
                         <option key={k} value={k}>{v.label}</option>
                       ))}
@@ -617,10 +617,10 @@ export function ModalNuevoPedido({ repartidores, empresas, tarifariosCliente, ta
             Requiere embalaje (pedido de agencia) <span style={{ color:B.textMut }}>— recargo de {fmt.sol(recargoEmp)}</span>
           </label>
         )}
-        {calc.aviso && <div style={{ marginTop:10, fontSize:12, color:"#B45309", background:"#FFF7ED", border:"1px solid #FDBA7488", borderRadius:8, padding:"8px 10px" }}>{calc.aviso}</div>}
+        {calc.aviso && <div style={{ marginTop:10, fontSize:12, color:"var(--bzt-B45309, #B45309)", background:"var(--bzf-FFF7ED, #FFF7ED)", border:"1px solid #FDBA7488", borderRadius:8, padding:"8px 10px" }}>{calc.aviso}</div>}
 
         {/* Resumen tarifa */}
-        <div style={{ background:`${B.navy}08`, border:`1px solid ${B.gold}44`,
+        <div style={{ background:`${alfa(B.navy,"08")}`, border:`1px solid ${B.gold}44`,
           borderRadius:10, padding:14, marginTop:12, display:"flex", gap:24, alignItems:"center" }}>
           <div><div style={{ fontSize:10, color:B.textMut, textTransform:"uppercase" }}>Tarifa</div>
             <div style={{ fontSize:22, fontWeight:800, color:B.gold }}>{fmt.sol(tarifa)}</div></div>
@@ -810,7 +810,7 @@ export function ModalEtiquetas({ pedidos, empresas, onClose }) {
           {pedidos.map((p,i)=>(
             <label key={p.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 14px",
               borderTop: i>0 ? `1px solid ${B.border}` : "none", cursor:"pointer",
-              background: seleccionados.has(p.id) ? "#FFF7ED" : B.white }}>
+              background: seleccionados.has(p.id) ? "var(--bzf-FFF7ED, #FFF7ED)" : B.white }}>
               <input type="checkbox" checked={seleccionados.has(p.id)} onChange={()=>toggle(p.id)}
                 style={{ width:16, height:16 }}/>
               <div style={{ flex:1 }}>
@@ -901,8 +901,8 @@ export function ModalGeocodificarPendientes({ pedidos, onClose, onDone, toast })
                 ))}
               </div>
             )}
-            <div style={{ background:"#FFFBEB", border:"1px solid #FDE68A", borderRadius:8,
-              padding:"10px 14px", marginBottom:20, fontSize:12, color:"#92400E" }}>
+            <div style={{ background:"var(--bzf-FFFBEB, #FFFBEB)", border:"1px solid var(--bzl-FDE68A, #FDE68A)", borderRadius:8,
+              padding:"10px 14px", marginBottom:20, fontSize:12, color:"var(--bzt-92400E, #92400E)" }}>
               Esto puede tardar aproximadamente <strong>{Math.ceil(pendientes.length*1.1)} segundos</strong> (1 dirección por segundo, para respetar el servicio gratuito). No cierres esta ventana mientras procesa.
             </div>
             <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
@@ -914,14 +914,14 @@ export function ModalGeocodificarPendientes({ pedidos, onClose, onDone, toast })
           </>
         ) : (
           <>
-            <div style={{ background:"#ECFDF5", border:"1px solid #A7F3D0", borderRadius:10,
+            <div style={{ background:"var(--bzf-ECFDF5, #ECFDF5)", border:"1px solid var(--bzl-A7F3D0, #A7F3D0)", borderRadius:10,
               padding:16, marginBottom:16, textAlign:"center" }}>
               <div style={{ fontSize:28, fontWeight:900, color:B.green }}>{resultado.ubicados}</div>
               <div style={{ fontSize:12, color:B.textSec }}>ubicados correctamente</div>
             </div>
             {resultado.fallidos.length > 0 && (
               <div style={{ marginBottom:16 }}>
-                <div style={{ background:"#FEF2F2", border:"1px solid #FECACA", borderRadius:10,
+                <div style={{ background:"var(--bzf-FEF2F2, #FEF2F2)", border:"1px solid var(--bzl-FECACA, #FECACA)", borderRadius:10,
                   padding:"12px 16px", marginBottom:8 }}>
                   <div style={{ fontSize:13, fontWeight:800, color:B.red, marginBottom:2 }}>
                     {resultado.fallidos.length} no se pudieron ubicar
@@ -1167,13 +1167,13 @@ export function ModalCargaMasiva({ repartidores, empresas, tarifariosCliente, ta
         </div>
 
         {errorArchivo && (
-          <div style={{ marginBottom:14, background:"#FEF2F2", border:"1px solid #FECACA", borderRadius:8,
+          <div style={{ marginBottom:14, background:"var(--bzf-FEF2F2, #FEF2F2)", border:"1px solid var(--bzl-FECACA, #FECACA)", borderRadius:8,
             padding:"10px 14px", color:B.red, fontSize:12 }}>{errorArchivo}</div>
         )}
 
         {filas.length > 0 && !empresaId && (
-          <div style={{ marginBottom:14, background:"#FFFBEB", border:"1px solid #FDE68A", borderRadius:8,
-            padding:"10px 14px", color:"#92400E", fontSize:12, fontWeight:600 }}>
+          <div style={{ marginBottom:14, background:"var(--bzf-FFFBEB, #FFFBEB)", border:"1px solid var(--bzl-FDE68A, #FDE68A)", borderRadius:8,
+            padding:"10px 14px", color:"var(--bzt-92400E, #92400E)", fontSize:12, fontWeight:600 }}>
             Selecciona el cliente (empresa) arriba antes de confirmar — el botón no hace nada hasta que lo elijas.
           </div>
         )}
@@ -1191,7 +1191,7 @@ export function ModalCargaMasiva({ repartidores, empresas, tarifariosCliente, ta
             </div>
             <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
               <thead>
-                <tr style={{ background:"#F6F9FC" }}>
+                <tr style={{ background:"var(--bzf-F6F9FC, #F6F9FC)" }}>
                   {["N° Orden","Destinatario","Distrito","Ámbito","Servicio","Estado"].map(h=>(
                     <th key={h} style={{ padding:"8px 10px", fontSize:10, fontWeight:700, color:B.textMut,
                       textTransform:"uppercase", borderBottom:`1px solid ${B.border}` }}>{h}</th>
@@ -1201,7 +1201,7 @@ export function ModalCargaMasiva({ repartidores, empresas, tarifariosCliente, ta
               <tbody>
                 {filas.map((f,i)=>(
                   <tr key={i} style={{ borderBottom:"1px solid #F1F5F9",
-                    background: f.errores.length>0 ? "#FEF2F2" : "transparent" }}>
+                    background: f.errores.length>0 ? "var(--bzf-FEF2F2, #FEF2F2)" : "transparent" }}>
                     <td style={{ padding:"8px 10px" }}>{f.cliente_referencia||"—"}</td>
                     <td style={{ padding:"8px 10px" }}>{f.dest_nombre||"—"}</td>
                     <td style={{ padding:"8px 10px" }}>{f.dest_distrito||"—"}</td>
@@ -1363,22 +1363,22 @@ export function ModalDetallePedido({ pedido: p, repartidores, onClose, onRefresh
         {(p.estado==="entregado" || p.estado==="no_entregado") && (
           <div style={{ marginBottom:24 }}>
             {p.estado==="entregado" ? (
-              <div style={{ borderRadius:10, padding:"10px 14px", background:"#ECFDF5",
+              <div style={{ borderRadius:10, padding:"10px 14px", background:"var(--bzf-ECFDF5, #ECFDF5)",
                 border:`1.5px solid ${B.green}` }}>
                 <div style={{ fontSize:11, fontWeight:700, color:B.green }}>
                   Entregado {p.recibido_por && `— a ${p.recibido_por}`}
                 </div>
                 <div style={{ fontSize:9, color:B.textMut, marginTop:2 }}>{fmt.fecha(p.fecha_entrega)}</div>
-                {p.comentario_entrega && <div style={{ fontSize:10, color:"#065F46", marginTop:4, fontStyle:"italic" }}>{p.comentario_entrega}</div>}
+                {p.comentario_entrega && <div style={{ fontSize:10, color:"var(--bzt-065F46, #065F46)", marginTop:4, fontStyle:"italic" }}>{p.comentario_entrega}</div>}
               </div>
             ) : (
-              <div style={{ borderRadius:10, padding:"10px 14px", background:"#FEF2F2",
+              <div style={{ borderRadius:10, padding:"10px 14px", background:"var(--bzf-FEF2F2, #FEF2F2)",
                 border:`1.5px solid ${B.red}` }}>
                 <div style={{ fontSize:11, fontWeight:700, color:B.red }}>
                   No entregado {p.motivo_no_entrega && `— ${p.motivo_no_entrega}`}
                 </div>
                 <div style={{ fontSize:9, color:B.textMut, marginTop:2 }}>{fmt.fecha(p.fecha_entrega)}</div>
-                {p.comentario_no_entrega && <div style={{ fontSize:10, color:"#991B1B", marginTop:4, fontStyle:"italic" }}>{p.comentario_no_entrega}</div>}
+                {p.comentario_no_entrega && <div style={{ fontSize:10, color:"var(--bzt-991B1B, #991B1B)", marginTop:4, fontStyle:"italic" }}>{p.comentario_no_entrega}</div>}
               </div>
             )}
           </div>

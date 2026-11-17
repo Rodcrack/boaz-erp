@@ -176,8 +176,8 @@ export function Gastos({ unidades, repartidores, toast, usuario }) {
   const pgMov = usePaginacion(filtrados, 25, "movimientos");
   const esComb = form && form.tipo==="egreso" && form.categoria==="Combustible";
   const esMant = form && form.tipo==="egreso" && ["Mantenimiento","Reparación"].includes(form.categoria);
-  const th = { textAlign:"left", padding:"10px 14px", fontSize:11, fontWeight:700, color:B.textSec, background:"#F6F9FC", letterSpacing:".3px", borderBottom:"1px solid #E3EAF2", whiteSpace:"nowrap" };
-  const td = { padding:"12px 14px", fontSize:13, borderBottom:"1px solid #E3EAF2", color:B.textPri, verticalAlign:"top" };
+  const th = { textAlign:"left", padding:"10px 14px", fontSize:11, fontWeight:700, color:B.textSec, background:"var(--bzf-F6F9FC, #F6F9FC)", letterSpacing:".3px", borderBottom:"1px solid var(--bzl-E3EAF2, #E3EAF2)", whiteSpace:"nowrap" };
+  const td = { padding:"12px 14px", fontSize:13, borderBottom:"1px solid var(--bzl-E3EAF2, #E3EAF2)", color:B.textPri, verticalAlign:"top" };
 
   return (
     <div>
@@ -191,9 +191,9 @@ export function Gastos({ unidades, repartidores, toast, usuario }) {
       </div>
 
       {alertas.length>0 && (
-        <div style={{ background:"#FFF7ED", border:"1px solid #FDBA74", borderRadius:12, padding:"10px 14px", marginBottom:14 }}>
-          <div style={{ fontWeight:700, fontSize:13, color:"#9A3412", marginBottom:4, display:"flex", alignItems:"center", gap:7 }}><Ico n="wrench" size={15}/> Alertas de mantenimiento</div>
-          {alertas.map((a,i)=><div key={i} style={{ fontSize:13, color:a.rojo?"#B91C1C":"#9A3412", paddingLeft:22 }}><b>{a.placa}</b>: {a.msg}</div>)}
+        <div style={{ background:"var(--bzf-FFF7ED, #FFF7ED)", border:"1px solid var(--bzl-FDBA74, #FDBA74)", borderRadius:12, padding:"10px 14px", marginBottom:14 }}>
+          <div style={{ fontWeight:700, fontSize:13, color:"var(--bzt-9A3412, #9A3412)", marginBottom:4, display:"flex", alignItems:"center", gap:7 }}><Ico n="wrench" size={15}/> Alertas de mantenimiento</div>
+          {alertas.map((a,i)=><div key={i} style={{ fontSize:13, color:a.rojo?"var(--bzt-B91C1C, #B91C1C)":"var(--bzt-9A3412, #9A3412)", paddingLeft:22 }}><b>{a.placa}</b>: {a.msg}</div>)}
         </div>
       )}
 
@@ -235,7 +235,7 @@ export function Gastos({ unidades, repartidores, toast, usuario }) {
                 <td style={td}>{g.descripcion||"—"}{g.proveedor && <div style={{ fontSize:11, color:B.textSec }}>{g.proveedor}</div>}
                   {g.galones ? <div style={{ fontSize:11, color:B.textSec }}>{g.galones} gal{g.km?` · ${Number(g.km).toLocaleString()} km`:""}</div> : (g.km ? <div style={{ fontSize:11, color:B.textSec }}>{Number(g.km).toLocaleString()} km</div> : null)}
                   {g.comprobante_url && <a href={g.comprobante_url} target="_blank" rel="noreferrer" style={{ fontSize:12, color:B.blue, display:"block" }}>Ver comprobante</a>}</td>
-                <td style={{...td,textAlign:"right",fontWeight:700,color:g.tipo==="ingreso"?"#047857":"#B91C1C",whiteSpace:"nowrap"}}>{g.tipo==="ingreso"?"+":"−"} {solN(parseFloat(g.monto))}</td>
+                <td style={{...td,textAlign:"right",fontWeight:700,color:g.tipo==="ingreso"?"var(--bzt-047857, #047857)":"var(--bzt-B91C1C, #B91C1C)",whiteSpace:"nowrap"}}>{g.tipo==="ingreso"?"+":"−"} {solN(parseFloat(g.monto))}</td>
                 <td style={{...td,whiteSpace:"nowrap"}}>{g.auto ? <span style={{ fontSize:11, color:B.textMut }}>automático</span> : <>
                   <BtnIco n="edit" title="Editar" onClick={()=>editar(g)}/>
                   <BtnIco n="trash" title="Eliminar" color="#B91C1C" onClick={()=>setConfirmDel(g)}/></>}</td>
@@ -364,7 +364,7 @@ export function Planilla({ toast, repartidores=[] }) {
           </div>
           <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden", marginBottom:20 }}>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
-              <thead><tr style={{ background:"#F6F9FC" }}>
+              <thead><tr style={{ background:"var(--bzf-F6F9FC, #F6F9FC)" }}>
                 {["Nombre","Cargo","Sueldo bruto","Pensión","Descuento","EsSalud (empresa)","Neto","Estado","Acciones"].map(h=>(
                   <th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
                 ))}
@@ -385,7 +385,7 @@ export function Planilla({ toast, repartidores=[] }) {
                       <td style={{ padding:"9px 12px", fontSize:13, fontWeight:800, color:B.gold }}>{fmt.sol(calc.neto)}</td>
                       <td style={{ padding:"9px 12px" }}>
                         <span style={{ fontSize:10, padding:"3px 8px", borderRadius:10, fontWeight:700,
-                          background:p.activo?"#ECFDF5":"#F3F4F6", color:p.activo?B.green:B.textMut }}>
+                          background:p.activo?"var(--bzf-ECFDF5, #ECFDF5)":"var(--bzf-F3F4F6, #F3F4F6)", color:p.activo?B.green:B.textMut }}>
                           {p.activo?"Activo":"Inactivo"}
                         </span>
                       </td>
@@ -409,7 +409,7 @@ export function Planilla({ toast, repartidores=[] }) {
           <div style={{ fontSize:13, fontWeight:700, color:B.navy, marginBottom:10 }}>Historial de pagos</div>
           <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden" }}>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
-              <thead><tr style={{ background:"#F6F9FC" }}>
+              <thead><tr style={{ background:"var(--bzf-F6F9FC, #F6F9FC)" }}>
                 {["Trabajador","Periodo","Neto pagado","Fecha de pago","Estado"].map(h=>(
                   <th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
                 ))}
@@ -423,7 +423,7 @@ export function Planilla({ toast, repartidores=[] }) {
                     <td style={{ padding:"9px 12px", fontSize:11, color:B.textMut }}>{pg.fecha_pago?fmt.fecha(pg.fecha_pago+"T00:00:00"):"—"}</td>
                     <td style={{ padding:"9px 12px" }}>
                       <span style={{ fontSize:10, padding:"3px 8px", borderRadius:10, fontWeight:700,
-                        background:pg.estado==="pagado"?"#ECFDF5":"#FFFBEB", color:pg.estado==="pagado"?B.green:B.goldDk }}>
+                        background:pg.estado==="pagado"?"var(--bzf-ECFDF5, #ECFDF5)":"var(--bzf-FFFBEB, #FFFBEB)", color:pg.estado==="pagado"?B.green:B.goldDk }}>
                         {pg.estado==="pagado"?"Pagado":"Pendiente"}
                       </span>
                     </td>
@@ -441,7 +441,7 @@ export function Planilla({ toast, repartidores=[] }) {
           </div>
           <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden", marginBottom:20 }}>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
-              <thead><tr style={{ background:"#F6F9FC" }}>
+              <thead><tr style={{ background:"var(--bzf-F6F9FC, #F6F9FC)" }}>
                 {["Nombre","RUC/DNI","Tipo de documento","Servicio","Estado","Acciones"].map(h=>(
                   <th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
                 ))}
@@ -457,7 +457,7 @@ export function Planilla({ toast, repartidores=[] }) {
                     <td style={{ padding:"9px 12px", fontSize:12, color:B.textPri }}>{t.servicio||"—"}</td>
                     <td style={{ padding:"9px 12px" }}>
                       <span style={{ fontSize:10, padding:"3px 8px", borderRadius:10, fontWeight:700,
-                        background:t.activo?"#ECFDF5":"#F3F4F6", color:t.activo?B.green:B.textMut }}>
+                        background:t.activo?"var(--bzf-ECFDF5, #ECFDF5)":"var(--bzf-F3F4F6, #F3F4F6)", color:t.activo?B.green:B.textMut }}>
                         {t.activo?"Activo":"Inactivo"}
                       </span>
                     </td>
@@ -480,7 +480,7 @@ export function Planilla({ toast, repartidores=[] }) {
           <div style={{ fontSize:13, fontWeight:700, color:B.navy, marginBottom:10 }}>Historial de pagos</div>
           <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden" }}>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
-              <thead><tr style={{ background:"#F6F9FC" }}>
+              <thead><tr style={{ background:"var(--bzf-F6F9FC, #F6F9FC)" }}>
                 {["Tercero","N° Documento","Bruto","Retención 8%","Neto pagado","Fecha","Estado"].map(h=>(
                   <th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
                 ))}
@@ -498,7 +498,7 @@ export function Planilla({ toast, repartidores=[] }) {
                     <td style={{ padding:"9px 12px", fontSize:11, color:B.textMut }}>{pg.fecha_pago?fmt.fecha(pg.fecha_pago+"T00:00:00"):"—"}</td>
                     <td style={{ padding:"9px 12px" }}>
                       <span style={{ fontSize:10, padding:"3px 8px", borderRadius:10, fontWeight:700,
-                        background:pg.estado==="pagado"?"#ECFDF5":"#FFFBEB", color:pg.estado==="pagado"?B.green:B.goldDk }}>
+                        background:pg.estado==="pagado"?"var(--bzf-ECFDF5, #ECFDF5)":"var(--bzf-FFFBEB, #FFFBEB)", color:pg.estado==="pagado"?B.green:B.goldDk }}>
                         {pg.estado==="pagado"?"Pagado":"Pendiente"}
                       </span>
                     </td>

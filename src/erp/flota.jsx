@@ -79,7 +79,7 @@ export function Unidades({ unidades, asignaciones, empresas, tiposServicio, repa
       {vista==="docs" ? <FlotaDocs unidades={unidades} repartidores={repartidores} toast={toast} onIr={onIr}/> : vista==="unidades" ? (
         <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden", boxShadow:"0 1px 2px #0D1E3D0D" }}>
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
-            <thead><tr style={{ background:"#F6F9FC" }}>
+            <thead><tr style={{ background:"var(--bzf-F6F9FC, #F6F9FC)" }}>
               {["Placa","Tipo","Conductor","Teléfono","Estado","Acciones"].map(h=>(
                 <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
               ))}
@@ -95,7 +95,7 @@ export function Unidades({ unidades, asignaciones, empresas, tiposServicio, repa
                   <td style={{ padding:"11px 14px", fontSize:12, color:B.textSec }}>{conductor?.telefono||"—"}</td>
                   <td style={{ padding:"11px 14px" }}>
                     <span style={{ fontSize:10, padding:"3px 8px", borderRadius:10, fontWeight:700,
-                      background:u.activo?"#ECFDF5":"#F3F4F6", color:u.activo?B.green:B.textMut }}>
+                      background:u.activo?"var(--bzf-ECFDF5, #ECFDF5)":"var(--bzf-F3F4F6, #F3F4F6)", color:u.activo?B.green:B.textMut }}>
                       {u.activo?"Activa":"Inactiva"}
                     </span>
                   </td>
@@ -114,7 +114,7 @@ export function Unidades({ unidades, asignaciones, empresas, tiposServicio, repa
       ) : (
         <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden", boxShadow:"0 1px 2px #0D1E3D0D" }}>
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
-            <thead><tr style={{ background:"#F6F9FC" }}>
+            <thead><tr style={{ background:"var(--bzf-F6F9FC, #F6F9FC)" }}>
               {["Unidad","Cliente","Servicio","Desde","Hasta","Estado","Acciones"].map(h=>(
                 <th key={h} style={{ padding:"10px 12px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
               ))}
@@ -133,7 +133,7 @@ export function Unidades({ unidades, asignaciones, empresas, tiposServicio, repa
                     <td style={{ padding:"10px 12px", fontSize:11, color:B.textMut }}>{a.fecha_fin?fmt.fecha(a.fecha_fin):"En curso"}</td>
                     <td style={{ padding:"10px 12px" }}>
                       <span style={{ fontSize:10, padding:"3px 8px", borderRadius:10, fontWeight:700,
-                        background: a.liquidado?"#ECFDF5":a.estado==="activa"?"#FFFBEB":"#F3F4F6",
+                        background: a.liquidado?"var(--bzf-ECFDF5, #ECFDF5)":a.estado==="activa"?"var(--bzf-FFFBEB, #FFFBEB)":"var(--bzf-F3F4F6, #F3F4F6)",
                         color: a.liquidado?B.green:a.estado==="activa"?B.goldDk:B.textMut }}>
                         {a.liquidado?"Liquidado":a.estado==="activa"?"Activa":"Finalizada"}
                       </span>
@@ -200,7 +200,7 @@ export function LiquidacionTransporte({ unidades, asignaciones, empresas, tiposS
 
       <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflow:"hidden", boxShadow:"0 1px 2px #0D1E3D0D" }}>
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
-          <thead><tr style={{ background:"#F6F9FC" }}>
+          <thead><tr style={{ background:"var(--bzf-F6F9FC, #F6F9FC)" }}>
             {["Unidad","Cliente","Servicio","Desde","Hasta","Días","Tarifa/día","Subtotal","IGV (18%)","Total a facturar","Estado","Acciones"].map(h=>(
               <th key={h} style={{ padding:"10px 12px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
             ))}
@@ -234,7 +234,7 @@ export function LiquidacionTransporte({ unidades, asignaciones, empresas, tiposS
                   <td style={{ padding:"10px 12px", fontSize:13, fontWeight:800, color:B.gold }}>{fmt.sol(totalConIGV)}</td>
                   <td style={{ padding:"10px 12px" }}>
                     <span style={{ fontSize:10, padding:"3px 8px", borderRadius:10, fontWeight:700,
-                      background: a.liquidado?"#ECFDF5":a.estado==="activa"?"#FFFBEB":"#F3F4F6",
+                      background: a.liquidado?"var(--bzf-ECFDF5, #ECFDF5)":a.estado==="activa"?"var(--bzf-FFFBEB, #FFFBEB)":"var(--bzf-F3F4F6, #F3F4F6)",
                       color: a.liquidado?B.green:a.estado==="activa"?B.goldDk:B.textMut }}>
                       {a.liquidado?"Liquidado":a.estado==="activa"?"Activa":"Finalizada"}
                     </span>
@@ -391,8 +391,8 @@ export function ModalCalendarioServicio({ asignacion, diasServicio, unidad, empr
                 const prestado = mapa[f] === true;
                 const feriado = esFeriadoPeru(f);
                 const fechaObj = new Date(f+"T12:00:00");
-                const bg = prestado && feriado ? "linear-gradient(135deg, #ECFDF5 50%, #FEF2F2 50%)"
-                  : prestado ? "#ECFDF5" : feriado ? "#FEF2F2" : B.bg;
+                const bg = prestado && feriado ? "linear-gradient(135deg, var(--bzf-ECFDF5, #ECFDF5) 50%, var(--bzf-FEF2F2, #FEF2F2) 50%)"
+                  : prestado ? "var(--bzf-ECFDF5, #ECFDF5)" : feriado ? "var(--bzf-FEF2F2, #FEF2F2)" : B.bg;
                 const borderColor = prestado && feriado ? B.gold : prestado ? B.green : feriado ? B.red : B.border;
                 const textColor = prestado && feriado ? B.goldDk : prestado ? B.green : feriado ? B.red : B.textMut;
                 return (
@@ -414,9 +414,9 @@ export function ModalCalendarioServicio({ asignacion, diasServicio, unidad, empr
             </div>
 
             <div style={{ display:"flex", gap:14, marginTop:14, fontSize:10, color:B.textMut, flexWrap:"wrap" }}>
-              <span><span style={{ display:"inline-block", width:10, height:10, background:"#ECFDF5", border:`1.5px solid ${B.green}`, borderRadius:3, marginRight:4 }}/>Activo</span>
-              <span><span style={{ display:"inline-block", width:10, height:10, background:"#FEF2F2", border:`1.5px solid ${B.red}`, borderRadius:3, marginRight:4 }}/>Feriado</span>
-              <span><span style={{ display:"inline-block", width:10, height:10, background:"linear-gradient(135deg,#ECFDF5 50%,#FEF2F2 50%)", border:`1.5px solid ${B.gold}`, borderRadius:3, marginRight:4 }}/>Activo + Feriado (con recargo)</span>
+              <span><span style={{ display:"inline-block", width:10, height:10, background:"var(--bzf-ECFDF5, #ECFDF5)", border:`1.5px solid ${B.green}`, borderRadius:3, marginRight:4 }}/>Activo</span>
+              <span><span style={{ display:"inline-block", width:10, height:10, background:"var(--bzf-FEF2F2, #FEF2F2)", border:`1.5px solid ${B.red}`, borderRadius:3, marginRight:4 }}/>Feriado</span>
+              <span><span style={{ display:"inline-block", width:10, height:10, background:"linear-gradient(135deg,var(--bzf-ECFDF5, #ECFDF5) 50%,var(--bzf-FEF2F2, #FEF2F2) 50%)", border:`1.5px solid ${B.gold}`, borderRadius:3, marginRight:4 }}/>Activo + Feriado (con recargo)</span>
             </div>
           </>
         )}

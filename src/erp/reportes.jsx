@@ -1,6 +1,6 @@
 // BOAZ ERP — módulo "reportes" (parte de BoazERP; ver src/BoazERP.jsx)
 import { useState, useEffect, useCallback, useRef, useMemo, Fragment } from "react";
-import { Ayuda, B, BtnPri, BtnSec, CARD, Ico, Kpi, Tabs, fmt, inp, lbl, sb } from "./base.jsx";
+import { alfa, Ayuda, B, BtnPri, BtnSec, CARD, Ico, Kpi, Tabs, fmt, inp, lbl, sb } from "./base.jsx";
 import { ModalTarifarioCliente, ModalTarifarioEstandar, ModalTarifarioVehiculo, ModalTarifarioVehiculoEstandar, ModalTarifarioViaje, modalidadesDe } from "./clientes.jsx";
 import { TIPOS_SERVICIO } from "./ventas.jsx";
 
@@ -54,7 +54,7 @@ export function BarraHorizontal({ label, valor, max, color }) {
         <span style={{ color:B.textSec, fontWeight:600 }}>{label}</span>
         <span style={{ color:B.navy, fontWeight:800 }}>{valor}</span>
       </div>
-      <div style={{ background:"#F1F5F9", borderRadius:6, height:9, overflow:"hidden" }}>
+      <div style={{ background:"var(--bzf-F1F5F9, #F1F5F9)", borderRadius:6, height:9, overflow:"hidden" }}>
         <div style={{ width:`${pct}%`, height:"100%", background:color, borderRadius:6 }}/>
       </div>
     </div>
@@ -310,7 +310,7 @@ export function Reportes({ pedidos, repartidores, empresas, toast, onIr }) {
           { icon:"package", label:"Total pedidos", value: filtrados.length, color:B.navy },
           { icon:"check", label:"Entregados", value: entregados.length, sub: finalizados>0?`${efectividad}% efect.`:null, color:B.green },
           { icon:"alert", label:"No entregados", value: noEntregados.length, color:B.red },
-          { icon:"bike", label:"En ruta", value: enRuta.length, color:"#7C3AED" },
+          { icon:"bike", label:"En ruta", value: enRuta.length, color:"var(--bzt-7C3AED, #7C3AED)" },
           { icon:"clock", label:"Por asignar/asig.", value: sinAsignar.length+asignados.length, color:B.gold },
           { icon:"dollar", label:"Ingreso periodo", value: fmt.sol(ingresoTotal), color:B.goldDk, big:true },
         ].map((k,i)=><Kpi key={i} icon={k.icon} label={k.label} valor={k.value} sub={k.sub} color={k.color}/>)}
@@ -325,8 +325,8 @@ export function Reportes({ pedidos, repartidores, empresas, toast, onIr }) {
             <DonutChart segments={[
               { value:entregados.length, color:B.green },
               { value:noEntregados.length, color:B.red },
-              { value:enRuta.length, color:"#7C3AED" },
-              { value:asignados.length, color:"#D97706" },
+              { value:enRuta.length, color:"var(--bzt-7C3AED, #7C3AED)" },
+              { value:asignados.length, color:"var(--bzt-D97706, #D97706)" },
               { value:sinAsignar.length, color:"#3B82F6" },
             ]}/>
             <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
@@ -357,7 +357,7 @@ export function Reportes({ pedidos, repartidores, empresas, toast, onIr }) {
             <div><div style={{ fontSize:10, color:B.textMut, textTransform:"uppercase" }}>Cobrado</div>
               <div style={{ fontSize:22, fontWeight:900, color:B.green }}>{fmt.sol(codCobrado)}</div></div>
             <div style={{ gridColumn:"1/-1" }}><div style={{ fontSize:10, color:B.textMut, textTransform:"uppercase" }}>Pendiente por cobrar</div>
-              <div style={{ fontSize:22, fontWeight:900, color:"#C2410C" }}>{fmt.sol(codPendiente)}</div></div>
+              <div style={{ fontSize:22, fontWeight:900, color:"var(--bzt-C2410C, #C2410C)" }}>{fmt.sol(codPendiente)}</div></div>
           </div>
           {onIr && <button onClick={()=>onIr("cobranza")} style={{ marginTop:14, background:"none", border:"none", color:B.blue, fontSize:12, fontWeight:700, cursor:"pointer", padding:0 }}>Gestionar rendición en Cobranza →</button>}
         </div>
@@ -399,7 +399,7 @@ export function Reportes({ pedidos, repartidores, empresas, toast, onIr }) {
           <div style={{ padding:"14px 18px", borderBottom:`1px solid ${B.border}`,
             fontSize:13, fontWeight:700, color:B.navy }}>Rendimiento por repartidor</div>
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
-            <thead><tr style={{ background:"#F6F9FC" }}>
+            <thead><tr style={{ background:"var(--bzf-F6F9FC, #F6F9FC)" }}>
               {["Repartidor","Total","Entregados","No entreg.","Efectividad","Ingresos"].map(h=>(
                 <th key={h} style={{ padding:"8px 12px", textAlign:"left", fontSize:10,
                   color:B.textMut, fontWeight:700 }}>{h}</th>
@@ -661,9 +661,9 @@ export function Configuracion({ onRefresh, toast }) {
               marginBottom:6 }}>{ambito.replace("_"," ")}</div>
             <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
               {distritos.map(d=>(
-                <span key={d} style={{ fontSize:10, background:`${B.navy}10`,
+                <span key={d} style={{ fontSize:10, background:`${alfa(B.navy,"10")}`,
                   color:B.navy, padding:"2px 8px", borderRadius:10,
-                  border:`1px solid ${B.navy}22` }}>{d}</span>
+                  border:`1px solid ${alfa(B.navy,"22")}` }}>{d}</span>
               ))}
             </div>
           </div>
@@ -687,7 +687,7 @@ export function Configuracion({ onRefresh, toast }) {
           ].map(it=>(
             <div key={it.name} style={{ border:`1px solid ${B.border}`, borderRadius:10,
               padding:14, display:"flex", alignItems:"center", gap:10 }}>
-              <div style={{ width:36, height:36, borderRadius:8, background:`${it.color}22`,
+              <div style={{ width:36, height:36, borderRadius:8, background:`${alfa(it.color,"22")}`,
                 display:"flex", alignItems:"center", justifyContent:"center",
                 fontSize:11, fontWeight:800, color:it.color }}>
                 {it.name.slice(0,2)}
@@ -697,7 +697,7 @@ export function Configuracion({ onRefresh, toast }) {
                 <div style={{ fontSize:10, color:B.textMut }}>{it.desc}</div>
               </div>
               <span style={{ marginLeft:"auto", fontSize:9, padding:"2px 6px", borderRadius:6,
-                background:"#FFF7ED", color:B.orange, fontWeight:700, border:`1px solid ${B.orange}44` }}>
+                background:"var(--bzf-FFF7ED, #FFF7ED)", color:B.orange, fontWeight:700, border:`1px solid ${B.orange}44` }}>
                 Pronto
               </span>
             </div>
@@ -748,7 +748,7 @@ export function Catalogo({ onIr, tarifasDistrito=[], lineasNegocio, tiposServici
   return (
     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
       {/* Las tarifas de cada cliente viven en su ficha (Clientes → Cómo se cobra) */}
-      <div style={{ ...CARD, padding:"14px 18px", gridColumn:"span 2", display:"flex", alignItems:"center", gap:14, flexWrap:"wrap", background:"#F6F9FC" }}>
+      <div style={{ ...CARD, padding:"14px 18px", gridColumn:"span 2", display:"flex", alignItems:"center", gap:14, flexWrap:"wrap", background:"var(--bzf-F6F9FC, #F6F9FC)" }}>
         <Ico n="building" size={20} color={B.goldDk}/>
         <div style={{ flex:"1 1 300px", fontSize:13, color:B.textSec }}>
           Aquí están las <b style={{ color:B.textPri }}>propuestas base</b> que se usan cuando un cliente no tiene tarifa propia. Las tarifas negociadas con cada cliente se ven y se editan en <b style={{ color:B.textPri }}>Clientes → Cómo se cobra</b>.
@@ -789,7 +789,7 @@ export function Catalogo({ onIr, tarifasDistrito=[], lineasNegocio, tiposServici
             <button key={id} onClick={()=>setTabEstandar(id)}
               style={{ flex:1, padding:"6px 8px", borderRadius:8, fontSize:11, fontWeight:700, cursor:"pointer",
                 border: tabEstandar===id ? `2px solid ${B.gold}` : `1px solid ${B.border}`,
-                background: tabEstandar===id ? "#FFF7ED" : B.white,
+                background: tabEstandar===id ? "var(--bzf-FFF7ED, #FFF7ED)" : B.white,
                 color: tabEstandar===id ? B.goldDk : B.textSec }}>
               {label}
             </button>
@@ -797,7 +797,7 @@ export function Catalogo({ onIr, tarifasDistrito=[], lineasNegocio, tiposServici
         </div>
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
           <thead>
-            <tr style={{ background:"#F6F9FC" }}>
+            <tr style={{ background:"var(--bzf-F6F9FC, #F6F9FC)" }}>
               {["Ámbito","XS (0-1kg)","S (1-3kg)","M (3-7kg)"].map(h=>(
                 <th key={h} style={{ padding:"8px 12px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
               ))}
@@ -842,7 +842,7 @@ export function Catalogo({ onIr, tarifasDistrito=[], lineasNegocio, tiposServici
         </div>
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
           <thead>
-            <tr style={{ background:"#F6F9FC" }}>
+            <tr style={{ background:"var(--bzf-F6F9FC, #F6F9FC)" }}>
               {["Tipo de vehículo","Tarifa base (día)","Recargo periférico"].map(h=>(
                 <th key={h} style={{ padding:"8px 12px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>
               ))}

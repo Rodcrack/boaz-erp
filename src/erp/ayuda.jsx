@@ -61,7 +61,7 @@ export function PrimerosPasos({ empresas=[], repartidores=[], unidades=[], pedid
   const preg = PREGUNTAS.filter(([a,b]) => !q || `${a} ${b}`.toLowerCase().includes(q));
   return (
     <div>
-      <div style={{ ...CARD, padding:"18px 20px", marginBottom:16, display:"flex", gap:16, alignItems:"center", flexWrap:"wrap", background:`linear-gradient(135deg,${B.navy},${B.navyLt})`, border:"none" }}>
+      <div style={{ ...CARD, padding:"18px 20px", marginBottom:16, display:"flex", gap:16, alignItems:"center", flexWrap:"wrap", background:`linear-gradient(135deg,${B.navyFijo},${B.navyLt})`, border:"none" }}>
         <div style={{ width:44, height:44, borderRadius:12, background:"#FFFFFF1A", display:"flex", alignItems:"center", justifyContent:"center", color:B.goldLt, flexShrink:0 }}><Ico n="book" size={24}/></div>
         <div style={{ flex:1, minWidth:220 }}>
           <div style={{ fontSize:16, fontWeight:800, color:"#fff" }}>Cómo se trabaja en Boaz ERP</div>
@@ -77,12 +77,12 @@ export function PrimerosPasos({ empresas=[], repartidores=[], unidades=[], pedid
         {PASOS.map((p,i) => { const ok = estados[i]; return (
           <div key={p.id} className="bz-card-hover" style={{ ...CARD, padding:16, display:"flex", gap:12, borderLeft:`3px solid ${ok===true?"#047857":ok===false?B.gold:B.border}` }}>
             <div style={{ width:30, height:30, borderRadius:"50%", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:800,
-              background: ok===true ? "#ECFDF5" : "#F1F5F9", color: ok===true ? "#047857" : B.textSec }}>{ok===true ? <Ico n="check" size={16}/> : i+1}</div>
+              background: ok===true ? "var(--bzf-ECFDF5, #ECFDF5)" : "var(--bzf-F1F5F9, #F1F5F9)", color: ok===true ? "var(--bzt-047857, #047857)" : B.textSec }}>{ok===true ? <Ico n="check" size={16}/> : i+1}</div>
             <div style={{ flex:1, minWidth:0 }}>
               <div style={{ fontSize:13.5, fontWeight:700, color:B.textPri, display:"flex", alignItems:"center", gap:8 }}><Ico n={p.ico} size={15} color={B.textMut}/>{p.titulo}</div>
               <div style={{ fontSize:12.5, color:B.textSec, marginTop:6, lineHeight:1.5 }}>{p.que}</div>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:10, gap:8 }}>
-                <span style={{ fontSize:11.5, color: ok===false ? "#B45309" : B.textMut, fontWeight: ok===false ? 600 : 400 }}>{p.meta(d)}</span>
+                <span style={{ fontSize:11.5, color: ok===false ? "var(--bzt-B45309, #B45309)" : B.textMut, fontWeight: ok===false ? 600 : 400 }}>{p.meta(d)}</span>
                 <button onClick={()=>onIr && onIr(p.ir)} style={{ display:"inline-flex", alignItems:"center", gap:4, fontSize:12, fontWeight:600, color:B.goldDk, background:"none", border:"none", cursor:"pointer", padding:0 }}>Ir <Ico n="arrow" size={13}/></button>
               </div>
             </div>

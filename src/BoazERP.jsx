@@ -1,7 +1,7 @@
 // BOAZ ERP — entrada principal: inicio de sesión, menú y carga de datos.
 // Los módulos están en la carpeta ./erp/
 import { useState, useEffect, useCallback, useRef, useMemo, Fragment } from "react";
-import { B, EstadoVacio, Ico, ModalCambiarClave, emailValido, errorAuthEs, traducirError, PaletaComandos, ROLES_ACCESO, Toast, cargarPedidosLiviano, sb, setTarifasDistritoGlobal, traerTodo } from "./erp/base.jsx";
+import { B, EstadoVacio, Ico, ModalCambiarClave, useTema, emailValido, errorAuthEs, traducirError, PaletaComandos, ROLES_ACCESO, Toast, cargarPedidosLiviano, sb, setTarifasDistritoGlobal, traerTodo } from "./erp/base.jsx";
 import { Dashboard } from "./erp/dashboard.jsx";
 import { Pedidos } from "./erp/pedidos.jsx";
 import { Clientes, Repartidores } from "./erp/clientes.jsx";
@@ -39,7 +39,7 @@ export function Login({ onLogin }) {
   };
 
   return (
-    <div style={{ minHeight:"100vh", background:`radial-gradient(1200px 600px at 20% 0%, ${B.navyLt} 0%, ${B.navy} 60%)`, display:"flex",
+    <div style={{ minHeight:"100vh", background:`radial-gradient(1200px 600px at 20% 0%, ${B.navyLt} 0%, ${B.navyFijo} 60%)`, display:"flex",
       alignItems:"center", justifyContent:"center",
       fontFamily:"'Inter','Segoe UI',sans-serif" }}>
       <div style={{ width:360, background:B.navyMd, border:`1px solid ${B.navyBdr}`,
@@ -57,14 +57,14 @@ export function Login({ onLogin }) {
           textTransform:"uppercase", letterSpacing:"0.7px", marginBottom:4, display:"block" }}>Email</label>
         <input type="email" value={email} onChange={e=>setEmail(e.target.value)}
           onKeyDown={e=>e.key==="Enter"&&entrar()}
-          style={{ width:"100%", background:B.navy, border:`1px solid ${B.navyBdr}`,
+          style={{ width:"100%", background:B.navyFijo, border:`1px solid ${B.navyBdr}`,
             color:"#fff", borderRadius:8, padding:"10px 12px", fontSize:13,
             outline:"none", marginBottom:14, boxSizing:"border-box" }}/>
         <label style={{ fontSize:11, color:"#8FA3BA", fontWeight:700,
           textTransform:"uppercase", letterSpacing:"0.7px", marginBottom:4, display:"block" }}>Contraseña</label>
         <input type="password" value={password} onChange={e=>setPassword(e.target.value)}
           onKeyDown={e=>e.key==="Enter"&&entrar()}
-          style={{ width:"100%", background:B.navy, border:`1px solid ${B.navyBdr}`,
+          style={{ width:"100%", background:B.navyFijo, border:`1px solid ${B.navyBdr}`,
             color:"#fff", borderRadius:8, padding:"10px 12px", fontSize:13,
             outline:"none", marginBottom:16, boxSizing:"border-box" }}/>
         {error && <div style={{ background:"#2D0707", border:"1px solid #EF444444",
@@ -85,6 +85,7 @@ export function Login({ onLogin }) {
 // APP PRINCIPAL
 // ══════════════════════════════════════════════════════════════
 export default function BoazERP() {
+  const [tema, setTema, temaActivo] = useTema();   // claro / oscuro (se guarda en este navegador)
   const [sesion, setSesion] = useState(null);
   const [usuario, setUsuario] = useState(null);
   const [verificando, setVerificando] = useState(true);
@@ -297,7 +298,7 @@ export default function BoazERP() {
   });
 if (verificando) {
     return (
-      <div style={{ minHeight:"100vh", background:B.navy, display:"flex",
+      <div style={{ minHeight:"100vh", background:B.navyFijo, display:"flex",
         alignItems:"center", justifyContent:"center", color:"#8FA3BA", fontSize:13 }}>
         Verificando sesión...
       </div>
@@ -331,7 +332,7 @@ if (verificando) {
 
       {/* SIDEBAR */}
       {esMovil && drawerNav && <div className="bz-overlay-nav" onClick={()=>setDrawerNav(false)}/>}
-      <div style={{ width:sideW, background:B.navy, display:"flex",
+      <div style={{ width:sideW, background:B.navyFijo, display:"flex",
         flexDirection:"column", flexShrink:0, transition: esMovil ? "transform .22s" : "width 0.2s",
         boxShadow:"4px 0 20px #0D1E3D33", overflow:"hidden",
         ...(esMovil ? { position:"fixed", top:0, bottom:0, left:0, zIndex:50, transform: drawerNav ? "none" : "translateX(-105%)" } : {}) }}>
@@ -408,7 +409,7 @@ if (verificando) {
         {/* Footer */}
         {navAbierto && (
           <div style={{ padding:"12px 14px", borderTop:"1px solid #1E3560",
-            fontSize:9, color:"#4A6080" }}>
+            fontSize:9, color:"var(--bzt-4A6080, #4A6080)" }}>
             <div style={{ color:B.gold, fontWeight:600, marginBottom:2 }}>Con Boaz, tu negocio no para</div>
             <div>v2.0 · {new Date().toLocaleDateString("es-PE")}</div>
           </div>
@@ -455,11 +456,14 @@ if (verificando) {
     <div style={{ fontSize:10, color:B.textMut, textTransform:"capitalize" }}>{usuario.rol}</div>
   </div>
   <div className="bz-oculta-movil" style={{ width:36, height:36,
-    background:`linear-gradient(135deg,${B.navy},${B.navyLt})`,
+    background:`linear-gradient(135deg,${B.navyFijo},${B.navyLt})`,
     borderRadius:"50%", display:"flex", alignItems:"center",
     justifyContent:"center", fontSize:14, fontWeight:800, color:B.gold }}>
     {usuario.nombre?.[0]}
   </div>
+  <button onClick={()=>setTema(temaActivo==="oscuro" ? "claro" : "oscuro")} aria-label={temaActivo==="oscuro" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"} title={temaActivo==="oscuro" ? "Modo claro" : "Modo oscuro"}
+    style={{ background:"none", border:`1px solid ${B.border}`, color:B.textSec,
+      padding: esMovil ? "9px 10px" : "6px 8px", borderRadius:6, cursor:"pointer", display:"flex", alignItems:"center" }}><Ico n={temaActivo==="oscuro" ? "sun" : "moon"} size={13}/></button>
   <button onClick={()=>setCambiarClave("voluntario")} aria-label="Cambiar mi contraseña" title="Cambiar mi contraseña"
     style={{ background:"none", border:`1px solid ${B.border}`, color:B.textSec,
       padding: esMovil ? "9px 10px" : "6px 8px", borderRadius:6, cursor:"pointer", display:"flex", alignItems:"center" }}><Ico n="key" size={13}/></button>

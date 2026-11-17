@@ -1,6 +1,6 @@
 // BOAZ ERP — módulo "operacion" (parte de BoazERP; ver src/BoazERP.jsx)
 import { useState, useEffect, useCallback, useRef, useMemo, Fragment } from "react";
-import { Ayuda, B, crearCuentaAcceso, emailValido, generarClaveTemporal, validarClave, BtnIco, BtnPri, BtnSec, Buscador, CARD, Cargando, Confirm, EstadoVacio, Etiqueta, Ico, Kpi, KpiDS, TAB_CONT, TAB_SEG, Tabs, XLSX, asegurarXLSX, diaLocal, fmt, inp, kpiMini, lbl, sb, usePaginacion } from "./base.jsx";
+import { alfa, Ayuda, B, crearCuentaAcceso, emailValido, generarClaveTemporal, validarClave, BtnIco, BtnPri, BtnSec, Buscador, CARD, Cargando, Confirm, EstadoVacio, Etiqueta, Ico, Kpi, KpiDS, TAB_CONT, TAB_SEG, Tabs, XLSX, asegurarXLSX, diaLocal, fmt, inp, kpiMini, lbl, sb, usePaginacion } from "./base.jsx";
 import { esFeriadoPeru } from "./ventas.jsx";
 import { solN } from "./costos.jsx";
 
@@ -13,9 +13,9 @@ export const diasHasta = (f) => f ? Math.round((new Date(String(f).slice(0,10)+"
 export const estadoVenc = (f) => {
   const d = diasHasta(f);
   if (d===null) return { k:"sin", color:B.textMut, bg:B.bg, txt:"Sin registrar" };
-  if (d<0) return { k:"venc", color:B.red, bg:"#FEF2F2", txt:`Vencido hace ${-d} d` };
-  if (d<=30) return { k:"pronto", color:"#B45309", bg:"#FFF7ED", txt:`Vence en ${d} d` };
-  return { k:"ok", color:B.green, bg:"#ECFDF5", txt:fmt.fecha(f) };
+  if (d<0) return { k:"venc", color:B.red, bg:"var(--bzf-FEF2F2, #FEF2F2)", txt:`Vencido hace ${-d} d` };
+  if (d<=30) return { k:"pronto", color:"var(--bzt-B45309, #B45309)", bg:"var(--bzf-FFF7ED, #FFF7ED)", txt:`Vence en ${d} d` };
+  return { k:"ok", color:B.green, bg:"var(--bzf-ECFDF5, #ECFDF5)", txt:fmt.fecha(f) };
 };
 
 export function FlotaDocs({ unidades, repartidores, toast, onIr }) {
@@ -74,7 +74,7 @@ export function FlotaDocs({ unidades, repartidores, toast, onIr }) {
     let k = "ok", txt = `Último ${fmt.fecha(m.fecha)}`;
     if (m.proxFecha) { const e = estadoVenc(m.proxFecha); k = e.k; txt = e.k==="venc" ? `Mant. ${e.txt.toLowerCase()}` : e.k==="pronto" ? `Mant. ${e.txt.toLowerCase()}` : `Próx. ${fmt.fecha(m.proxFecha)}`; }
     if (m.proxKm && m.km) { const falta = m.proxKm - m.km; if (falta<=0) { k="venc"; txt=`Pasó el km (${m.proxKm.toLocaleString()})`; } else if (falta<=500 && k!=="venc") { k="pronto"; txt=`Faltan ${falta} km`; } }
-    const c = { ok:[B.green,"#ECFDF5"], pronto:["#B45309","#FFF7ED"], venc:[B.red,"#FEF2F2"] }[k] || [B.textMut,B.bg];
+    const c = { ok:[B.green,"var(--bzf-ECFDF5, #ECFDF5)"], pronto:["var(--bzt-B45309, #B45309)","var(--bzf-FFF7ED, #FFF7ED)"], venc:[B.red,"var(--bzf-FEF2F2, #FEF2F2)"] }[k] || [B.textMut,B.bg];
     return { k, color:c[0], bg:c[1], txt };
   };
 
@@ -112,10 +112,10 @@ export function FlotaDocs({ unidades, repartidores, toast, onIr }) {
     setConfirmDel(null);
   };
 
-  const th = { textAlign:"left", padding:"10px 14px", fontSize:11, fontWeight:700, color:B.textSec, background:"#F6F9FC", letterSpacing:".3px", borderBottom:"1px solid #E3EAF2", whiteSpace:"nowrap" };
-  const td = { padding:"12px 14px", fontSize:13, borderBottom:"1px solid #E3EAF2", verticalAlign:"middle" };
+  const th = { textAlign:"left", padding:"10px 14px", fontSize:11, fontWeight:700, color:B.textSec, background:"var(--bzf-F6F9FC, #F6F9FC)", letterSpacing:".3px", borderBottom:"1px solid var(--bzl-E3EAF2, #E3EAF2)", whiteSpace:"nowrap" };
+  const td = { padding:"12px 14px", fontSize:13, borderBottom:"1px solid var(--bzl-E3EAF2, #E3EAF2)", verticalAlign:"middle" };
   const Pill = ({ e, onClick }) => (
-    <button onClick={onClick} style={{ background:e.bg, color:e.color, border:`1px solid ${e.color}33`, borderRadius:20, padding:"3px 10px", fontSize:11, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>{e.txt}</button>
+    <button onClick={onClick} style={{ background:e.bg, color:e.color, border:`1px solid ${alfa(e.color,"33")}`, borderRadius:20, padding:"3px 10px", fontSize:11, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>{e.txt}</button>
   );
   const card = CARD;
 
@@ -363,8 +363,8 @@ export function Rentabilidad({ pedidos, empresas, repartidores, unidades, asigna
   };
 
   const card = CARD;
-  const th = { textAlign:"right", padding:"10px 14px", fontSize:11, fontWeight:700, color:B.textSec, background:"#F6F9FC", letterSpacing:".3px", borderBottom:"1px solid #E3EAF2", whiteSpace:"nowrap" };
-  const td = { padding:"12px 14px", fontSize:13, borderBottom:"1px solid #E3EAF2", textAlign:"right" };
+  const th = { textAlign:"right", padding:"10px 14px", fontSize:11, fontWeight:700, color:B.textSec, background:"var(--bzf-F6F9FC, #F6F9FC)", letterSpacing:".3px", borderBottom:"1px solid var(--bzl-E3EAF2, #E3EAF2)", whiteSpace:"nowrap" };
+  const td = { padding:"12px 14px", fontSize:13, borderBottom:"1px solid var(--bzl-E3EAF2, #E3EAF2)", textAlign:"right" };
   const Kpi = kpiMini;
 
   return (
@@ -384,7 +384,7 @@ export function Rentabilidad({ pedidos, empresas, repartidores, unidades, asigna
       </div>
 
       {modelo.sinCosto.length>0 && (
-        <div style={{ background:"#FFF7ED", border:"1px solid #FDBA74", borderRadius:10, padding:"10px 14px", marginBottom:12, fontSize:12, color:"#9A3412" }}>
+        <div style={{ background:"var(--bzf-FFF7ED, #FFF7ED)", border:"1px solid var(--bzl-FDBA74, #FDBA74)", borderRadius:10, padding:"10px 14px", marginBottom:12, fontSize:12, color:"var(--bzt-9A3412, #9A3412)" }}>
           <b>Atención:</b> estas personas no tienen costo configurado (tarifa o sueldo) y se están contando en S/ 0: {modelo.sinCosto.slice(0,6).join(", ")}{modelo.sinCosto.length>6?"…":""}. Configúralo en Repartidores para que el margen sea real.
         </div>)}
 
@@ -401,7 +401,7 @@ export function Rentabilidad({ pedidos, empresas, repartidores, unidades, asigna
                 <td style={{...td,textAlign:"left",fontWeight:600}}>{f.nombre}<div style={{ fontSize:11, color:B.textMut, fontWeight:400 }}>{f.pedidos} pedido{f.pedidos===1?"":"s"}{f.diasTR?` · ${f.diasTR} día${f.diasTR===1?"":"s"} de transporte`:""}</div></td>
                 <td style={td}>{solN(f.ingUM)}</td><td style={td}>{solN(f.ingTR)}</td><td style={td}>{solN(f.cPers)}</td><td style={td}>{solN(f.cVeh)}</td><td style={td}>{solN(f.cInc)}</td>
                 <td style={{...td,fontWeight:800,color:f.margen>=0?B.green:B.red}}>{solN(f.margen)}</td>
-                <td style={td}>{f.pct==null?"—":<span style={{ background:f.pct>=30?"#ECFDF5":f.pct>=10?"#FFF7ED":"#FEF2F2", color:f.pct>=30?B.green:f.pct>=10?"#B45309":B.red, fontWeight:800, fontSize:12, padding:"2px 9px", borderRadius:20 }}>{f.pct.toFixed(1)}%</span>}</td>
+                <td style={td}>{f.pct==null?"—":<span style={{ background:f.pct>=30?"var(--bzf-ECFDF5, #ECFDF5)":f.pct>=10?"var(--bzf-FFF7ED, #FFF7ED)":"var(--bzf-FEF2F2, #FEF2F2)", color:f.pct>=30?B.green:f.pct>=10?"var(--bzt-B45309, #B45309)":B.red, fontWeight:800, fontSize:12, padding:"2px 9px", borderRadius:20 }}>{f.pct.toFixed(1)}%</span>}</td>
               </tr>))}</tbody>
           </table>}
       </div>
@@ -436,8 +436,8 @@ export function DirectorioPersonas({ personal, terceros, repartidores }) {
   const nDup = new Set(filas.filter(f=>f.dup).map(f=>f.doc)).size;
   const q = busq.trim().toLowerCase();
   const vis = filas.filter(f => (!soloDup || f.dup) && (!q || `${f.nombre} ${f.doc} ${f.rol}`.toLowerCase().includes(q)));
-  const colores = { Planilla:[B.navy,"#E8EEF7"], Tercero:["#7C3AED","#F3EEFF"], Repartidor:[B.goldDk,"#FFF4E5"] };
-  const td = { padding:"12px 14px", fontSize:13, borderBottom:"1px solid #E3EAF2" };
+  const colores = { Planilla:[B.navy,"var(--bzf-E8EEF7, #E8EEF7)"], Tercero:["var(--bzt-7C3AED, #7C3AED)","var(--bzf-F3EEFF, #F3EEFF)"], Repartidor:[B.goldDk,"var(--bzf-FFF4E5, #FFF4E5)"] };
+  const td = { padding:"12px 14px", fontSize:13, borderBottom:"1px solid var(--bzl-E3EAF2, #E3EAF2)" };
   return (
     <div>
       <div style={{ fontSize:12, color:B.textSec, marginBottom:12 }}>Vista unificada de todas las personas del sistema: planilla, terceros y repartidores. Detecta a quien está registrado en más de un lugar por su DNI o RUC.</div>
@@ -448,14 +448,14 @@ export function DirectorioPersonas({ personal, terceros, repartidores }) {
       </div>
       <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, overflowX:"auto" }}>
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
-          <thead><tr style={{ background:"#F6F9FC" }}>{["Nombre","Documento","Registrado en","Rol / detalle","Estado","Alerta"].map(h=><th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>)}</tr></thead>
+          <thead><tr style={{ background:"var(--bzf-F6F9FC, #F6F9FC)" }}>{["Nombre","Documento","Registrado en","Rol / detalle","Estado","Alerta"].map(h=><th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:11, color:B.textSec, fontWeight:700, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>{h}</th>)}</tr></thead>
           <tbody>{vis.map(f => (
             <tr key={f.k}>
               <td style={{...td,fontWeight:600}}>{f.nombre||"—"}</td><td style={td}>{f.doc||"—"}</td>
               <td style={td}><span style={{ background:colores[f.origen][1], color:colores[f.origen][0], fontSize:11, fontWeight:700, padding:"2px 9px", borderRadius:20 }}>{f.origen}</span></td>
               <td style={{...td,color:B.textSec}}>{f.rol}</td>
               <td style={td}>{f.activo ? <span style={{ color:B.green, fontWeight:700, fontSize:12 }}>Activo</span> : <span style={{ color:B.textMut, fontSize:12 }}>Inactivo</span>}</td>
-              <td style={td}>{f.dup && <span style={{ background:"#FFF7ED", color:"#B45309", fontSize:11, fontWeight:700, padding:"2px 9px", borderRadius:20 }}>También en {f.otros.join(", ")}</span>}</td>
+              <td style={td}>{f.dup && <span style={{ background:"var(--bzf-FFF7ED, #FFF7ED)", color:"var(--bzt-B45309, #B45309)", fontSize:11, fontWeight:700, padding:"2px 9px", borderRadius:20 }}>También en {f.otros.join(", ")}</span>}</td>
             </tr>))}</tbody>
         </table>
         {vis.length===0 && <EstadoVacio icono="users" titulo="Sin resultados"/>}
@@ -574,8 +574,8 @@ export function ServiciosCliente({ empresas=[], repartidores=[], unidades=[], ta
     } catch (e) { toast("No se pudo exportar: "+(e.message||e), "error"); }
   };
 
-  const th = { textAlign:"left", padding:"10px 14px", fontSize:11, fontWeight:700, color:B.textSec, background:"#F6F9FC", letterSpacing:".3px", borderBottom:"1px solid #E3EAF2", whiteSpace:"nowrap" };
-  const td = { padding:"12px 14px", fontSize:13, borderBottom:"1px solid #E3EAF2", color:B.textPri, verticalAlign:"middle" };
+  const th = { textAlign:"left", padding:"10px 14px", fontSize:11, fontWeight:700, color:B.textSec, background:"var(--bzf-F6F9FC, #F6F9FC)", letterSpacing:".3px", borderBottom:"1px solid var(--bzl-E3EAF2, #E3EAF2)", whiteSpace:"nowrap" };
+  const td = { padding:"12px 14px", fontSize:13, borderBottom:"1px solid var(--bzl-E3EAF2, #E3EAF2)", color:B.textPri, verticalAlign:"middle" };
 
   return (
     <div>
@@ -588,7 +588,7 @@ export function ServiciosCliente({ empresas=[], repartidores=[], unidades=[], ta
       </div>
 
       {faltaSql && (
-        <div style={{ background:"#FFF7ED", border:"1px solid #FDBA74", borderRadius:12, padding:"12px 14px", marginBottom:14, fontSize:13, color:"#9A3412", display:"flex", gap:8, alignItems:"flex-start" }}>
+        <div style={{ background:"var(--bzf-FFF7ED, #FFF7ED)", border:"1px solid var(--bzl-FDBA74, #FDBA74)", borderRadius:12, padding:"12px 14px", marginBottom:14, fontSize:13, color:"var(--bzt-9A3412, #9A3412)", display:"flex", gap:8, alignItems:"flex-start" }}>
           <Ico n="alert" size={16}/><div>Falta activar este módulo en la base de datos: ejecuta <b>servicios_cliente_boaz.sql</b> en Supabase (SQL Editor) y recarga la página.</div>
         </div>
       )}
@@ -637,7 +637,7 @@ export function ServiciosCliente({ empresas=[], repartidores=[], unidades=[], ta
                   <div style={{ display:"flex", alignItems:"center", justifyContent:"flex-end", gap:4, whiteSpace:"nowrap" }}>
                     {!anul && f.estado==="realizado" && (
                       <button className="bz-btn-sec" onClick={()=>marcarFacturado(f, !f.facturado)}
-                        style={{ fontSize:12, fontWeight:600, color:f.facturado?B.textSec:"#047857", background:B.white, border:`1px solid ${B.border}`, borderRadius:8, padding:"5px 10px", cursor:"pointer" }}>{f.facturado ? "Quitar facturado" : "Marcar facturado"}</button>)}
+                        style={{ fontSize:12, fontWeight:600, color:f.facturado?B.textSec:"var(--bzt-047857, #047857)", background:B.white, border:`1px solid ${B.border}`, borderRadius:8, padding:"5px 10px", cursor:"pointer" }}>{f.facturado ? "Quitar facturado" : "Marcar facturado"}</button>)}
                     <BtnIco n="edit" title="Editar servicio" onClick={()=>editar(f)}/>
                     {!f.facturado && <BtnIco n="trash" title="Eliminar servicio" color="#B91C1C" onClick={()=>setConfirmDel(f)}/>}
                   </div>
@@ -661,7 +661,7 @@ export function ServiciosCliente({ empresas=[], repartidores=[], unidades=[], ta
               {Object.entries(TIPOS_SERV).map(([id,t]) => { const on = form.tipo===id; return (
                 <button key={id} onClick={()=>set("tipo",id)} title={t.ayuda}
                   style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 12px", borderRadius:10, cursor:"pointer", textAlign:"left", fontSize:13, fontWeight:on?700:500,
-                    border:`1px solid ${on?B.gold:B.border}`, background:on?"#FFF7ED":B.white, color:on?B.goldDk:B.textPri }}>
+                    border:`1px solid ${on?B.gold:B.border}`, background:on?"var(--bzf-FFF7ED, #FFF7ED)":B.white, color:on?B.goldDk:B.textPri }}>
                   <Ico n={t.ico} size={16}/>{t.label}
                 </button>); })}
             </div>
@@ -678,7 +678,7 @@ export function ServiciosCliente({ empresas=[], repartidores=[], unidades=[], ta
                   </select></div>
               )}
               {form.tipo!=="especial" && form.empresa_id && opciones.length===0 && (
-                <div style={{ gridColumn:"1/-1", fontSize:12, color:"#B45309", background:"#FFF7ED", border:"1px solid #FDBA7488", borderRadius:8, padding:"8px 10px" }}>
+                <div style={{ gridColumn:"1/-1", fontSize:12, color:"var(--bzt-B45309, #B45309)", background:"var(--bzf-FFF7ED, #FFF7ED)", border:"1px solid #FDBA7488", borderRadius:8, padding:"8px 10px" }}>
                   Este cliente no tiene tarifas por {form.tipo} configuradas. Puedes escribir el concepto y el precio a mano, o configurarlas en Clientes → Por viaje.
                 </div>
               )}
@@ -699,7 +699,7 @@ export function ServiciosCliente({ empresas=[], repartidores=[], unidades=[], ta
                 <select style={inp} value={form.estado} onChange={e=>set("estado",e.target.value)}><option value="realizado">Realizado</option><option value="pendiente">Pendiente (programado)</option><option value="anulado">Anulado</option></select></div>
               <div style={{ gridColumn:"1/-1" }}><label style={lbl}>Notas</label><textarea style={{ ...inp, minHeight:50 }} value={form.notas} onChange={e=>set("notas",e.target.value)}/></div>
             </div>
-            <div style={{ background:`${B.navy}08`, border:`1px solid ${B.gold}44`, borderRadius:10, padding:14, marginTop:14, display:"flex", gap:28, flexWrap:"wrap" }}>
+            <div style={{ background:`${alfa(B.navy,"08")}`, border:`1px solid ${B.gold}44`, borderRadius:10, padding:14, marginTop:14, display:"flex", gap:28, flexWrap:"wrap" }}>
               <div><div style={{ fontSize:12, color:B.textSec }}>Monto (sin IGV)</div><div style={{ fontSize:22, fontWeight:800, color:B.goldDk }}>{fmt.sol(montoForm)}</div></div>
               <div><div style={{ fontSize:12, color:B.textSec }}>IGV (18%)</div><div style={{ fontSize:15, fontWeight:600, color:B.textSec, marginTop:6 }}>{fmt.sol(montoForm*0.18)}</div></div>
               <div><div style={{ fontSize:12, color:B.textSec }}>Total con IGV</div><div style={{ fontSize:15, fontWeight:700, color:B.navy, marginTop:6 }}>{fmt.sol(montoForm*1.18)}</div></div>
@@ -717,7 +717,7 @@ export function ServiciosCliente({ empresas=[], repartidores=[], unidades=[], ta
 }
 
 export const TIPOS_INCIDENCIA = ["Daño del producto","Extravío","Cliente ausente","Dirección errónea","Rechazo del destinatario","Retraso","Reclamo del cliente","Otro"];
-export const ESTADOS_INC = { abierta:{ label:"Abierta", c:"#B91C1C", bg:"#FEF2F2" }, en_proceso:{ label:"En proceso", c:"#B45309", bg:"#FFF7ED" }, resuelta:{ label:"Resuelta", c:"#047857", bg:"#ECFDF5" } };
+export const ESTADOS_INC = { abierta:{ label:"Abierta", c:"#B91C1C", bg:"var(--bzf-FEF2F2, #FEF2F2)" }, en_proceso:{ label:"En proceso", c:"#B45309", bg:"var(--bzf-FFF7ED, #FFF7ED)" }, resuelta:{ label:"Resuelta", c:"#047857", bg:"var(--bzf-ECFDF5, #ECFDF5)" } };
 
 export function Incidencias({ pedidos, empresas, repartidores, usuario, toast }) {
   const [lista, setLista] = useState([]);
@@ -791,8 +791,8 @@ export function Incidencias({ pedidos, empresas, repartidores, usuario, toast })
   };
 
   const card = CARD;
-  const th = { textAlign:"left", padding:"10px 14px", fontSize:11, fontWeight:700, color:B.textSec, background:"#F6F9FC", letterSpacing:".3px", borderBottom:"1px solid #E3EAF2", whiteSpace:"nowrap" };
-  const td = { padding:"12px 14px", fontSize:13, borderBottom:"1px solid #E3EAF2", verticalAlign:"top" };
+  const th = { textAlign:"left", padding:"10px 14px", fontSize:11, fontWeight:700, color:B.textSec, background:"var(--bzf-F6F9FC, #F6F9FC)", letterSpacing:".3px", borderBottom:"1px solid var(--bzl-E3EAF2, #E3EAF2)", whiteSpace:"nowrap" };
+  const td = { padding:"12px 14px", fontSize:13, borderBottom:"1px solid var(--bzl-E3EAF2, #E3EAF2)", verticalAlign:"top" };
   const Kpi = kpiMini;
 
   return (
@@ -987,21 +987,21 @@ export function UsuariosAuditoria({ usuario, navModulos, onPermisosCambio, toast
   const pgAud = usePaginacion(audFilt, 25, "registros");
 
   const card = CARD;
-  const th = { textAlign:"left", padding:"10px 14px", fontSize:11, fontWeight:700, color:B.textSec, background:"#F6F9FC", letterSpacing:".3px", borderBottom:"1px solid #E3EAF2", whiteSpace:"nowrap" };
-  const td = { padding:"12px 14px", fontSize:13, borderBottom:"1px solid #E3EAF2", verticalAlign:"top" };
+  const th = { textAlign:"left", padding:"10px 14px", fontSize:11, fontWeight:700, color:B.textSec, background:"var(--bzf-F6F9FC, #F6F9FC)", letterSpacing:".3px", borderBottom:"1px solid var(--bzl-E3EAF2, #E3EAF2)", whiteSpace:"nowrap" };
+  const td = { padding:"12px 14px", fontSize:13, borderBottom:"1px solid var(--bzl-E3EAF2, #E3EAF2)", verticalAlign:"top" };
   const TabBtn = ({ id, children }) => (<button onClick={()=>setTab(id)} style={TAB_SEG(tab===id)}>{children}</button>);
 
   return (
     <div>
       <div style={{ ...TAB_CONT, marginBottom:14 }}>
-        <TabBtn id="usuarios">Usuarios{pendientes.length>0 && <span style={{ background:"#FEE2E2", color:"#B91C1C", fontSize:11, fontWeight:700, padding:"1px 7px", borderRadius:10 }}>{pendientes.length}</span>}</TabBtn>
+        <TabBtn id="usuarios">Usuarios{pendientes.length>0 && <span style={{ background:"var(--bzf-FEE2E2, #FEE2E2)", color:"var(--bzt-B91C1C, #B91C1C)", fontSize:11, fontWeight:700, padding:"1px 7px", borderRadius:10 }}>{pendientes.length}</span>}</TabBtn>
         <TabBtn id="roles">Roles y permisos</TabBtn><TabBtn id="auditoria">Auditoría</TabBtn>
       </div>
 
       {tab==="usuarios" && (<>
         {pendientes.length>0 && (
-          <div style={{ background:"#FFF7ED", border:"1px solid #FDBA74", borderRadius:12, padding:"12px 16px", marginBottom:14 }}>
-            <div style={{ fontWeight:800, fontSize:13, color:"#9A3412", marginBottom:8 }}>Cuentas creadas pendientes de activar en el ERP</div>
+          <div style={{ background:"var(--bzf-FFF7ED, #FFF7ED)", border:"1px solid var(--bzl-FDBA74, #FDBA74)", borderRadius:12, padding:"12px 16px", marginBottom:14 }}>
+            <div style={{ fontWeight:800, fontSize:13, color:"var(--bzt-9A3412, #9A3412)", marginBottom:8 }}>Cuentas creadas pendientes de activar en el ERP</div>
             {pendientes.map(p => (
               <div key={p.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"6px 0", flexWrap:"wrap" }}>
                 <span style={{ fontSize:13, fontWeight:600 }}>{p.email}</span><span style={{ fontSize:11, color:B.textMut }}>creada el {fmt.fecha(p.creado)}</span>
@@ -1020,7 +1020,7 @@ export function UsuariosAuditoria({ usuario, navModulos, onPermisosCambio, toast
                 <td style={{...td,fontWeight:700}}>{u.nombre}{u.id===usuario.id && <span style={{ marginLeft:8, fontSize:10, background:B.bg, color:B.textSec, padding:"1px 8px", borderRadius:10 }}>tú</span>}</td>
                 <td style={td}>{u.email||"—"}</td>
                 <td style={td}><select style={{...inp,width:160,padding:"6px 10px"}} value={u.rol} disabled={u.id===usuario.id} onChange={e=>cambiarUsuario(u,{ rol:e.target.value })}>{nombresRol.map(r=><option key={r}>{r}</option>)}</select></td>
-                <td style={td}><button disabled={u.id===usuario.id} onClick={()=>cambiarUsuario(u,{ activo:!u.activo })} style={{ border:"none", borderRadius:20, padding:"4px 12px", fontSize:11, fontWeight:700, cursor:u.id===usuario.id?"not-allowed":"pointer", background:u.activo?"#ECFDF5":"#FEF2F2", color:u.activo?B.green:B.red }}>{u.activo?"Activo":"Desactivado"}</button></td>
+                <td style={td}><button disabled={u.id===usuario.id} onClick={()=>cambiarUsuario(u,{ activo:!u.activo })} style={{ border:"none", borderRadius:20, padding:"4px 12px", fontSize:11, fontWeight:700, cursor:u.id===usuario.id?"not-allowed":"pointer", background:u.activo?"var(--bzf-ECFDF5, #ECFDF5)":"var(--bzf-FEF2F2, #FEF2F2)", color:u.activo?B.green:B.red }}>{u.activo?"Activo":"Desactivado"}</button></td>
               </tr>))}</tbody>
           </table>}
         </div>
@@ -1098,7 +1098,7 @@ export function UsuariosAuditoria({ usuario, navModulos, onPermisosCambio, toast
               <BtnSec aria-label="Generar otra contraseña" onClick={()=>setNuevo(n=>({...n,clave:generarClaveTemporal(),err:""}))} style={{ flexShrink:0 }}><Ico n="refresh" size={15}/></BtnSec>
             </div>
             <div style={{ fontSize:11.5, color:B.textMut, marginBottom:14 }}>Ya viene generada. Podrás copiarla al terminar para enviársela.</div>
-            {nuevo.err && <div role="alert" style={{ background:"#FEF2F2", border:"1px solid #FECACA", color:"#B91C1C", borderRadius:8, padding:"9px 12px", fontSize:12.5, marginBottom:12, lineHeight:1.5 }}>{nuevo.err}</div>}
+            {nuevo.err && <div role="alert" style={{ background:"var(--bzf-FEF2F2, #FEF2F2)", border:"1px solid var(--bzl-FECACA, #FECACA)", color:"var(--bzt-B91C1C, #B91C1C)", borderRadius:8, padding:"9px 12px", fontSize:12.5, marginBottom:12, lineHeight:1.5 }}>{nuevo.err}</div>}
             <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}><BtnSec onClick={()=>setNuevo(null)} disabled={creando}>Cancelar</BtnSec><BtnPri onClick={crearUsuario} disabled={creando}>{creando?"Creando…":"Crear usuario"}</BtnPri></div>
           </div>
         </div>)}
@@ -1106,10 +1106,10 @@ export function UsuariosAuditoria({ usuario, navModulos, onPermisosCambio, toast
       {creado && (
         <div role="dialog" aria-modal="true" aria-label="Usuario creado" style={{ position:"fixed", inset:0, background:"#0008", zIndex:1500, display:"flex", alignItems:"center", justifyContent:"center", padding:12 }}>
           <div style={{ background:B.white, borderRadius:16, padding:24, width:480, maxWidth:"100%", maxHeight:"92vh", overflowY:"auto" }}>
-            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}><span style={{ width:30, height:30, borderRadius:"50%", background:"#DCFCE7", color:"#15803D", display:"flex", alignItems:"center", justifyContent:"center" }}><Ico n="check" size={17}/></span><div style={{ fontSize:16, fontWeight:800, color:B.navy }}>Cuenta creada para {creado.nombre}</div></div>
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}><span style={{ width:30, height:30, borderRadius:"50%", background:"var(--bzf-DCFCE7, #DCFCE7)", color:"#15803D", display:"flex", alignItems:"center", justifyContent:"center" }}><Ico n="check" size={17}/></span><div style={{ fontSize:16, fontWeight:800, color:B.navy }}>Cuenta creada para {creado.nombre}</div></div>
             <div style={{ fontSize:12.5, color:B.textSec, marginBottom:12, lineHeight:1.5 }}>Envíale estos datos por un canal privado (WhatsApp o correo). La contraseña no se vuelve a mostrar.</div>
-            <pre style={{ background:"#F6F9FC", border:`1px solid ${B.border}`, borderRadius:10, padding:"12px 14px", fontSize:12.5, whiteSpace:"pre-wrap", wordBreak:"break-word", margin:"0 0 12px", fontFamily:"ui-monospace,Consolas,monospace", color:B.textPri, userSelect:"all" }}>{textoAcceso(creado)}</pre>
-            {creado.requiereConfirmar && <div style={{ background:"#FFF7ED", border:"1px solid #FDBA74", borderRadius:10, padding:"10px 12px", fontSize:12, color:"#9A3412", marginBottom:12, lineHeight:1.5 }}>Supabase le envió un correo de confirmación. <b>No podrá ingresar hasta hacer clic en ese enlace.</b> Si prefieres evitar este paso, desactiva «Confirm email» en Supabase.</div>}
+            <pre style={{ background:"var(--bzf-F6F9FC, #F6F9FC)", border:`1px solid ${B.border}`, borderRadius:10, padding:"12px 14px", fontSize:12.5, whiteSpace:"pre-wrap", wordBreak:"break-word", margin:"0 0 12px", fontFamily:"ui-monospace,Consolas,monospace", color:B.textPri, userSelect:"all" }}>{textoAcceso(creado)}</pre>
+            {creado.requiereConfirmar && <div style={{ background:"var(--bzf-FFF7ED, #FFF7ED)", border:"1px solid var(--bzl-FDBA74, #FDBA74)", borderRadius:10, padding:"10px 12px", fontSize:12, color:"var(--bzt-9A3412, #9A3412)", marginBottom:12, lineHeight:1.5 }}>Supabase le envió un correo de confirmación. <b>No podrá ingresar hasta hacer clic en ese enlace.</b> Si prefieres evitar este paso, desactiva «Confirm email» en Supabase.</div>}
             <div style={{ display:"flex", justifyContent:"flex-end", gap:10, flexWrap:"wrap" }}><BtnSec onClick={copiarAcceso}><Ico n="copy" size={15}/> Copiar datos</BtnSec><BtnPri onClick={()=>setCreado(null)}>Listo</BtnPri></div>
           </div>
         </div>)}
