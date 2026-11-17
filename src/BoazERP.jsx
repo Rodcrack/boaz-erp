@@ -10,7 +10,7 @@ import { Cobranza, Cotizaciones, Facturacion, LiquidacionClientes, Liquidaciones
 import { Incidencias, Rentabilidad, ServiciosCliente, UsuariosAuditoria } from "./erp/operacion.jsx";
 import { Gastos, Planilla } from "./erp/costos.jsx";
 import { Inventario } from "./erp/inventario.jsx";
-import { Catalogo, Configuracion, Reportes } from "./erp/reportes.jsx";
+import { ConfiguracionGeneral, Reportes } from "./erp/reportes.jsx";
 import { PrimerosPasos } from "./erp/ayuda.jsx";
 
 export function Login({ onLogin }) {
@@ -92,7 +92,9 @@ export default function BoazERP() {
     await sb.auth.signOut();
     setSesion(null); setUsuario(null);
   };
-  const [seccion, setSeccion] = useState("dashboard");
+  const [seccion, setSeccionBase] = useState("dashboard");
+  const [tabConfig, setTabConfig] = useState({ tab:"tarifas", n:0 });
+  const setSeccion = useCallback((id) => { if (id==="catalogo") { setTabConfig(t => ({ tab:"tarifas", n:t.n+1 })); setSeccionBase("configuracion"); } else setSeccionBase(id); }, []);
   // Conteos ligeros para la página Primeros pasos
   const [nFacturasAyuda, setNFacturasAyuda] = useState(0);
   const [nUsuariosAyuda, setNUsuariosAyuda] = useState(1);
@@ -214,7 +216,6 @@ export default function BoazERP() {
     { section:"COMERCIAL" },
     { id:"clientes",     icon:"building",  label:"Clientes" },
     { id:"cotizaciones", icon:"mail",      label:"Cotizaciones", badge: cotizNuevas || null },
-    { id:"catalogo",     icon:"tag",       label:"Tarifas y servicios" },
     { section:"VENTAS Y COBRANZA" },
     { id:"liquidacion-clientes", icon:"filetext", label:"Pre-facturación" },
     { id:"facturacion",  icon:"receipt",   label:"Facturación" },
@@ -280,9 +281,19 @@ if (verificando) {
   }
 
   const modulosRol = usuario.rol==="admin" ? ROLES_ACCESO.admin : [...new Set(["dashboard","ayuda", ...((permisosDB && permisosDB[usuario.rol]) || ROLES_ACCESO[usuario.rol] || [])])];
-  const navVisible = NAV.filter(n => n.section || modulosRol.includes(n.id)).filter((n,i,arr) => !n.section || (arr[i+1] && !arr[i+1].section));
-  const seccionOk = modulosRol.includes(seccion);
+  // «Tarifas y servicios» ahora vive dentro de Configuración: quien tenga permiso de catálogo también ve Configuración
+  const accesoConfig = modulosRol.includes("configuracion") || modulosRol.includes("catalogo");
+  const puedeVer = (id) => modulosRol.includes(id) || (id==="configuracion" && accesoConfig);
+  const navVisible = NAV.filter(n => n.section || puedeVer(n.id)).filter((n,i,arr) => !n.section || (arr[i+1] && !arr[i+1].section));
+  const seccionOk = puedeVer(seccion);
   const navConSeccion = (() => { let act = null; return navVisible.map(n => { if (n.section) act = n.section; return { ...n, _sec: act }; }); })();
+  const modulosLista = (() => {
+    const base = navConSeccion.filter(x=>!x.section).map(x=>({ id:x.id, label:x.label, icon:x.icon, grupo:x._sec }));
+    if (!modulosRol.includes("catalogo")) return base;
+    const i = base.findIndex(x=>x.id==="configuracion");
+    const cat = { id:"catalogo", label:"Tarifarios y servicios", icon:"tag", grupo:"SISTEMA" };
+    return i>=0 ? [...base.slice(0,i), cat, ...base.slice(i)] : [...base, cat];
+  })();
   const contieneActiva = (nombre) => navConSeccion.some(x => !x.section && x._sec===nombre && x.id===seccion);
   const badgeSec = (nombre) => navConSeccion.filter(x => !x.section && x._sec===nombre).reduce((t,x)=>t+(x.badge||0),0);
   
@@ -448,20 +459,20 @@ if (verificando) {
               {seccionOk && seccion==="inventario"    && <Inventario empresas={empresas} toast={showToast}/>}
               {seccionOk && seccion==="clientes"      && <Clientes empresas={empresas} tarifasDistrito={tarifasDistrito} pedidos={pedidos} lineasNegocio={lineasNegocio} tarifariosCliente={tarifariosCliente} tarifarioVehiculoCliente={tarifarioVehiculoCliente} tarifarioEstandar={tarifarioEstandar} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} tarifasViajeCliente={tarifasViajeCliente} tarifarioViajeEstandar={tarifarioViajeEstandar} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccionOk && seccion==="cotizaciones"  && <Cotizaciones toast={showToast} onCambio={setCotizNuevas}/>}
-              {seccionOk && seccion==="catalogo"      && <Catalogo empresas={empresas} tarifasDistrito={tarifasDistrito} tarifariosCliente={tarifariosCliente} tarifarioVehiculoCliente={tarifarioVehiculoCliente} tarifasViajeCliente={tarifasViajeCliente} tarifarioViajeEstandar={tarifarioViajeEstandar} lineasNegocio={lineasNegocio} tiposServicio={tiposServicio} tarifarioEstandar={tarifarioEstandar} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} recargoFeriadoPct={recargoFeriadoPct} onRefresh={cargarSilencioso} toast={showToast}/>}
-              {seccionOk && seccion==="liquidaciones" && <Liquidaciones repartidores={repartidores} pedidos={pedidos} liquidaciones={liquidaciones} onRefresh={cargarSilencioso} toast={showToast}/>}
+                            {seccionOk && seccion==="liquidaciones" && <Liquidaciones repartidores={repartidores} pedidos={pedidos} liquidaciones={liquidaciones} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccionOk && seccion==="liquidacion-transporte" && <LiquidacionTransporte onIr={setSeccion} unidades={unidades} asignaciones={asignacionesUnidad} empresas={empresas} tiposServicio={tiposServicio} diasServicio={diasServicio} recargoFeriadoPct={recargoFeriadoPct} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccionOk && seccion==="liquidacion-clientes" && <LiquidacionClientes pedidos={pedidos} empresas={empresas} unidades={unidades} asignacionesUnidad={asignacionesUnidad} diasServicio={diasServicio} tarifarioVehiculoEstandar={tarifarioVehiculoEstandar} recargoFeriadoPct={recargoFeriadoPct} toast={showToast}/>}
               {seccionOk && seccion==="facturacion"   && <Facturacion empresas={empresas} pedidos={pedidos} tiposServicio={tiposServicio} usuario={usuario} toast={showToast}/>}
               {seccionOk && seccion==="servicios"     && <ServiciosCliente empresas={empresas} repartidores={repartidores} unidades={unidades} tarifasViajeCliente={tarifasViajeCliente} tarifarioViajeEstandar={tarifarioViajeEstandar} usuario={usuario} toast={showToast}/>}
               {seccionOk && seccion==="incidencias"   && <Incidencias pedidos={pedidos} empresas={empresas} repartidores={repartidores} usuario={usuario} toast={showToast}/>}
-              {seccionOk && seccion==="usuarios"      && <UsuariosAuditoria usuario={usuario} navModulos={navConSeccion.filter(x=>!x.section).map(x=>({ id:x.id, label:x.label, icon:x.icon, grupo:x._sec }))} onPermisosCambio={cargarPermisos} toast={showToast}/>}
+              {seccionOk && seccion==="usuarios"      && <UsuariosAuditoria usuario={usuario} navModulos={modulosLista} onPermisosCambio={cargarPermisos} toast={showToast}/>}
               {seccionOk && seccion==="cobranza"      && <Cobranza pedidos={pedidos} empresas={empresas} repartidores={repartidores} onRefresh={cargarSilencioso} toast={showToast}/>}
               {seccionOk && seccion==="gastos"        && <Gastos unidades={unidades} repartidores={repartidores} usuario={usuario} toast={showToast}/>}
               {seccionOk && seccion==="planilla"      && <Planilla toast={showToast} repartidores={repartidores}/>}
               {seccionOk && seccion==="rentabilidad"  && <Rentabilidad pedidos={pedidos} empresas={empresas} repartidores={repartidores} unidades={unidades} asignaciones={asignacionesUnidad} diasServicio={diasServicio} recargoFeriadoPct={recargoFeriadoPct} toast={showToast}/>}
               {seccionOk && seccion==="reportes"      && <Reportes pedidos={pedidos} repartidores={repartidores} empresas={empresas} toast={showToast} onIr={setSeccion}/>}
-              {seccionOk && seccion==="configuracion" && <Configuracion onRefresh={cargarSilencioso} toast={showToast}/>}
+              {seccionOk && seccion==="configuracion" && <ConfiguracionGeneral key={tabConfig.n} verTarifas={modulosRol.includes("catalogo")} verEmpresa={modulosRol.includes("configuracion")} tabInicial={tabConfig.tab}
+                propsCatalogo={{ empresas:empresas, tarifasDistrito:tarifasDistrito, tarifariosCliente:tarifariosCliente, tarifarioVehiculoCliente:tarifarioVehiculoCliente, tarifasViajeCliente:tarifasViajeCliente, tarifarioViajeEstandar:tarifarioViajeEstandar, lineasNegocio:lineasNegocio, tiposServicio:tiposServicio, tarifarioEstandar:tarifarioEstandar, tarifarioVehiculoEstandar:tarifarioVehiculoEstandar, recargoFeriadoPct:recargoFeriadoPct, }} onRefresh={cargarSilencioso} toast={showToast} onIr={setSeccion}/>}
               {seccionOk && seccion==="ayuda"         && <PrimerosPasos empresas={empresas} repartidores={repartidores} unidades={unidades} pedidos={pedidos} nFacturas={nFacturasAyuda} nUsuarios={nUsuariosAyuda} onIr={setSeccion}/>}
             </>
           )}
@@ -470,7 +481,7 @@ if (verificando) {
 
       {toast && <Toast msg={toast.msg} tipo={toast.tipo} onClose={()=>setToast(null)}/>}
       {paleta && <PaletaComandos onCerrar={()=>setPaleta(false)} onIr={setSeccion}
-        modulos={navConSeccion.filter(x=>!x.section).map(x=>({ id:x.id, label:x.label, icon:x.icon, grupo:x._sec }))}
+        modulos={modulosLista}
         pedidos={pedidos} empresas={empresas} unidades={unidades} repartidores={repartidores}/>}
     </div>
   );

@@ -686,7 +686,7 @@ export const GLOSARIO = {
   lote: ["Lote", "Grupo de pedidos cargados juntos desde un Excel. Permite asignarlos y rastrearlos como un conjunto."],
   geocodificar: ["Geocodificar", "Convertir la dirección escrita en un punto del mapa. Sin esto el pedido no aparece en el mapa del repartidor."],
   modalidad: ["Modalidad de cobro", "Cómo se le cobra al cliente: por pedido (cada entrega), por vehículo (unidad por día) o por viaje (recojo o ruta). Un cliente puede tener más de una."],
-  modo_pedido: ["Forma de cobro por pedido", "Según tarifario (ámbito, servicio y peso), precio fijo por pedido, o tarifa por distrito. Se define en la ficha del cliente."],
+  modo_pedido: ["Forma de cobro por pedido", "Según tarifario (ámbito, servicio y peso), precio fijo por pedido, o tarifa por distrito. Se define en Clientes → «Cómo se cobra»."],
   embalaje: ["Recargo por embalaje", "Monto extra que se suma solo a los pedidos marcados como «requiere embalaje» (por ejemplo, pedidos de agencia)."],
   tarifa_dia: ["Tarifa por día", "Lo que se cobra por cada día que una unidad trabaja para el cliente. Se multiplica por los días del calendario de servicio."],
   recargo_periferico: ["Recargo periférico", "Monto adicional a la tarifa por día cuando la unidad trabaja en zona periférica."],

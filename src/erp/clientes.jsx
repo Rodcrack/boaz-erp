@@ -271,19 +271,23 @@ export function Clientes({ tarifasDistrito=[], empresas, pedidos, lineasNegocio,
   const [modalTarifario, setModalTarifario] = useState(null); // guarda la empresa seleccionada
   const [modalTarifarioVehiculo, setModalTarifarioVehiculo] = useState(null);
   const [modalTarifarioViaje, setModalTarifarioViaje] = useState(null);
+  const [panelCobro, setPanelCobro] = useState(null);   // { id, base, nuevo }
+  const abrirConfig = (mod, emp) => { if (mod==="pedido") setModalTarifario(emp); else if (mod==="vehiculo") setModalTarifarioVehiculo(emp); else setModalTarifarioViaje(emp); };
   const empty = { nombre:"", ruc:"", contacto:"", telefono:"", email:"", direccion:"", puede_generar_etiquetas:false, puede_ver_liquidacion:false, linea_negocio_id:"", modalidades_tarifa:[] };
   const [f, setF] = useState(empty);
 
   const guardar = async () => {
     if (!f.nombre) { toast("El nombre es obligatorio","error"); return; }
-    let error;
+    let error, nuevo = null;
     if (editando) {
       ({ error } = await sb.from("empresas").update(f).eq("id",editando.id));
     } else {
-      ({ error } = await sb.from("empresas").insert([{...f,activo:true}]));
+      ({ data: nuevo, error } = await sb.from("empresas").insert([{...f,activo:true}]).select("*").single());
     }
     if (error) { toast("Error: "+error.message,"error"); return; }
-    toast(editando?"Cliente actualizado ✓":((f.modalidades_tarifa||[]).length?"Cliente registrado ✓ — configura sus tarifas desde su tarjeta":"Cliente registrado ✓"));
+    toast(editando ? "Cliente actualizado ✓" : "Cliente registrado ✓");
+    // Cliente nuevo: se abre directo «Cómo se cobra» para que no quede sin configurar
+    if (!editando && nuevo && nuevo.id) setPanelCobro({ id:nuevo.id, base:{ ...f, ...nuevo }, nuevo:true });
     setModal(false); setEditando(null); setF(empty); onRefresh();
   };
 
@@ -342,29 +346,26 @@ export function Clientes({ tarifasDistrito=[], empresas, pedidos, lineasNegocio,
                 {dato("user", e.contacto)}{dato("phone", e.telefono)}{dato("mail", e.email)}{dato("pin", e.direccion)}
               </div>
 
-              <div>
-                <div style={{ fontSize:11, fontWeight:700, color:B.textMut, letterSpacing:"0.3px", marginBottom:6 }}>TARIFARIO</div>
-                <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                  {!mods.length ? (
-                    <button onClick={()=>editar(e, { modalidades_tarifa:[] })}
-                      style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:12, fontWeight:600, padding:"5px 10px", borderRadius:8, cursor:"pointer", border:`1px dashed #B4530988`, background:"#FFF7ED", color:"#B45309" }}>
-                      <Ico n="alert" size={14}/> Sin tarifario habilitado · elegir
-                    </button>
-                  ) : MODALIDADES_TARIFA.filter(m=>mods.includes(m.id)).map(m => {
-                    const x = info[m.id];
-                    const regla = m.id!=="pedido" ? "" : e.modo_pedido==="fijo" && e.precio_fijo_pedido!=null ? `${fmt.sol(e.precio_fijo_pedido)} fijo` : e.modo_pedido==="distrito" ? `${tarifasDistrito.filter(t=>t.empresa_id===e.id).length} distritos` : "";
-                    const ok = x.n>0 || !!regla;
-                    return (
-                      <button key={m.id} onClick={x.abrir} className="bz-btn-sec" title={ok ? "Ver o editar tarifas" : "Configurar tarifas"}
-                        style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:12, fontWeight:600, padding:"5px 10px", borderRadius:8, cursor:"pointer",
-                          border:`1px solid ${ok?B.border:"#B4530966"}`, background:ok?B.white:"#FFF7ED", color:ok?B.textPri:"#B45309" }}>
-                        <Ico n={m.ico} size={14} color={ok?"#047857":"#B45309"}/>{m.label}
-                        <span style={{ fontWeight:500, color:ok?B.textMut:"#B45309" }}>{regla || (ok ? `${x.n} ${x.n===1?x.uno:x.otro}` : "configurar")}</span>
-                      </button>
-                    );
-                  })}
+              <button onClick={()=>setPanelCobro({ id:e.id, base:e })} className="bz-btn-sec" title="Ver y configurar cómo se le cobra"
+                style={{ textAlign:"left", width:"100%", background: mods.length ? "#F6F9FC" : "#FFF7ED", border:`1px ${mods.length?"solid":"dashed"} ${mods.length ? B.border : "#B4530988"}`, borderRadius:10, padding:"10px 12px", cursor:"pointer" }}>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, marginBottom: mods.length ? 7 : 0 }}>
+                  <span style={{ fontSize:11, fontWeight:700, color: mods.length ? B.textMut : "#B45309", letterSpacing:".3px", display:"flex", alignItems:"center", gap:6 }}>
+                    {!mods.length && <Ico n="alert" size={14}/>}{mods.length ? "CÓMO SE COBRA" : "Falta definir cómo se le cobra"}</span>
+                  <span style={{ fontSize:12, fontWeight:700, color:B.goldDk, display:"flex", alignItems:"center", gap:4 }}>{mods.length ? "Ver / editar" : "Definir"} <Ico n="arrow" size={13}/></span>
                 </div>
-              </div>
+                {mods.length>0 && <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                  {MODALIDADES_TARIFA.filter(m=>mods.includes(m.id)).map(m => {
+                    const x = info[m.id];
+                    const regla = m.id!=="pedido" ? "" : e.modo_pedido==="fijo" && e.precio_fijo_pedido!=null ? `${fmt.sol(e.precio_fijo_pedido)} fijo` : e.modo_pedido==="distrito" ? (n => `${n} distrito${n===1?"":"s"}`)(tarifasDistrito.filter(t=>t.empresa_id===e.id).length) : (x.n ? `${x.n} ${x.n===1?x.uno:x.otro}` : "estándar");
+                    const ok = m.id==="viaje" ? x.n>0 : true;
+                    return (
+                      <span key={m.id} style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:12, fontWeight:600, padding:"4px 9px", borderRadius:8, background:B.white, border:`1px solid ${ok?B.border:"#B4530966"}`, color:ok?B.textPri:"#B45309" }}>
+                        <Ico n={m.ico} size={14} color={ok?"#047857":"#B45309"}/>{m.label}
+                        <span style={{ fontWeight:500, color:ok?B.textMut:"#B45309" }}>{regla || (x.n ? `${x.n} ${x.n===1?x.uno:x.otro}` : "configurar")}</span>
+                      </span>);
+                  })}
+                </div>}
+              </button>
 
               <div style={{ display:"flex", gap:14, flexWrap:"wrap" }}>
                 {permiso(e.puede_generar_etiquetas, "Etiquetas en portal")}{permiso(e.puede_ver_liquidacion, "Liquidación en portal")}
@@ -429,20 +430,9 @@ export function Clientes({ tarifasDistrito=[], empresas, pedidos, lineasNegocio,
                 </select>
               </div>
             </div>
-            <div style={{ marginTop:16, padding:"12px 14px", background:"#FFF8EF", border:`1px solid ${B.gold}55`, borderRadius:10 }}>
-              <div style={{ fontSize:12, fontWeight:800, color:B.navy, marginBottom:4 }}>Tarifario habilitado para este cliente<Ayuda k="modalidad"/></div>
-              <div style={{ fontSize:11, color:B.textMut, marginBottom:10 }}>Marca cómo se le cobra según el acuerdo comercial. Puedes habilitar más de una; después configuras las tarifas de cada una desde su tarjeta.</div>
-              <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                {MODALIDADES_TARIFA.map(m => {
-                  const on = (f.modalidades_tarifa||[]).includes(m.id);
-                  return (
-                    <label key={m.id} style={{ display:"flex", alignItems:"center", gap:8, fontSize:12.5, color:B.textPri, cursor:"pointer" }}>
-                      <input type="checkbox" checked={on} style={{ width:16, height:16 }}
-                        onChange={ev=>setF(p=>{ const cur = p.modalidades_tarifa||[]; return { ...p, modalidades_tarifa: ev.target.checked ? [...cur, m.id] : cur.filter(x=>x!==m.id) }; })}/>
-                      <Ico n={m.ico} size={15} color={on?B.goldDk:B.textMut}/><span><b>{m.label}</b> <span style={{ color:B.textMut }}>— {m.ayuda}</span></span>
-                    </label>);
-                })}
-              </div>
+            <div style={{ marginTop:16, padding:"10px 12px", background:"#F6F9FC", border:`1px solid ${B.border}`, borderRadius:10, fontSize:12.5, color:B.textSec, display:"flex", gap:8, alignItems:"flex-start" }}>
+              <Ico n="dollar" size={16} color={B.goldDk} style={{ marginTop:1 }}/>
+              <span>{editando ? <>Cómo se le cobra (por pedido, por vehículo o por viaje) se configura en <b>«Cómo se cobra»</b>, en la tarjeta del cliente.</> : <>Al registrar el cliente se abrirá <b>«Cómo se cobra»</b> para que elijas la modalidad y sus tarifas.</>}</span>
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:12,
               padding:"10px 12px", background:B.bg, borderRadius:8 }}>
@@ -469,6 +459,11 @@ export function Clientes({ tarifasDistrito=[], empresas, pedidos, lineasNegocio,
           </div>
         </div>
       )}
+      {panelCobro && (
+        <PanelCobroCliente key={panelCobro.id} empresa={empresas.find(x=>x.id===panelCobro.id) || panelCobro.base} esNuevo={panelCobro.nuevo}
+          tarifariosCliente={tarifariosCliente} tarifarioVehiculoCliente={tarifarioVehiculoCliente} tarifasViajeCliente={tarifasViajeCliente} tarifasDistrito={tarifasDistrito}
+          onConfigurar={abrirConfig} onClose={()=>setPanelCobro(null)} onSaved={onRefresh} toast={toast}/>
+      )}
       {modalTarifario && (
         <ModalTarifarioCliente tarifasDistrito={tarifasDistrito} empresa={modalTarifario} tarifariosCliente={tarifariosCliente} tarifarioEstandar={tarifarioEstandar}
           onClose={()=>setModalTarifario(null)} onSaved={()=>{onRefresh();}} toast={toast}/>
@@ -481,6 +476,111 @@ export function Clientes({ tarifasDistrito=[], empresas, pedidos, lineasNegocio,
         <ModalTarifarioViaje empresa={modalTarifarioViaje} filas={tarifasViajeCliente} estandar={tarifarioViajeEstandar}
           onClose={()=>setModalTarifarioViaje(null)} onSaved={()=>{onRefresh();}} toast={toast}/>
       )}
+    </div>
+  );
+}
+
+// ── PANEL «CÓMO SE COBRA» ─────────────────────────────────────
+// Un solo lugar por cliente: qué modalidades se le cobran y el resumen de sus tarifas.
+// Las tarifas se editan con las ventanas de siempre, que se abren encima del panel.
+export function PanelCobroCliente({ empresa, tarifariosCliente=[], tarifarioVehiculoCliente=[], tarifasViajeCliente=[], tarifasDistrito=[], esNuevo, onConfigurar, onClose, onSaved, toast }) {
+  const e = empresa;
+  const [mods, setMods] = useState(() => modalidadesDe(e, tarifariosCliente, tarifarioVehiculoCliente, tarifasViajeCliente));
+  const [guardando, setGuardando] = useState(null);
+  const tP = tarifariosCliente.filter(t=>t.empresa_id===e.id && t.activo);
+  const tV = tarifarioVehiculoCliente.filter(t=>t.empresa_id===e.id && t.activo!==false);
+  const tJ = tarifasViajeCliente.filter(t=>t.empresa_id===e.id && t.activo!==false);
+  const tD = tarifasDistrito.filter(t=>t.empresa_id===e.id && t.activo!==false);
+
+  const alternar = async (id) => {
+    const nuevo = mods.includes(id) ? mods.filter(x=>x!==id) : [...mods, id];
+    setMods(nuevo); setGuardando(id);
+    const { error } = await sb.from("empresas").update({ modalidades_tarifa: nuevo }).eq("id", e.id);
+    setGuardando(null);
+    if (error) { setMods(mods); toast("Error: "+error.message, "error"); return; }
+    onSaved && onSaved();
+  };
+
+  // Resumen legible de cada modalidad + si ya está lista para cobrar
+  const resumen = {
+    pedido: (() => {
+      const filas = [];
+      if (e.modo_pedido==="fijo" && e.precio_fijo_pedido!=null) filas.push(`Precio fijo de ${fmt.sol(e.precio_fijo_pedido)} por pedido`);
+      else if (e.modo_pedido==="distrito") {
+        if (tD.length) { const v = tD.map(t=>parseFloat(t.tarifa)||0); const mn = Math.min(...v), mx = Math.max(...v); filas.push(`Tarifa por distrito: ${tD.length} distrito${tD.length===1?"":"s"} (${mn===mx ? fmt.sol(mn) : `de ${fmt.sol(mn)} a ${fmt.sol(mx)}`})`); }
+        else filas.push("Tarifa por distrito, pero aún no hay distritos cargados");
+        filas.push(tP.length ? `Distritos sin tarifa: usa su tarifario por ámbito (${tP.length} tarifa${tP.length===1?"":"s"})` : "Distritos sin tarifa: usa el tarifario estándar");
+      } else filas.push(tP.length ? `Según su tarifario por ámbito, servicio y peso (${tP.length} tarifa${tP.length===1?"":"s"} propia${tP.length===1?"":"s"})` : "Según el tarifario estándar (no tiene tarifas propias)");
+      if (parseFloat(e.recargo_embalaje)>0) filas.push(`Recargo por embalaje: ${fmt.sol(e.recargo_embalaje)} en pedidos marcados`);
+      const listo = (e.modo_pedido==="fijo" && e.precio_fijo_pedido!=null) || (e.modo_pedido==="distrito" ? tD.length>0 : true);
+      return { filas, listo, aviso: e.modo_pedido==="distrito" && !tD.length ? "Carga los distritos con su tarifa" : null };
+    })(),
+    vehiculo: {
+      filas: tV.length ? tV.slice(0,6).map(t => `${(t.tipo_vehiculo||"—").replace(/^\w/,c=>c.toUpperCase())}: ${fmt.sol(t.tarifa_base)} por día${parseFloat(t.recargo_periferico)>0 ? ` (+${fmt.sol(t.recargo_periferico)} periférico)` : ""}`).concat(tV.length>6 ? [`y ${tV.length-6} más`] : [])
+        : ["Sin tarifa propia: al asignar una unidad se sugiere la del tarifario estándar"],
+      listo: true, aviso: null,
+    },
+    viaje: {
+      filas: tJ.length ? tJ.slice(0,6).map(t => `${t.concepto}: ${fmt.sol(t.tarifa)} por ${t.unidad==="recojo"?"recojo":"viaje"}${t.tipo_vehiculo?` · ${t.tipo_vehiculo}`:""}`).concat(tJ.length>6 ? [`y ${tJ.length-6} más`] : [])
+        : ["Sin tarifas acordadas: al registrar un viaje o recojo tendrás que escribir el precio a mano"],
+      listo: tJ.length>0, aviso: tJ.length ? null : "Configura sus conceptos y precios",
+    },
+  };
+  const TXT_CONF = { pedido:"Configurar cobro por pedido", vehiculo:"Configurar tarifas por vehículo", viaje:"Configurar tarifas por viaje" };
+  const DONDE = { pedido:"Se aplica al crear o cargar pedidos; suma en Pre-facturación → Pedidos.", vehiculo:"Se aplica al asignar unidades en Flota; suma en Liq. Transporte y Pre-facturación → Unidades.", viaje:"Se usa al registrar en Viajes y servicios; suma en Pre-facturación → Servicios." };
+
+  return (
+    <div onMouseDown={ev=>{ if (ev.target===ev.currentTarget) onClose(); }} style={{ position:"fixed", inset:0, background:"#0D1E3D66", zIndex:900, display:"flex", justifyContent:"flex-end" }}>
+      <div className="bz-panel" style={{ background:B.bg, width:560, maxWidth:"100vw", height:"100%", overflowY:"auto", boxShadow:"-12px 0 40px #0D1E3D33", display:"flex", flexDirection:"column" }}>
+        <div style={{ background:B.white, padding:"20px 22px 16px", borderBottom:`1px solid ${B.border}`, position:"sticky", top:0, zIndex:2 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10 }}>
+            <div style={{ minWidth:0 }}>
+              <div style={{ fontSize:12, fontWeight:700, color:B.textMut, letterSpacing:".3px" }}>CÓMO SE COBRA<Ayuda k="modalidad"/></div>
+              <div style={{ fontSize:18, fontWeight:800, color:B.navy, marginTop:2 }}>{e.nombre}</div>
+            </div>
+            <button onClick={onClose} aria-label="Cerrar" style={{ background:"none", border:"none", fontSize:20, color:B.textSec, cursor:"pointer" }}>✕</button>
+          </div>
+          {esNuevo && <div style={{ marginTop:12, background:"#ECFDF5", border:"1px solid #A7F3D0", color:"#065F46", borderRadius:10, padding:"9px 12px", fontSize:12.5 }}>
+            Cliente registrado. Ahora elige cómo se le cobra: marca una o más modalidades y configura sus tarifas.</div>}
+          {!esNuevo && mods.length===0 && <div style={{ marginTop:12, background:"#FFF7ED", border:"1px solid #FDBA7488", color:"#9A3412", borderRadius:10, padding:"9px 12px", fontSize:12.5 }}>
+            Aún no se eligió cómo se le cobra. Sin esto, la pre-facturación de este cliente no sabrá qué sumar.</div>}
+        </div>
+
+        <div style={{ padding:16, display:"flex", flexDirection:"column", gap:12 }}>
+          {MODALIDADES_TARIFA.map(m => {
+            const on = mods.includes(m.id); const r = resumen[m.id];
+            return (
+              <div key={m.id} style={{ ...CARD, padding:16, borderLeft:`4px solid ${on ? (r.listo ? "#047857" : B.gold) : B.border}`, opacity: on ? 1 : 0.85 }}>
+                <label style={{ display:"flex", alignItems:"flex-start", gap:12, cursor:"pointer" }}>
+                  <input type="checkbox" checked={on} disabled={guardando===m.id} onChange={()=>alternar(m.id)} style={{ width:18, height:18, marginTop:2 }} aria-label={`Cobrar ${m.label.toLowerCase()}`}/>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:14, fontWeight:700, color:B.textPri }}>
+                      <Ico n={m.ico} size={17} color={on ? B.goldDk : B.textMut}/>{m.label}
+                      {on && <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, background: r.listo ? "#ECFDF5" : "#FFF7ED", color: r.listo ? "#047857" : "#B45309" }}>{r.listo ? "Activa" : "Falta configurar"}</span>}
+                      {guardando===m.id && <span style={{ fontSize:11, color:B.textMut, fontWeight:500 }}>guardando…</span>}
+                    </div>
+                    <div style={{ fontSize:12.5, color:B.textSec, marginTop:3 }}>{m.ayuda}</div>
+                  </div>
+                </label>
+                {on && (
+                  <div style={{ marginTop:12, marginLeft:30 }}>
+                    <ul style={{ margin:0, padding:"10px 12px 10px 28px", background:"#F6F9FC", borderRadius:8, fontSize:12.5, color:B.textPri, lineHeight:1.65 }}>
+                      {r.filas.map((t,i)=><li key={i}>{t}</li>)}
+                    </ul>
+                    {r.aviso && <div style={{ fontSize:12, color:"#B45309", marginTop:8, display:"flex", alignItems:"center", gap:6 }}><Ico n="alert" size={14}/>{r.aviso}</div>}
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, marginTop:10, flexWrap:"wrap" }}>
+                      <span style={{ fontSize:11.5, color:B.textMut, flex:"1 1 200px" }}>{DONDE[m.id]}</span>
+                      <BtnSec onClick={()=>onConfigurar(m.id, e)}><Ico n="edit" size={14}/> {TXT_CONF[m.id]}</BtnSec>
+                    </div>
+                  </div>
+                )}
+              </div>);
+          })}
+          <div style={{ fontSize:12, color:B.textMut, padding:"2px 4px", lineHeight:1.5 }}>
+            Un cliente puede tener varias modalidades (por ejemplo, entregas por pedido y además una unidad por día). Desmarcar una modalidad no borra sus tarifas; solo deja de sumarse en la pre-facturación.
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

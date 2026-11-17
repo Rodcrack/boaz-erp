@@ -1060,7 +1060,7 @@ export function LiquidacionClientes({ pedidos, empresas, unidades, asignacionesU
 
             {noCobrables>0 && (
               <div style={{ background:"#EFF6FF", border:"1px solid #BFDBFE", borderRadius:10, padding:"10px 14px", marginBottom:16, fontSize:12.5, color:"#1E40AF" }}>
-                {noCobrables} pedido{noCobrables===1?"":"s"} del período no se suma{noCobrables===1?"":"n"} porque su cliente no tiene habilitado el cobro <strong>por pedido</strong> (se le cobra por unidad o por viaje). Si también debe cobrarse por pedido, habilítalo en Clientes → Editar.
+                {noCobrables} pedido{noCobrables===1?"":"s"} del período no se suma{noCobrables===1?"":"n"} porque su cliente no tiene habilitado el cobro <strong>por pedido</strong> (se le cobra por unidad o por viaje). Si también debe cobrarse por pedido, habilítalo en Clientes → «Cómo se cobra».
               </div>
             )}
 

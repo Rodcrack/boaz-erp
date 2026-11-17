@@ -8,7 +8,7 @@ const PASOS = [
     que:"Cada empresa a la que le haces entregas o le prestas unidades. Con su RUC, contacto y la línea de negocio.",
     listo:(d)=>d.empresas.length>0, meta:(d)=>`${d.empresas.length} cliente${d.empresas.length===1?"":"s"}` },
   { id:"cobro", ir:"clientes", titulo:"Define cómo se le cobra a cada uno", ico:"dollar",
-    que:"En la ficha del cliente marca la modalidad: por pedido, por vehículo o por viaje. Luego, desde su tarjeta, configura las tarifas. Sin esto la pre-facturación no sabe qué sumar.",
+    que:"En la tarjeta del cliente abre «Cómo se cobra»: marca la modalidad (por pedido, por vehículo o por viaje) y configura sus tarifas. Sin esto la pre-facturación no sabe qué sumar. Las tarifas base están en Configuración → Tarifarios y servicios.",
     listo:(d)=>d.empresas.length>0 && d.empresas.every(e=>Array.isArray(e.modalidades_tarifa) && e.modalidades_tarifa.length>0),
     meta:(d)=>{ const n=d.empresas.filter(e=>!(Array.isArray(e.modalidades_tarifa)&&e.modalidades_tarifa.length)).length; return n ? `${n} sin modalidad` : "todos configurados"; } },
   { id:"repartidores", ir:"repartidores", titulo:"Registra repartidores y unidades", ico:"bike",
@@ -39,7 +39,7 @@ const PASOS = [
 
 const PREGUNTAS = [
   ["¿Por qué un pedido sale con tarifa S/ 0.00?", "Se creó desde el portal del cliente o antes de configurar su tarifario. En Pedidos, filtra «Solo sin tarifa», selecciónalos y usa «Recalcular tarifa»."],
-  ["¿Por qué un cliente no aparece en la pre-facturación por pedido?", "No tiene marcada la modalidad «por pedido» (se le cobra por unidad o por viaje). Si también debe cobrarse por pedido, actívalo en Clientes → Editar."],
+  ["¿Por qué un cliente no aparece en la pre-facturación por pedido?", "No tiene marcada la modalidad «por pedido» (se le cobra por unidad o por viaje). Si también debe cobrarse por pedido, actívalo en Clientes → «Cómo se cobra»."],
   ["¿Qué diferencia hay entre Pre-facturación y Facturación?", "Pre-facturación es el cálculo de lo que corresponde cobrar en un período, para revisarlo y acordarlo con el cliente. Facturación es el registro de la factura ya emitida."],
   ["¿Cómo agrego un repartidor a la app?", "En Repartidores, al crearlo o editarlo, define su usuario y PIN en «Acceso a la app». Él entra en boaz-erp.netlify.app/app con esos datos."],
   ["¿Cómo doy acceso a un cliente a su portal?", "Crea su usuario en Supabase → tabla clientes_usuarios con el ID de su empresa, usuario y PIN. Entra en boaz-erp.netlify.app/cliente."],

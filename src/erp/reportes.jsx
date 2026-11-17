@@ -1,6 +1,6 @@
 // BOAZ ERP — módulo "reportes" (parte de BoazERP; ver src/BoazERP.jsx)
 import { useState, useEffect, useCallback, useRef, useMemo, Fragment } from "react";
-import { Ayuda, B, BtnPri, BtnSec, Ico, Kpi, Tabs, fmt, inp, lbl, sb } from "./base.jsx";
+import { Ayuda, B, BtnPri, BtnSec, CARD, Ico, Kpi, Tabs, fmt, inp, lbl, sb } from "./base.jsx";
 import { ModalTarifarioCliente, ModalTarifarioEstandar, ModalTarifarioVehiculo, ModalTarifarioVehiculoEstandar, ModalTarifarioViaje, modalidadesDe } from "./clientes.jsx";
 import { TIPOS_SERVICIO } from "./ventas.jsx";
 
@@ -713,7 +713,7 @@ export function Configuracion({ onRefresh, toast }) {
 // líneas de negocio + tipos de servicio, y tarifarios negociados
 // por cliente. Todo el tema de precios en un solo lugar.
 // ══════════════════════════════════════════════════════════════
-export function Catalogo({ tarifasDistrito=[], lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVehiculoEstandar, recargoFeriadoPct, empresas=[], tarifariosCliente=[], tarifarioVehiculoCliente=[], tarifasViajeCliente=[], tarifarioViajeEstandar=[], onRefresh, toast }) {
+export function Catalogo({ onIr, tarifasDistrito=[], lineasNegocio, tiposServicio, tarifarioEstandar, tarifarioVehiculoEstandar, recargoFeriadoPct, empresas=[], tarifariosCliente=[], tarifarioVehiculoCliente=[], tarifasViajeCliente=[], tarifarioViajeEstandar=[], onRefresh, toast }) {
   const [modalTarCli, setModalTarCli] = useState(null);
   const [modalTarVeh, setModalTarVeh] = useState(null);
   const [modalTarViaje, setModalTarViaje] = useState(null);
@@ -747,32 +747,13 @@ export function Catalogo({ tarifasDistrito=[], lineasNegocio, tiposServicio, tar
 
   return (
     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
-      {/* Tarifas por cliente (centralizado) */}
-      <div style={{ background:B.white, border:`1px solid ${B.border}`, borderRadius:12, padding:20, boxShadow:"0 1px 2px #0D1E3D0D", gridColumn:"span 2" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, paddingBottom:8, borderBottom:`2px solid ${B.gold}`, gap:12, flexWrap:"wrap" }}>
-          <div style={{ fontSize:14, fontWeight:800, color:B.navy }}>Tarifas por cliente</div>
-          <input style={{ ...inp, width:220 }} placeholder="Buscar cliente…" value={busqCli} onChange={e=>setBusqCli(e.target.value)}/>
+      {/* Las tarifas de cada cliente viven en su ficha (Clientes → Cómo se cobra) */}
+      <div style={{ ...CARD, padding:"14px 18px", gridColumn:"span 2", display:"flex", alignItems:"center", gap:14, flexWrap:"wrap", background:"#F6F9FC" }}>
+        <Ico n="building" size={20} color={B.goldDk}/>
+        <div style={{ flex:"1 1 300px", fontSize:13, color:B.textSec }}>
+          Aquí están las <b style={{ color:B.textPri }}>propuestas base</b> que se usan cuando un cliente no tiene tarifa propia. Las tarifas negociadas con cada cliente se ven y se editan en <b style={{ color:B.textPri }}>Clientes → Cómo se cobra</b>.
         </div>
-        <div style={{ maxHeight:320, overflowY:"auto" }}>
-          {empresas.filter(e => !busqCli.trim() || (e.nombre||"").toLowerCase().includes(busqCli.trim().toLowerCase())).map(e => {
-            const mods = modalidadesDe(e, tarifariosCliente, tarifarioVehiculoCliente, tarifasViajeCliente);
-            const pill = (n, txt, onClick) => (
-              <button onClick={onClick} style={{ fontSize:11, fontWeight:700, padding:"5px 12px", borderRadius:20, cursor:"pointer",
-                border:`1px solid ${n>0?B.green:B.orange}`, background:n>0?"#ECFDF5":"#FFF7ED", color:n>0?B.green:B.orange }}>{txt}</button>);
-            const aP = tarifariosCliente.filter(t=>t.empresa_id===e.id && t.activo).length;
-            const aV = tarifarioVehiculoCliente.filter(t=>t.empresa_id===e.id && t.activo).length;
-            const aJ = tarifasViajeCliente.filter(t=>t.empresa_id===e.id && t.activo).length;
-            return (
-              <div key={e.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 4px", borderBottom:`1px solid ${B.border}`, flexWrap:"wrap" }}>
-                <div style={{ flex:"1 1 200px", fontSize:13, fontWeight:600, color:B.textPri }}>{e.nombre}</div>
-                {mods.length===0 && <span style={{ fontSize:11, color:B.textMut, fontStyle:"italic" }}>Sin tarifario habilitado (se elige en Clientes → Editar)</span>}
-                {mods.includes("pedido")   && pill(aP, `Por pedido: ${aP} tarifa${aP===1?"":"s"}`, ()=>setModalTarCli(e))}
-                {mods.includes("vehiculo") && pill(aV, `Por vehículo: ${aV}`, ()=>setModalTarVeh(e))}
-                {mods.includes("viaje")    && pill(aJ, `Por viaje: ${aJ} tarifa${aJ===1?"":"s"}`, ()=>setModalTarViaje(e))}
-              </div>);
-          })}
-          {empresas.length===0 && <div style={{ fontSize:12, color:B.textMut, padding:12 }}>Sin clientes registrados</div>}
-        </div>
+        {onIr && <BtnSec onClick={()=>onIr("clientes")}>Ir a Clientes <Ico n="arrow" size={14}/></BtnSec>}
       </div>
       {/* Recargo por feriados */}
       <div style={{ background:B.white, border:`1px solid ${B.border}`,
@@ -999,3 +980,17 @@ export function Catalogo({ tarifasDistrito=[], lineasNegocio, tiposServicio, tar
   );
 }
 
+
+// Configuración: tarifarios base y catálogos (rol con permiso «catalogo») y datos de la empresa (rol con permiso «configuracion»)
+export function ConfiguracionGeneral({ verTarifas, verEmpresa, tabInicial, propsCatalogo, onRefresh, toast, onIr }) {
+  const tabs = [...(verTarifas ? [{ id:"tarifas", l:"Tarifarios y servicios", i:"tag" }] : []), ...(verEmpresa ? [{ id:"empresa", l:"Datos de la empresa", i:"building" }] : [])];
+  const [tab, setTab] = useState(() => tabs.some(t=>t.id===tabInicial) ? tabInicial : (tabs[0] && tabs[0].id));
+  const actual = tabs.some(t=>t.id===tab) ? tab : (tabs[0] && tabs[0].id);
+  return (
+    <div>
+      {tabs.length>1 && <Tabs tipo="linea" tabs={tabs} valor={actual} onChange={setTab} style={{ marginBottom:18 }}/>}
+      {actual==="tarifas" && <Catalogo {...propsCatalogo} onRefresh={onRefresh} toast={toast} onIr={onIr}/>}
+      {actual==="empresa" && <Configuracion onRefresh={onRefresh} toast={toast}/>}
+    </div>
+  );
+}
